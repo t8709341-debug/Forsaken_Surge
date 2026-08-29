@@ -29,8 +29,10 @@ local TweenService = game:GetService("TweenService")
 local Debris = game:GetService("Debris")
 local Camera = Workspace.CurrentCamera
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local StarterGui = game:GetService("StarterGui")
 
 local player = Players.LocalPlayer
+local RNG = Random.new()
 
 -- ===== CHARACTER VARIABLES =====
 local character = nil
@@ -97,6 +99,11 @@ local DefaultSettings = {
     ITEMS_COLOR = "Gold",
     SHOW_TEXT = true,
     
+    -- AUTO GENERATOR SETTINGS
+    AUTO_GENERATOR = false,
+    GENERATOR_COOLDOWN = 3.0,
+    SPEED_UP_COOLDOWN = false,
+    
     TURBO_ACTIVE = false,
     TURBO_SPEED = 30,
     TURBO_MODE = "Velocity",
@@ -145,7 +152,163 @@ rayParams.FilterType = Enum.RaycastFilterType.Exclude
 rayParams.RespectCanCollide = true
 
 -- ==========================================
--- ESP SYSTEM
+-- AUTO GENERATOR SYSTEM
+-- ==========================================
+
+local IsFixingGenerator = false
+local AutoGenConnections = {}
+
+local function IsPlayersNear(Distance)
+    if character and hrp then
+        for _, v in ipairs(Players:GetPlayers()) do
+            if v ~= player and v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
+                local otherHrp = v.Character.HumanoidRootPart
+                if (otherHrp.Position - hrp.Position).Magnitude < Distance then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+-- Оптимизированный поиск генераторов
+local generatorCache = {}
+local lastGeneratorScan = 0
+
+local function getGenerators()
+    local now = tick()
+    if now - lastGeneratorScan < 2 then
+        return generatorCache
+    end
+    lastGeneratorScan = now
+    generatorCache = {}
+    
+    -- Ищем генераторы разными способами
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj:IsA("Model") and obj.Parent then
+            local name = string.lower(obj.Name)
+            if string.find(name, "generator") or string.find(name, "gen") or obj:GetAttribute("Generator") then
+                local main = obj:FindFirstChild("Main") or obj:FindFirstChild("HumanoidRootPart")
+                if main and main:IsA("BasePart") then
+                    local progress = obj:FindFirstChild("Progress")
+                    if progress and progress:IsA("NumberValue") and progress.Value < 100 then
+                        local remotes = obj:FindFirstChild("Remotes")
+                        if remotes then
+                            local remoteEvent = remotes:FindFirstChildOfClass("RemoteEvent")
+                            if remoteEvent then
+                                table.insert(generatorCache, {
+                                    Object = obj,
+                                    Main = main,
+                                    Progress = progress,
+                                    RemoteEvent = remoteEvent
+                                })
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return generatorCache
+end
+
+-- Основной поток автогенератора
+task.spawn(function()
+    while true do
+        task.wait(0.2)
+        
+        if not settings.AUTO_GENERATOR then
+            IsFixingGenerator = false
+            continue
+        end
+        
+        if not character or not hrp or not humanoid then
+            updateCharacterReferences()
+            if not character or not hrp then
+                continue
+            end
+        end
+        
+        if IsFixingGenerator then
+            continue
+        end
+        
+        -- Получаем генераторы
+        local generators = getGenerators()
+        
+        for _, genInfo in ipairs(generators) do
+            local main = genInfo.Main
+            if main and main.Parent then
+                local distance = (main.Position - hrp.Position).Magnitude
+                
+                if distance < 6.7 then
+                    -- Начинаем чинить генератор
+                    IsFixingGenerator = true
+                    
+                    task.spawn(function()
+                        local remoteEvent = genInfo.RemoteEvent
+                        local progress = genInfo.Progress
+                        local obj = genInfo.Object
+                        
+                        if not remoteEvent or not progress then
+                            IsFixingGenerator = false
+                            return
+                        end
+                        
+                        local genCooldown = settings.GENERATOR_COOLDOWN
+                        local speedUp = settings.SPEED_UP_COOLDOWN
+                        
+                        while IsFixingGenerator and settings.AUTO_GENERATOR and progress.Parent and progress.Value < 100 do
+                            -- Проверяем, жив ли персонаж
+                            if not character or not character.Parent then
+                                IsFixingGenerator = false
+                                break
+                            end
+                            
+                            -- Проверяем расстояние
+                            local currentDistance = (main.Position - hrp.Position).Magnitude
+                            if currentDistance > 7 then
+                                IsFixingGenerator = false
+                                break
+                            end
+                            
+                            -- Проверяем, есть ли игроки рядом
+                            local isNear = IsPlayersNear(32)
+                            
+                            -- Вычисляем задержку
+                            local cooldown = genCooldown
+                            if speedUp and not isNear and genCooldown > 2 then
+                                cooldown = 1.5
+                            end
+                            
+                            -- Случайная задержка
+                            local delay = RNG:NextNumber(cooldown - 0.1 * cooldown, cooldown + 0.1 * cooldown)
+                            task.wait(math.max(delay, 0.2))
+                            
+                            -- Повторная проверка перед отправкой
+                            if not IsFixingGenerator or not settings.AUTO_GENERATOR or not progress.Parent then
+                                break
+                            end
+                            
+                            -- Отправляем событие на сервер
+                            pcall(function()
+                                remoteEvent:FireServer()
+                            end)
+                        end
+                        
+                        IsFixingGenerator = false
+                    end)
+                    
+                    break
+                end
+            end
+        end
+    end
+end)
+
+-- ==========================================
+-- ESP SYSTEM (Оптимизированная)
 -- ==========================================
 
 local ColorPresets = {
@@ -164,353 +327,164 @@ local espFolder = Instance.new("Folder")
 espFolder.Name = "ForsakenSurgeESP"
 espFolder.Parent = player:WaitForChild("PlayerGui")
 
-local espHighlights = {}
-local espBillboards = {}
+local espObjects = {}
+local espUpdateInterval = 0.2
+local espTimer = 0
 
-local function clearAllESP()
-    for _, hl in ipairs(espHighlights) do
-        pcall(function() hl:Destroy() end)
-    end
-    espHighlights = {}
-    for _, bg in ipairs(espBillboards) do
-        pcall(function() bg:Destroy() end)
-    end
-    espBillboards = {}
+-- Оптимизированное создание подсветки
+local function CreateHighlight(adornee, color, alpha)
+    if not adornee or not adornee.Parent then return nil end
+    
+    local hl = Instance.new("Highlight")
+    hl.Adornee = adornee
+    hl.FillColor = color
+    hl.OutlineColor = color
+    hl.FillTransparency = alpha or 0.5
+    hl.OutlineTransparency = alpha or 0.5
+    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    hl.Parent = espFolder
+    return hl
 end
 
-function GetValue(FeatureName)
-    return settings[FeatureName]
+-- Оптимизированное создание текста
+local function CreateNameTag(adornee, text, color)
+    if not adornee or not adornee.Parent then return nil end
+    
+    local bill = Instance.new("BillboardGui")
+    bill.Adornee = adornee
+    bill.Size = UDim2.new(2, 0, 0.8, 0)
+    bill.StudsOffset = Vector3.new(0, 3.5, 0)
+    bill.AlwaysOnTop = true
+    bill.ResetOnSpawn = false
+    bill.Parent = adornee
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.fromScale(1, 1)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = color
+    label.TextScaled = true
+    label.Font = Enum.Font.GothamBold
+    label.TextStrokeTransparency = 0.3
+    label.Parent = bill
+    
+    return bill
 end
 
--- Function to check distance for highlight
-local function CheckHighlightDistance(Highlight, TargetRoot, Settings)
-    local Camera = TargetRoot and workspace.CurrentCamera
-    if not Camera or (Highlight:GetAttribute("Frozen") and not Settings.Instant) then return end
-    
-    local Distance = (Camera.CFrame.Position - TargetRoot.Position).Magnitude
-    local MinDistance = Settings.MinDistance or 10
-    local ShouldHide = Distance < MinDistance or Distance > 1200
-    
-    if ShouldHide and Highlight.FillTransparency ~= 1 then
-        local Tween = TweenService:Create(Highlight, TweenInfo.new(Settings.Instant and 0 or 0.1), {
-            FillTransparency = 1,
-            OutlineTransparency = 1
-        })
-        Tween.Parent = Highlight
-        Tween:Play()
-        Debris:AddItem(Tween, 0.2)
-        return
+-- Очистка ESP
+local function clearESP()
+    for _, obj in ipairs(espObjects) do
+        pcall(function() obj:Destroy() end)
     end
-    
-    if not ShouldHide and Distance >= MinDistance and Distance < 1200 then
-        local TransparencyAmount = math.clamp(1 - math.clamp((Distance - MinDistance) / math.max(Settings.MaxDistance - MinDistance, 0.001), 0, 1), 0.45, 1)
-        if math.abs(Highlight.FillTransparency - TransparencyAmount) > 0 then
-            local Tween = TweenService:Create(Highlight, TweenInfo.new(Settings.Instant and 0 or 0.1), {
-                FillTransparency = math.clamp(TransparencyAmount + 0.05, 0, 1),
-                OutlineTransparency = TransparencyAmount <= 0.95 and TransparencyAmount - 0.05 or TransparencyAmount
-            })
-            Tween.Parent = Highlight
-            Tween:Play()
-            Debris:AddItem(Tween, 0.2)
-        end
-    end
+    espObjects = {}
 end
 
--- Function to check distance for text
-local function CheckTextDistance(Text, TargetRoot, Settings)
-    local Camera = TargetRoot and workspace.CurrentCamera
-    if not Camera or (Text:GetAttribute("Frozen") and not Settings.Instant) then return end
-    
-    local Distance = (Camera.CFrame.Position - TargetRoot.Position).Magnitude
-    local MinDistance = Settings.MinDistance or 25
-    
-    if Distance > MinDistance and Distance < 1200 and Text.TextTransparency ~= 0 then
-        local Tween = TweenService:Create(Text, TweenInfo.new(Settings.Instant and 0 or 0.1), {
-            TextTransparency = 0,
-            TextStrokeTransparency = 0
-        })
-        Tween.Parent = TargetRoot
-        Tween:Play()
-        Debris:AddItem(Tween, 0.2)
-    elseif Distance <= MinDistance or Distance >= 1200 and Text.TextTransparency ~= 1 then
-        local Tween = TweenService:Create(Text, TweenInfo.new(Settings.Instant and 0 or 0.1), {
-            TextTransparency = 1,
-            TextStrokeTransparency = 1
-        })
-        Tween.Parent = TargetRoot
-        Tween:Play()
-        Debris:AddItem(Tween, 0.2)
-    end
-end
-
--- Function to create dynamic highlight
-local function CreateDynamicHighlight(Enabled, ItemInstance, TargetRoot, Settings)
-    Settings = type(Settings) == "table" and Settings or {
-        MaxDistance = 100,
-        MinDistance = 10,
-        Color = Color3.new(1,1,1)
-    }
-    
-    if not settings.ESP_ENABLED then
-        Enabled = false
-    end
-    
-    local Highlight = nil
-    for _, child in ipairs(ItemInstance:GetChildren()) do
-        if child:IsA("Highlight") and child:GetAttribute("Dynamic") then
-            Highlight = child
-            break
-        end
-    end
-    
-    if Enabled then
-        if not Highlight then
-            Highlight = Instance.new("Highlight")
-            Highlight.Name = HttpService:GenerateGUID(false):sub(1,7)
-            Highlight.Archivable = false
-            
-            local H, S, V = Settings.Color:ToHSV()
-            Highlight.FillColor = Color3.fromHSV(H, S, V * 0.8)
-            Highlight.OutlineColor = Color3.fromHSV(H, S, V * 1.1)
-            Highlight:SetAttribute("Dynamic", true)
-            Highlight.Parent = ItemInstance
-            Highlight.Adornee = ItemInstance
-            Highlight.FillTransparency = 1
-            Highlight.OutlineTransparency = 1
-            table.insert(espHighlights, Highlight)
-            
-            CheckHighlightDistance(Highlight, TargetRoot, Settings)
-            
-            local Connection
-            Connection = workspace.CurrentCamera:GetPropertyChangedSignal("CameraSubject"):Connect(function()
-                if Highlight and Highlight.Parent then
-                    for i,v in Highlight:GetChildren() do 
-                        pcall(function() v:Cancel() end) 
-                    end
-                    Highlight.FillTransparency = 0.95
-                    Highlight.OutlineTransparency = 0.95
-                else
-                    Connection:Disconnect()
-                end
-            end)
-            
-            Highlight.Destroying:Once(function()
-                if Connection then
-                    Connection:Disconnect()
-                end
-            end)
-            
-            Highlight.Parent:GetPropertyChangedSignal("Parent"):Once(function()
-                Highlight:Destroy()
-            end)
-        else
-            local H, S, V = Settings.Color:ToHSV()
-            Highlight.FillColor = Color3.fromHSV(H, S, V * 0.8)
-            Highlight.OutlineColor = Color3.fromHSV(H, S, V * 1.1)
-            CheckHighlightDistance(Highlight, TargetRoot, Settings)
-        end
-    elseif Highlight then
-        Highlight:Destroy()
-    end
-end
-
--- Function to create text
-local function CreateText(Enabled, ItemInstance, TargetRoot, Settings)
-    Settings = type(Settings) == "table" and Settings or {
-        MinDistance = 25,
-        Color = Color3.new(1,1,1)
-    }
-    
-    if not settings.ESP_ENABLED or not settings.SHOW_TEXT then
-        Enabled = false
-    end
-    
-    local BillboardGui = nil
-    for _, child in ipairs(TargetRoot:GetChildren()) do
-        if child:IsA("BillboardGui") and child:GetAttribute("Dynamic") then
-            BillboardGui = child
-            break
-        end
-    end
-    
-    if Enabled then
-        if not BillboardGui then
-            BillboardGui = Instance.new("BillboardGui")
-            local TextLabel = Instance.new("TextLabel")
-            
-            BillboardGui.Name = HttpService:GenerateGUID(false):sub(1,7)
-            BillboardGui.Archivable = false
-            BillboardGui.Size = ItemInstance:IsA("Tool") and UDim2.new(1.5, 30, 0.75, 30) or UDim2.new(1.5,60,0.75,25)
-            BillboardGui.StudsOffset = ItemInstance:IsA("Tool") and Vector3.new(0,3,0) or Vector3.new(0,4,0)
-            BillboardGui.AlwaysOnTop = true
-            BillboardGui.ResetOnSpawn = false
-            BillboardGui.Adornee = TargetRoot
-            BillboardGui:SetAttribute("Dynamic", true)
-            table.insert(espBillboards, BillboardGui)
-            
-            TextLabel.Text = Settings.Text or "Unknown"
-            local H, S, V = Settings.Color:ToHSV()
-            TextLabel.TextColor3 = Color3.fromHSV(H, S, V * 1.1)
-            TextLabel.AnchorPoint = Vector2.new(0.5, 0.5)
-            TextLabel.Position = UDim2.fromScale(0.5, 0.5)
-            TextLabel.Size = UDim2.fromScale(1, 1)
-            TextLabel.BackgroundTransparency = 1
-            TextLabel.TextScaled = true
-            TextLabel.Parent = BillboardGui
-            
-            BillboardGui.Parent = TargetRoot
-            CheckTextDistance(TextLabel, TargetRoot, Settings)
-            
-            local Connection
-            Connection = workspace.CurrentCamera:GetPropertyChangedSignal("CameraSubject"):Connect(function()
-                if BillboardGui and BillboardGui.Parent then
-                    for i,v in TextLabel:GetChildren() do 
-                        pcall(function() v:Cancel() end) 
-                    end
-                    TextLabel.TextTransparency = 0.95
-                    TextLabel.TextStrokeTransparency = 0.95
-                else
-                    Connection:Disconnect()
-                end
-            end)
-            
-            BillboardGui.Destroying:Once(function()
-                if Connection then
-                    Connection:Disconnect()
-                end
-            end)
-            
-            BillboardGui.Parent:GetPropertyChangedSignal("Parent"):Once(function()
-                BillboardGui:Destroy()
-            end)
-        else
-            local H, S, V = Settings.Color:ToHSV()
-            local TextLabel = BillboardGui.TextLabel
-            if TextLabel then
-                TextLabel.TextColor3 = Color3.fromHSV(H, S, V * 1.1)
-                CheckTextDistance(TextLabel, TargetRoot, Settings)
-            end
-        end
-    elseif BillboardGui then
-        BillboardGui:Destroy()
-    end
-end
-
--- ESP Update Loop
+-- Основной ESP цикл (оптимизированный)
 task.spawn(function()
     while true do
-        task.wait(0.1)
-        pcall(function()
-            if not settings.ESP_ENABLED then
-                clearAllESP()
-                return
+        task.wait(espUpdateInterval)
+        
+        if not settings.ESP_ENABLED then
+            if #espObjects > 0 then
+                clearESP()
             end
-            
-            -- Player ESP
+            continue
+        end
+        
+        -- Очищаем старые объекты
+        for i = #espObjects, 1, -1 do
+            if not espObjects[i] or not espObjects[i].Parent then
+                table.remove(espObjects, i)
+            end
+        end
+        
+        -- Подсветка игроков
+        if settings.KILLERS_ESP or settings.SURVIVORS_ESP then
             for _, plr in ipairs(Players:GetPlayers()) do
-                task.spawn(function()
-                    if plr == player then return end
-                    local char = plr.Character
-                    if char and char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0 then
-                        local TargetRoot = char:FindFirstChild("HumanoidRootPart")
-                        if not TargetRoot then return end
-                        
-                        local isKiller = false
-                        local team = plr.Team
-                        if team then
-                            local teamName = team.Name:lower()
-                            if teamName:find("killer") or teamName:find("monster") or teamName:find("enemy") then
-                                isKiller = true
-                            end
-                        end
-                        
-                        if isKiller and settings.KILLERS_ESP then
-                            local color = ColorPresets[settings.KILLERS_COLOR] or ColorPresets.Red
-                            CreateDynamicHighlight(true, char, TargetRoot, {
-                                MaxDistance = 100,
-                                MinDistance = 10,
-                                Color = color
-                            })
-                            CreateText(true, char, TargetRoot, {
-                                MinDistance = 25,
-                                Text = plr.Name,
-                                Color = color
-                            })
-                        elseif not isKiller and settings.SURVIVORS_ESP then
-                            local color = ColorPresets[settings.SURVIVORS_COLOR] or ColorPresets.Green
-                            CreateDynamicHighlight(true, char, TargetRoot, {
-                                MaxDistance = 100,
-                                MinDistance = 10,
-                                Color = color
-                            })
-                            CreateText(true, char, TargetRoot, {
-                                MinDistance = 25,
-                                Text = plr.Name,
-                                Color = color
-                            })
-                        else
-                            CreateDynamicHighlight(false, char)
-                            CreateText(false, char)
-                        end
+                if plr == player then continue end
+                
+                local char = plr.Character
+                if not char or not char.Parent then continue end
+                
+                local hrpPart = char:FindFirstChild("HumanoidRootPart")
+                if not hrpPart then continue end
+                
+                local hum = char:FindFirstChild("Humanoid")
+                if not hum or hum.Health <= 0 then continue end
+                
+                -- Определяем тип игрока
+                local isKiller = false
+                local team = plr.Team
+                if team then
+                    local teamName = string.lower(team.Name)
+                    if string.find(teamName, "killer") or string.find(teamName, "monster") or string.find(teamName, "enemy") then
+                        isKiller = true
                     end
-                end)
-            end
-            
-            -- Generators ESP
-            if settings.GENERATORS_ESP then
-                for _, obj in ipairs(Workspace:GetDescendants()) do
-                    if obj:IsA("Model") and obj.Parent then
-                        local name = string.lower(obj.Name)
-                        if string.find(name, "generator") or string.find(name, "gen") or obj:GetAttribute("Generator") then
-                            local progress = obj:FindFirstChild("Progress")
-                            if progress and progress.Value >= 100 then
-                                CreateDynamicHighlight(false, obj)
-                                CreateText(false, obj)
-                            else
-                                local TargetRoot = obj:FindFirstChild("Main") or obj:FindFirstChild("HumanoidRootPart") or obj
-                                local color = ColorPresets[settings.GENERATORS_COLOR] or ColorPresets.Cyan
-                                CreateDynamicHighlight(true, obj, TargetRoot, {
-                                    MaxDistance = 100,
-                                    MinDistance = 12,
-                                    Color = color
-                                })
-                                CreateText(true, obj, TargetRoot, {
-                                    MinDistance = 25,
-                                    Text = obj.Name,
-                                    Color = color
-                                })
-                            end
-                        end
+                end
+                
+                local color
+                local shouldShow = false
+                
+                if isKiller and settings.KILLERS_ESP then
+                    color = ColorPresets[settings.KILLERS_COLOR] or ColorPresets.Red
+                    shouldShow = true
+                elseif not isKiller and settings.SURVIVORS_ESP then
+                    color = ColorPresets[settings.SURVIVORS_COLOR] or ColorPresets.Green
+                    shouldShow = true
+                end
+                
+                if shouldShow then
+                    -- Создаем подсветку
+                    local hl = CreateHighlight(char, color, 0.4)
+                    if hl then table.insert(espObjects, hl) end
+                    
+                    -- Создаем имя
+                    if settings.SHOW_TEXT then
+                        local name = CreateNameTag(hrpPart, plr.Name, color)
+                        if name then table.insert(espObjects, name) end
                     end
                 end
             end
-            
-            -- Items ESP
-            if settings.ITEMS_ESP then
-                for _, obj in ipairs(Workspace:GetDescendants()) do
-                    if obj:IsA("Tool") and obj.Parent then
-                        local TargetRoot = obj:FindFirstChildWhichIsA("BasePart") or obj
+        end
+        
+        -- Подсветка генераторов (оптимизировано)
+        if settings.GENERATORS_ESP then
+            local generators = getGenerators()
+            for _, genInfo in ipairs(generators) do
+                local obj = genInfo.Object
+                local main = genInfo.Main
+                if obj and main and main.Parent then
+                    local color = ColorPresets[settings.GENERATORS_COLOR] or ColorPresets.Cyan
+                    local hl = CreateHighlight(obj, color, 0.35)
+                    if hl then table.insert(espObjects, hl) end
+                    
+                    if settings.SHOW_TEXT then
+                        local name = CreateNameTag(main, obj.Name, color)
+                        if name then table.insert(espObjects, name) end
+                    end
+                end
+            end
+        end
+        
+        -- Подсветка предметов (оптимизировано)
+        if settings.ITEMS_ESP then
+            for _, obj in ipairs(Workspace:GetDescendants()) do
+                if obj:IsA("Tool") and obj.Parent then
+                    local part = obj:FindFirstChildWhichIsA("BasePart")
+                    if part then
                         local color = ColorPresets[settings.ITEMS_COLOR] or ColorPresets.Gold
-                        CreateDynamicHighlight(true, obj, TargetRoot, {
-                            MaxDistance = 100,
-                            MinDistance = 12,
-                            Color = color
-                        })
-                        CreateText(true, obj, TargetRoot, {
-                            MinDistance = 25,
-                            Text = obj.Name,
-                            Color = color
-                        })
+                        local hl = CreateHighlight(obj, color, 0.3)
+                        if hl then table.insert(espObjects, hl) end
                     end
                 end
             end
-        end)
+        end
     end
 end)
 
-player.CharacterAdded:Connect(function(char)
+player.CharacterAdded:Connect(function()
     task.wait(0.5)
-    clearAllESP()
+    clearESP()
 end)
 
 -- ==========================================
@@ -1350,8 +1324,8 @@ local ESPTab = Window:CreateTab({
 })
 
 ESPTab:CreateParagraph({
-    Title = "ADVANCED ESP",
-    Text = "Full dynamic highlighting with distance fading"
+    Title = "OPTIMIZED ESP",
+    Text = "Dynamic highlighting with minimal FPS impact"
 })
 
 ESPTab:CreateToggle({
@@ -1362,7 +1336,7 @@ ESPTab:CreateToggle({
         settings.ESP_ENABLED = Value
         SaveSettings(settings)
         if not Value then
-            clearAllESP()
+            clearESP()
         end
     end
 }, "ESPMaster")
@@ -1467,9 +1441,59 @@ ESPTab:CreateToggle({
     end
 }, "ShowText")
 
-ESPTab:CreateParagraph({
+-- ==========================================
+-- AUTO GENERATOR TAB
+-- ==========================================
+local GenTab = Window:CreateTab({
+    Name = "Generator",
+    Icon = "bolt",
+    ImageSource = "Material",
+    ShowTitle = true
+})
+
+GenTab:CreateParagraph({
+    Title = "AUTO GENERATOR",
+    Text = "Automatically completes generator puzzles\nStands next to generator and it will auto-complete"
+})
+
+GenTab:CreateToggle({
+    Name = "Auto Generator",
+    Description = "Auto completes generator puzzles",
+    CurrentValue = settings.AUTO_GENERATOR,
+    Callback = function(Value)
+        settings.AUTO_GENERATOR = Value
+        SaveSettings(settings)
+        if not Value then
+            IsFixingGenerator = false
+        end
+    end
+}, "AutoGenerator")
+
+GenTab:CreateSlider({
+    Name = "Generator Cooldown",
+    Description = "Cooldown between completions (seconds)",
+    Range = {1.5, 8},
+    Increment = 0.25,
+    CurrentValue = settings.GENERATOR_COOLDOWN,
+    Callback = function(Value)
+        settings.GENERATOR_COOLDOWN = Value
+        SaveSettings(settings)
+    end
+}, "GenCooldown")
+
+GenTab:CreateToggle({
+    Name = "Speed Up When Alone",
+    Description = "Reduces cooldown when nobody is nearby",
+    CurrentValue = settings.SPEED_UP_COOLDOWN,
+    Callback = function(Value)
+        settings.SPEED_UP_COOLDOWN = Value
+        SaveSettings(settings)
+    end
+}, "SpeedUpCooldown")
+
+GenTab:CreateParagraph({
     Title = "HOW IT WORKS",
-    Text = "• Dynamic highlights with distance fading\n• Colors change based on distance\n• Names appear when close enough\n• Auto-hides completed generators"
+    Text = "1. Stand near a generator\n2. Auto Generator will activate\n3. It will repeatedly complete the puzzle\n4. Cooldown controls speed\n5. 'Speed Up' makes it faster when alone"
 })
 
 -- ==========================================
@@ -1527,7 +1551,8 @@ SettingsTab:CreateButton({
             settings[key] = value
         end
         SaveSettings(settings)
-        clearAllESP()
+        clearESP()
+        IsFixingGenerator = false
     end
 })
 
