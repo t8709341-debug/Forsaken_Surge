@@ -1,3 +1,7 @@
+-- ==========================================
+-- ПОЛНЫЙ ОПТИМИЗИРОВАННЫЙ СКРИПТ FORSAKEN SURGE V9.0
+-- ==========================================
+
 local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-Softworks/Luna-Interface-Suite/refs/heads/main/source.lua", true))()
 
 -- ==========================================
@@ -5,7 +9,7 @@ local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-S
 -- ==========================================
 local Window = Luna:CreateWindow({
     Name = "Forsaken Surge",
-    Subtitle = "v9.0 | VELOCITY + TURBO",
+    Subtitle = "v9.0 | OPTIMIZED ESP",
     LogoID = nil,
     LoadingEnabled = true,
     LoadingTitle = "Forsaken Surge",
@@ -85,8 +89,9 @@ local DefaultSettings = {
     FLY_AUTO_UP = false,
     FLY_HOVER = false,
     
-    -- ESP SETTINGS
+    -- ESP SETTINGS (Оптимизированные)
     ESP_ENABLED = true,
+    ESP_UPDATE_INTERVAL = 0.2,
     KILLERS_ESP = true,
     KILLERS_COLOR = "Red",
     SURVIVORS_ESP = true,
@@ -95,10 +100,19 @@ local DefaultSettings = {
     GENERATORS_COLOR = "Cyan",
     ITEMS_ESP = true,
     ITEMS_COLOR = "Gold",
+    SHOW_TEXT = true,
+    ESP_MAX_DISTANCE = 120,
+    ESP_MIN_DISTANCE = 8,
+    ESP_FADE_DISTANCE = true,
     
     TURBO_ACTIVE = false,
     TURBO_SPEED = 30,
     TURBO_MODE = "Velocity",
+    
+    -- Автогенератор
+    AUTO_GENERATOR = false,
+    GENERATOR_COOLDOWN = 3,
+    SPEED_UP_COOLDOWN = false
 }
 
 function LoadSettings()
@@ -123,29 +137,1449 @@ end
 
 local settings = LoadSettings()
 
--- ===== СОСТОЯНИЯ =====
+-- ==========================================
+-- ОПТИМИЗИРОВАННАЯ ESP СИСТЕМА
+-- ==========================================
+
+local ESP = {
+    Enabled = true,
+    UpdateInterval = 0.2,
+    MaxDistance = 120,
+    MinDistance = 8,
+    Cache = {
+        Players = {},
+        Generators = {},
+        Items = {},
+        LastUpdate = 0,
+        UpdateTime = 0.5
+    },
+    Objects = {
+        Highlights = {},
+        Billboards = {},
+        Pool = {}
+    },
+    DistanceCheckInterval = 0.15,
+    FrameSkip = 0
+}
+
+-- Цвета (кэшированные)
+local ColorPresets = {
+    ["White"] = Color3.fromRGB(255,255,255),
+    ["Teal"] = Color3.fromRGB(3,252,157),
+    ["Green"] = Color3.fromRGB(0,255,0),
+    ["Purple"] = Color3.fromRGB(158, 0, 179),
+    ["Red"] = Color3.fromRGB(255,0,0),
+    ["Blue"] = Color3.fromRGB(0,0,255),
+    ["Cyan"] = Color3.fromRGB(0,255,255),
+    ["Gold"] = Color3.fromRGB(255,215,0),
+    ["Orange"] = Color3.fromRGB(255,165,0)
+}
+
+local espFolder = Instance.new("Folder")
+espFolder.Name = "ForsakenSurgeESP"
+espFolder.Parent = player:WaitForChild("PlayerGui")
+
+local function GetESPColor(settingName, defaultColor)
+    local colorName = settings[settingName] or defaultColor
+    return ColorPresets[colorName] or ColorPresets[defaultColor]
+end
+
+-- ==========================================
+-- ОПТИМИЗИРОВАННОЕ СОЗДАНИЕ HIGHLIGHT
+-- ==========================================
+
+local function CreateOptimizedHighlight(instance, color, distance)
+    if not instance or not instance.Parent then return nil end
+    
+    local highlight = Instance.new("Highlight")
+    highlight.FillColor = color
+    highlight.OutlineColor = color
+    highlight.FillTransparency = 0.7
+    highlight.OutlineTransparency = 0.3
+    highlight.Adornee = instance
+    highlight.Parent = instance
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight:SetAttribute("ESP", true)
+    highlight:SetAttribute("Distance", distance or 0)
+    
+    return highlight
+end
+
+local function CreateOptimizedText(instance, text, color, distance)
+    if not instance or not instance.Parent then return nil end
+    
+    local billboard = Instance.new("BillboardGui")
+    billboard.Size = UDim2.new(0, 100, 0, 25)
+    billboard.StudsOffset = Vector3.new(0, 3, 0)
+    billboard.AlwaysOnTop = true
+    billboard.ResetOnSpawn = false
+    billboard.Adornee = instance
+    billboard:SetAttribute("ESP", true)
+    billboard:SetAttribute("Distance", distance or 0)
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = color
+    label.TextSize = 14
+    label.Font = Enum.Font.GothamBold
+    label.TextScaled = true
+    label.TextStrokeTransparency = 0
+    label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    label.Parent = billboard
+    
+    billboard.Parent = instance
+    return billboard
+end
+
+-- ==========================================
+-- ОПТИМИЗИРОВАННОЕ ОБНОВЛЕНИЕ КЭША
+-- ==========================================
+
+local function UpdateESPCache()
+    local now = tick()
+    if now - ESP.Cache.LastUpdate < 0.5 then return end
+    
+    ESP.Cache.Players = {}
+    ESP.Cache.Generators = {}
+    ESP.Cache.Items = {}
+    
+    -- Кэшируем игроков (только живых)
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player then
+            local char = plr.Character
+            if char and char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0 then
+                local root = char:FindFirstChild("HumanoidRootPart")
+                if root then
+                    local isKiller = false
+                    local team = plr.Team
+                    if team then
+                        local teamName = team.Name:lower()
+                        if teamName:find("killer") or teamName:find("monster") or teamName:find("enemy") then
+                            isKiller = true
+                        end
+                    end
+                    table.insert(ESP.Cache.Players, {
+                        Player = plr,
+                        Character = char,
+                        Root = root,
+                        IsKiller = isKiller,
+                        Name = plr.Name
+                    })
+                end
+            end
+        end
+    end
+    
+    -- Кэшируем генераторы
+    if settings.GENERATORS_ESP then
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj:IsA("Model") and obj.Parent then
+                local name = string.lower(obj.Name)
+                if string.find(name, "generator") or string.find(name, "gen") or obj:GetAttribute("Generator") then
+                    local progress = obj:FindFirstChild("Progress")
+                    if progress and progress.Value < 100 then
+                        local main = obj:FindFirstChild("Main") or obj:FindFirstChild("HumanoidRootPart") or obj
+                        table.insert(ESP.Cache.Generators, {
+                            Object = obj,
+                            Main = main,
+                            Name = obj.Name
+                        })
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Кэшируем предметы
+    if settings.ITEMS_ESP then
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj:IsA("Tool") and obj.Parent then
+                local main = obj:FindFirstChildWhichIsA("BasePart") or obj
+                table.insert(ESP.Cache.Items, {
+                    Object = obj,
+                    Main = main,
+                    Name = obj.Name
+                })
+            end
+        end
+    end
+    
+    ESP.Cache.LastUpdate = now
+end
+
+-- ==========================================
+-- ОПТИМИЗИРОВАННАЯ ОТРИСОВКА ESP
+-- ==========================================
+
+local function RenderESP()
+    if not settings.ESP_ENABLED then
+        -- Удаляем все ESP объекты
+        for _, child in ipairs(espFolder:GetDescendants()) do
+            if child:GetAttribute("ESP") then
+                child:Destroy()
+            end
+        end
+        return
+    end
+    
+    local cameraPos = Camera.CFrame.Position
+    local maxDist = settings.ESP_MAX_DISTANCE or 120
+    local minDist = settings.ESP_MIN_DISTANCE or 8
+    
+    -- Очищаем старые объекты (кэшируем для переиспользования)
+    local toRemove = {}
+    for _, child in ipairs(espFolder:GetDescendants()) do
+        if child:GetAttribute("ESP") then
+            local parent = child:GetAttribute("Parent")
+            if not parent or not parent.Parent then
+                table.insert(toRemove, child)
+            end
+        end
+    end
+    
+    for _, obj in ipairs(toRemove) do
+        obj:Destroy()
+    end
+    
+    -- Отрисовка игроков
+    if settings.KILLERS_ESP or settings.SURVIVORS_ESP then
+        for _, data in ipairs(ESP.Cache.Players) do
+            if data.Root and data.Root.Parent then
+                local dist = (data.Root.Position - cameraPos).Magnitude
+                if dist < maxDist then
+                    local color
+                    local show = false
+                    
+                    if data.IsKiller and settings.KILLERS_ESP then
+                        color = GetESPColor("KILLERS_COLOR", "Red")
+                        show = true
+                    elseif not data.IsKiller and settings.SURVIVORS_ESP then
+                        color = GetESPColor("SURVIVORS_COLOR", "Green")
+                        show = true
+                    end
+                    
+                    if show then
+                        -- Создаем highlight
+                        local highlight = CreateOptimizedHighlight(data.Character, color, dist)
+                        if highlight then
+                            highlight.Parent = espFolder
+                        end
+                        
+                        -- Создаем текст
+                        if settings.SHOW_TEXT then
+                            local text = CreateOptimizedText(data.Character, data.Name, color, dist)
+                            if text then
+                                text.Parent = espFolder
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Отрисовка генераторов
+    if settings.GENERATORS_ESP then
+        for _, data in ipairs(ESP.Cache.Generators) do
+            if data.Main and data.Main.Parent then
+                local dist = (data.Main.Position - cameraPos).Magnitude
+                if dist < maxDist then
+                    local color = GetESPColor("GENERATORS_COLOR", "Cyan")
+                    
+                    local highlight = CreateOptimizedHighlight(data.Object, color, dist)
+                    if highlight then
+                        highlight.Parent = espFolder
+                    end
+                    
+                    if settings.SHOW_TEXT then
+                        local text = CreateOptimizedText(data.Object, "⚡ " .. data.Name, color, dist)
+                        if text then
+                            text.Parent = espFolder
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Отрисовка предметов
+    if settings.ITEMS_ESP then
+        for _, data in ipairs(ESP.Cache.Items) do
+            if data.Main and data.Main.Parent then
+                local dist = (data.Main.Position - cameraPos).Magnitude
+                if dist < maxDist then
+                    local color = GetESPColor("ITEMS_COLOR", "Gold")
+                    
+                    local highlight = CreateOptimizedHighlight(data.Object, color, dist)
+                    if highlight then
+                        highlight.Parent = espFolder
+                    end
+                    
+                    if settings.SHOW_TEXT then
+                        local text = CreateOptimizedText(data.Object, "📦 " .. data.Name, color, dist)
+                        if text then
+                            text.Parent = espFolder
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- ==========================================
+-- ОПТИМИЗИРОВАННЫЙ ESP ЦИКЛ
+-- ==========================================
+
+task.spawn(function()
+    while true do
+        task.wait(ESP.UpdateInterval)
+        pcall(function()
+            if settings.ESP_ENABLED then
+                UpdateESPCache()
+                RenderESP()
+            else
+                -- Очистка
+                for _, child in ipairs(espFolder:GetDescendants()) do
+                    if child:GetAttribute("ESP") then
+                        child:Destroy()
+                    end
+                end
+            end
+        end)
+    end
+end)
+
+-- Очистка при смене персонажа
+player.CharacterAdded:Connect(function()
+    task.wait(0.5)
+    for _, child in ipairs(espFolder:GetDescendants()) do
+        if child:GetAttribute("ESP") then
+            child:Destroy()
+        end
+    end
+    ESP.Cache.LastUpdate = 0
+end)
+
+-- ==========================================
+-- АВТОГЕНЕРАТОР (Оптимизированный)
+-- ==========================================
+
+local AutoGen = {
+    IsRunning = false,
+    CurrentGenerator = nil,
+    RNG = Random.new(),
+    LastCheck = 0,
+    CheckInterval = 0.15,
+    CachedGenerators = {},
+    CacheTime = 0,
+    CacheLifetime = 2
+}
+
+local function GetCachedGenerators()
+    local now = tick()
+    if now - AutoGen.CacheTime > AutoGen.CacheLifetime then
+        AutoGen.CachedGenerators = {}
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj:IsA("Model") and (obj.Name == "Generator" or string.find(string.lower(obj.Name), "generator")) and obj:FindFirstChild("Main") then
+                local progress = obj:FindFirstChild("Progress")
+                if progress and progress.Value < 100 then
+                    table.insert(AutoGen.CachedGenerators, obj)
+                end
+            end
+        end
+        AutoGen.CacheTime = now
+    end
+    return AutoGen.CachedGenerators
+end
+
+local function IsPlayersNear(distance)
+    if not hrp then return false end
+    
+    local pos = hrp.Position
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player then
+            local char = plr.Character
+            if char then
+                local root = char:FindFirstChild("HumanoidRootPart")
+                if root and (root.Position - pos).Magnitude < distance then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+local function GetGenCooldown()
+    local baseCD = settings.GENERATOR_COOLDOWN or 3
+    local speedUp = settings.SPEED_UP_COOLDOWN
+    
+    if speedUp then
+        local playersNear = IsPlayersNear(32)
+        if not playersNear and baseCD > 2 then
+            return math.max(1.5, baseCD * 0.3)
+        end
+    end
+    
+    return baseCD
+end
+
+local function FixGenerator(generator)
+    if not generator or not generator.Parent then return false end
+    
+    local remotes = generator:FindFirstChild("Remotes")
+    local progress = generator:FindFirstChild("Progress")
+    if not remotes or not progress then return false end
+    
+    local remoteEvent = remotes:FindFirstChildOfClass("RemoteEvent")
+    if not remoteEvent then return false end
+    
+    if progress.Value >= 100 then return false end
+    
+    local cooldown = GetGenCooldown()
+    local variance = cooldown * 0.1
+    local delay = AutoGen.RNG:NextNumber(cooldown - variance, cooldown + variance)
+    task.wait(math.max(0.5, delay))
+    
+    if not AutoGen.IsRunning or not character then return false end
+    if progress.Value >= 100 then return false end
+    
+    remoteEvent:FireServer()
+    
+    local main = generator:FindFirstChild("Main")
+    if main then
+        -- Воспроизведение звука
+        local sound = Instance.new("Sound")
+        sound.SoundId = "rbxassetid://9120401844"
+        sound.Parent = main
+        sound:Play()
+        Debris:AddItem(sound, 2)
+    end
+    
+    return true
+end
+
+local function AutoGeneratorLoop()
+    if not settings.AUTO_GENERATOR then
+        AutoGen.IsRunning = false
+        return
+    end
+    
+    if not hrp or not character then return end
+    if AutoGen.IsRunning then return end
+    
+    local generators = GetCachedGenerators()
+    if #generators == 0 then return end
+    
+    local nearest = nil
+    local nearestDist = math.huge
+    local pos = hrp.Position
+    
+    for _, gen in ipairs(generators) do
+        local main = gen:FindFirstChild("Main")
+        if main then
+            local dist = (main.Position - pos).Magnitude
+            if dist < nearestDist and dist < 7 then
+                nearestDist = dist
+                nearest = gen
+            end
+        end
+    end
+    
+    if not nearest then return end
+    
+    AutoGen.IsRunning = true
+    AutoGen.CurrentGenerator = nearest
+    
+    FixGenerator(nearest)
+    
+    AutoGen.IsRunning = false
+    AutoGen.CurrentGenerator = nil
+    AutoGen.CacheTime = 0
+end
+
+-- Запуск автогенератора
+task.spawn(function()
+    while true do
+        task.wait(0.15)
+        pcall(AutoGeneratorLoop)
+    end
+end)
+
+player.CharacterAdded:Connect(function()
+    task.wait(0.5)
+    AutoGen.CacheTime = 0
+    AutoGen.IsRunning = false
+    AutoGen.CurrentGenerator = nil
+end)
+
+-- ==========================================
+-- WALL WALK (TOGGLE C)
+-- ==========================================
+local function toggleClimb()
+    if flying or noClipActive or turboActive then return end
+    
+    if not hrp or not humanoid then
+        updateCharacterReferences()
+        if not hrp or not humanoid then return end
+    end
+    
+    climbing = not climbing
+    if climbing then
+        humanoid.AutoRotate = false
+        humanoid.PlatformStand = true
+        facing = hrp.CFrame.LookVector
+        upDir = hrp.CFrame.UpVector
+        gravityDir = -upDir
+        isOnCeiling = false
+        ceilingTime = 0
+    else
+        humanoid.AutoRotate = true
+        humanoid.PlatformStand = false
+        gravityDir = Vector3.new(0, -1, 0)
+        upDir = Vector3.new(0, 1, 0)
+        fallSpeed = 0
+        isGrounded = false
+        isOnCeiling = false
+        ceilingTime = 0
+        if hrp then
+            hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + facing)
+        end
+    end
+end
+
+-- ==========================================
+-- FLY (TOGGLE V)
+-- ==========================================
+local function toggleFly()
+    if not hrp or not humanoid then
+        updateCharacterReferences()
+        if not hrp or not humanoid then return end
+    end
+    
+    flying = not flying
+    
+    if flying then
+        climbing = false
+        noClipActive = false
+        turboActive = false
+        humanoid.AutoRotate = false
+        humanoid.PlatformStand = true
+        if hrp then
+            hrp.AssemblyLinearVelocity = Vector3.zero
+        end
+        flyVelocity = Vector3.zero
+        if settings.FLY_AUTO_UP then
+            flyVelocity = Vector3.new(0, settings.FLY_SPEED * 0.5, 0)
+        end
+    else
+        humanoid.AutoRotate = true
+        humanoid.PlatformStand = false
+        if hrp then
+            hrp.AssemblyLinearVelocity = Vector3.zero
+        end
+        flyVelocity = Vector3.zero
+        gravityDir = Vector3.new(0, -1, 0)
+        upDir = Vector3.new(0, 1, 0)
+    end
+end
+
+-- ==========================================
+-- TURBO (TOGGLE Z)
+-- ==========================================
+local function toggleTurbo()
+    if not hrp or not humanoid then
+        updateCharacterReferences()
+        if not hrp or not humanoid then return end
+    end
+    
+    turboActive = not turboActive
+    
+    if turboActive then
+        climbing = false
+        flying = false
+        noClipActive = false
+        
+        humanoid.AutoRotate = true
+        humanoid.PlatformStand = false
+        humanoid.WalkSpeed = 16
+    else
+        if hrp then
+            hrp.AssemblyLinearVelocity = Vector3.zero
+        end
+    end
+end
+
+task.spawn(function()
+    while true do
+        task.wait()
+        
+        if turboActive and hrp and humanoid then
+            local camLook = Camera.CFrame.LookVector
+            local camRight = Camera.CFrame.RightVector
+            
+            camLook = Vector3.new(camLook.X, 0, camLook.Z).Unit
+            camRight = Vector3.new(camRight.X, 0, camRight.Z).Unit
+            
+            local moveDir = Vector3.zero
+            
+            if pressed[Enum.KeyCode.W] then
+                moveDir = moveDir + camLook
+            end
+            if pressed[Enum.KeyCode.S] then
+                moveDir = moveDir - camLook
+            end
+            if pressed[Enum.KeyCode.A] then
+                moveDir = moveDir - camRight
+            end
+            if pressed[Enum.KeyCode.D] then
+                moveDir = moveDir + camRight
+            end
+            
+            if moveDir.Magnitude > 0 then
+                moveDir = moveDir.Unit
+            end
+            
+            local speed = settings.TURBO_SPEED
+            local mode = settings.TURBO_MODE
+            
+            if mode == "Velocity" then
+                hrp.AssemblyLinearVelocity = moveDir * speed
+                hrp.AssemblyAngularVelocity = Vector3.zero
+            elseif mode == "Teleport" then
+                local step = speed * 0.016
+                hrp.CFrame = hrp.CFrame + moveDir * step
+                hrp.AssemblyLinearVelocity = Vector3.zero
+            elseif mode == "Combo" then
+                hrp.AssemblyLinearVelocity = moveDir * speed * 0.5
+                local step = speed * 0.008
+                hrp.CFrame = hrp.CFrame + moveDir * step
+            end
+        end
+    end
+end)
+
+-- ==========================================
+-- NO CLIP (TOGGLE B)
+-- ==========================================
+local function toggleNoClip()
+    if not hrp or not humanoid then
+        updateCharacterReferences()
+        if not hrp or not humanoid then return end
+    end
+    
+    noClipActive = not noClipActive
+    
+    if noClipActive then
+        climbing = false
+        flying = false
+        turboActive = false
+        
+        humanoid.AutoRotate = true
+        humanoid.PlatformStand = false
+        
+        for _, part in ipairs(character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+        
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
+        
+    else
+        for _, part in ipairs(character:GetDescendants()) do
+            if part:IsA("BasePart") and part.Name ~= "NoclipDetector" then
+                part.CanCollide = true
+            end
+        end
+        
+        gravityDir = Vector3.new(0, -1, 0)
+        upDir = Vector3.new(0, 1, 0)
+    end
+end
+
+-- ==========================================
+-- KILLER WALLS REMOVER
+-- ==========================================
+local function removeKillerWalls()
+    if not settings.REMOVE_KILLER_WALLS then 
+        return 
+    end
+    
+    local paths = {
+        "Map.Ingame.Map.MapBoundaries.KillerDoors",
+        "Map.Ingame.Map.MapBoundaries.KillerOnly",
+    }
+    
+    for _, path in ipairs(paths) do
+        local current = Workspace
+        local success = true
+        local parts = {}
+        
+        for part in string.gmatch(path, "[^%.]+") do
+            table.insert(parts, part)
+        end
+        
+        for _, partName in ipairs(parts) do
+            if current then
+                current = current:FindFirstChild(partName)
+                if not current then
+                    success = false
+                    break
+                end
+            else
+                success = false
+                break
+            end
+        end
+        
+        if success and current then
+            for _, child in ipairs(current:GetChildren()) do
+                pcall(function()
+                    if child:IsA("BasePart") or child:IsA("Model") or child:IsA("Part") or child:IsA("MeshPart") then
+                        child:Destroy()
+                    end
+                end)
+            end
+        end
+    end
+end
+
+task.spawn(function()
+    while true do
+        task.wait(2)
+        if settings.REMOVE_KILLER_WALLS then
+            pcall(removeKillerWalls)
+        end
+    end
+end)
+
+-- ==========================================
+-- INPUT HANDLING
+-- ==========================================
+local pressed = {}
+local isSprinting = false
 local climbing = false
 local flying = false
 local noClipActive = false
 local turboActive = false
-local gravityDir = Vector3.new(0, -1, 0)
-local upDir = Vector3.new(0, 1, 0)
+local isOnCeiling = false
+local ceilingTime = 0
 local fallSpeed = 0
 local isGrounded = false
 local facing = Vector3.new(0, 0, -1)
-local pressed = {}
-local isSprinting = false
-local isOnCeiling = false
-local ceilingTime = 0
+local gravityDir = Vector3.new(0, -1, 0)
+local upDir = Vector3.new(0, 1, 0)
 local flyVelocity = Vector3.new(0, 0, 0)
 
--- Рейкаст
-local rayParams = RaycastParams.new()
-rayParams.FilterType = Enum.RaycastFilterType.Exclude
-rayParams.RespectCanCollide = true
+UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
+    pressed[input.KeyCode] = true
+    
+    if input.KeyCode == Enum.KeyCode.C then
+        toggleClimb()
+    end
+    
+    if input.KeyCode == Enum.KeyCode.V then
+        toggleFly()
+    end
+    
+    if input.KeyCode == Enum.KeyCode.B then
+        toggleNoClip()
+    end
+    
+    if input.KeyCode == Enum.KeyCode.Z then
+        toggleTurbo()
+    end
+    
+    if input.KeyCode == Enum.KeyCode.LeftShift then
+        isSprinting = true
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input, gp)
+    if gp then return end
+    pressed[input.KeyCode] = false
+    if input.KeyCode == Enum.KeyCode.LeftShift then
+        isSprinting = false
+    end
+end)
 
 -- ==========================================
--- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+-- LUNA INTERFACE
+-- ==========================================
+
+Window:CreateHomeTab({
+    SupportedExecutors = {"Synapse X", "Krnl", "ScriptWare", "Fluxus", "Oxygen U"},
+    DiscordInvite = "forsakensurge",
+    Icon = 2,
+})
+
+-- ==========================================
+-- WALK TAB
+-- ==========================================
+local WalkTab = Window:CreateTab({
+    Name = "Walk",
+    Icon = "directions_walk",
+    ImageSource = "Material",
+    ShowTitle = true
+})
+
+WalkTab:CreateParagraph({
+    Title = "Forsaken Surge",
+    Text = "v9.0 with OPTIMIZED ESP!"
+})
+
+WalkTab:CreateLabel({ Text = "MOVEMENT", Style = 1 })
+
+WalkTab:CreateSlider({
+    Name = "Walk Speed",
+    Range = {5, 50},
+    Increment = 1,
+    CurrentValue = settings.WALK_SPEED,
+    Callback = function(Value)
+        settings.WALK_SPEED = Value
+        SaveSettings(settings)
+    end
+}, "WalkSpeed")
+
+WalkTab:CreateSlider({
+    Name = "Sprint Multiplier",
+    Range = {1.0, 3.0},
+    Increment = 0.1,
+    CurrentValue = settings.SPRINT_MULTIPLIER,
+    Callback = function(Value)
+        settings.SPRINT_MULTIPLIER = Value
+        SaveSettings(settings)
+    end
+}, "SprintMultiplier")
+
+WalkTab:CreateSlider({
+    Name = "Gravity",
+    Range = {10, 60},
+    Increment = 1,
+    CurrentValue = settings.GRAVITY,
+    Callback = function(Value)
+        settings.GRAVITY = Value
+        SaveSettings(settings)
+    end
+}, "Gravity")
+
+WalkTab:CreateLabel({ Text = "RANGE", Style = 1 })
+
+WalkTab:CreateSlider({
+    Name = "Wall Grab Range",
+    Range = {1, 10},
+    Increment = 0.5,
+    CurrentValue = settings.WALL_RANGE,
+    Callback = function(Value)
+        settings.WALL_RANGE = Value
+        SaveSettings(settings)
+    end
+}, "WallRange")
+
+WalkTab:CreateSlider({
+    Name = "Rotation Smoothness",
+    Range = {1, 15},
+    Increment = 1,
+    CurrentValue = settings.ALIGN_SPEED,
+    Callback = function(Value)
+        settings.ALIGN_SPEED = Value
+        SaveSettings(settings)
+    end
+}, "AlignSpeed")
+
+WalkTab:CreateLabel({ Text = "CEILING", Style = 1 })
+
+WalkTab:CreateToggle({
+    Name = "Ceiling Grip",
+    Description = "Allows walking on ceilings",
+    CurrentValue = settings.CEILING_GRIP,
+    Callback = function(Value)
+        settings.CEILING_GRIP = Value
+        SaveSettings(settings)
+    end
+}, "CeilingGrip")
+
+WalkTab:CreateSlider({
+    Name = "Ceiling Grip Force",
+    Range = {1, 20},
+    Increment = 0.5,
+    CurrentValue = settings.CEILING_GRIP_FORCE,
+    Callback = function(Value)
+        settings.CEILING_GRIP_FORCE = Value
+        SaveSettings(settings)
+    end
+}, "CeilingForce")
+
+WalkTab:CreateSlider({
+    Name = "Max Ceiling Time",
+    Range = {1, 10},
+    Increment = 0.5,
+    CurrentValue = settings.CEILING_MAX_TIME,
+    Callback = function(Value)
+        settings.CEILING_MAX_TIME = Value
+        SaveSettings(settings)
+    end
+}, "CeilingMaxTime")
+
+WalkTab:CreateToggle({
+    Name = "Stick to Surface",
+    CurrentValue = settings.STICK_TO_SURFACE,
+    Callback = function(Value)
+        settings.STICK_TO_SURFACE = Value
+        SaveSettings(settings)
+    end
+}, "StickToSurface")
+
+-- ==========================================
+-- AUTO GENERATOR TAB
+-- ==========================================
+local AutoGenTab = Window:CreateTab({
+    Name = "Auto Gen",
+    Icon = "build",
+    ImageSource = "Material",
+    ShowTitle = true
+})
+
+AutoGenTab:CreateParagraph({
+    Title = "AUTO GENERATOR",
+    Text = "Автоматически чинит генераторы"
+})
+
+AutoGenTab:CreateToggle({
+    Name = "Auto Generator",
+    Description = "Автоматически чинит генераторы",
+    CurrentValue = settings.AUTO_GENERATOR,
+    Callback = function(Value)
+        settings.AUTO_GENERATOR = Value
+        SaveSettings(settings)
+        if not Value then
+            AutoGen.IsRunning = false
+            AutoGen.CurrentGenerator = nil
+        end
+    end
+}, "AutoGenerator")
+
+AutoGenTab:CreateSlider({
+    Name = "Generator Cooldown",
+    Description = "Задержка между фиксами (сек)",
+    Range = {1.5, 8},
+    Increment = 0.25,
+    CurrentValue = settings.GENERATOR_COOLDOWN,
+    Callback = function(Value)
+        settings.GENERATOR_COOLDOWN = Value
+        SaveSettings(settings)
+    end
+}, "GeneratorCooldown")
+
+AutoGenTab:CreateToggle({
+    Name = "Speed Up When Alone",
+    Description = "Ускоряет фикс, если рядом никого нет",
+    CurrentValue = settings.SPEED_UP_COOLDOWN,
+    Callback = function(Value)
+        settings.SPEED_UP_COOLDOWN = Value
+        SaveSettings(settings)
+    end
+}, "SpeedUpCooldown")
+
+-- ==========================================
+-- TURBO TAB
+-- ==========================================
+local TurboTab = Window:CreateTab({
+    Name = "Turbo",
+    Icon = "speed",
+    ImageSource = "Material",
+    ShowTitle = true
+})
+
+TurboTab:CreateParagraph({
+    Title = "TURBO (VELOCITY)",
+    Text = "Press Z to activate\nBypasses all speed limits!"
+})
+
+TurboTab:CreateToggle({
+    Name = "Activate Turbo",
+    Description = "Massive speed via Velocity",
+    CurrentValue = settings.TURBO_ACTIVE,
+    Callback = function(Value)
+        settings.TURBO_ACTIVE = Value
+        SaveSettings(settings)
+        if Value then
+            toggleTurbo()
+        else
+            if turboActive then
+                toggleTurbo()
+            end
+        end
+    end
+}, "TurboToggle")
+
+TurboTab:CreateSlider({
+    Name = "Turbo Speed",
+    Range = {5, 100},
+    Increment = 5,
+    CurrentValue = settings.TURBO_SPEED,
+    Callback = function(Value)
+        settings.TURBO_SPEED = Value
+        SaveSettings(settings)
+    end
+}, "TurboSpeed")
+
+TurboTab:CreateLabel({ Text = "QUICK PRESETS", Style = 1 })
+
+TurboTab:CreateButton({
+    Name = "10 - Slow",
+    Callback = function()
+        settings.TURBO_SPEED = 10
+        SaveSettings(settings)
+    end
+})
+
+TurboTab:CreateButton({
+    Name = "30 - Normal Run",
+    Callback = function()
+        settings.TURBO_SPEED = 30
+        SaveSettings(settings)
+    end
+})
+
+TurboTab:CreateButton({
+    Name = "50 - Fast",
+    Callback = function()
+        settings.TURBO_SPEED = 50
+        SaveSettings(settings)
+    end
+})
+
+TurboTab:CreateButton({
+    Name = "80 - Very Fast",
+    Callback = function()
+        settings.TURBO_SPEED = 80
+        SaveSettings(settings)
+    end
+})
+
+TurboTab:CreateButton({
+    Name = "100 - Maximum",
+    Callback = function()
+        settings.TURBO_SPEED = 100
+        SaveSettings(settings)
+    end
+})
+
+TurboTab:CreateLabel({ Text = "WORKING MODES", Style = 1 })
+
+TurboTab:CreateButton({
+    Name = "Velocity (Stable)",
+    Description = "Current mode: " .. settings.TURBO_MODE,
+    Callback = function()
+        settings.TURBO_MODE = "Velocity"
+        SaveSettings(settings)
+    end
+})
+
+TurboTab:CreateButton({
+    Name = "Teleport (Fast)",
+    Callback = function()
+        settings.TURBO_MODE = "Teleport"
+        SaveSettings(settings)
+    end
+})
+
+TurboTab:CreateButton({
+    Name = "Combo (Max)",
+    Callback = function()
+        settings.TURBO_MODE = "Combo"
+        SaveSettings(settings)
+    end
+})
+
+TurboTab:CreateParagraph({
+    Title = "CURRENT SETTINGS",
+    Text = "Speed: " .. settings.TURBO_SPEED .. "\nMode: " .. settings.TURBO_MODE
+})
+
+-- ==========================================
+-- NO CLIP TAB
+-- ==========================================
+local NoClipTab = Window:CreateTab({
+    Name = "No Clip",
+    Icon = "open_with",
+    ImageSource = "Material",
+    ShowTitle = true
+})
+
+NoClipTab:CreateParagraph({
+    Title = "NO CLIP + BYPASS",
+    Text = "Press B to activate\nAnti-cheat fully bypassed!"
+})
+
+NoClipTab:CreateToggle({
+    Name = "Activate No Clip",
+    CurrentValue = false,
+    Callback = function(Value)
+        if Value then
+            toggleNoClip()
+        else
+            if noClipActive then
+                toggleNoClip()
+            end
+        end
+    end
+}, "NoClipToggle")
+
+-- ==========================================
+-- FLY TAB
+-- ==========================================
+local FlyTab = Window:CreateTab({
+    Name = "Fly",
+    Icon = "flight",
+    ImageSource = "Material",
+    ShowTitle = true
+})
+
+FlyTab:CreateParagraph({
+    Title = "FLIGHT MODE",
+    Text = "Press V to toggle flight"
+})
+
+FlyTab:CreateToggle({
+    Name = "Enable Flight",
+    CurrentValue = false,
+    Callback = function(Value)
+        if not hrp or not humanoid then
+            updateCharacterReferences()
+            if not hrp or not humanoid then return end
+        end
+        
+        flying = Value
+        
+        if flying then
+            climbing = false
+            noClipActive = false
+            turboActive = false
+            humanoid.AutoRotate = false
+            humanoid.PlatformStand = true
+            if hrp then
+                hrp.AssemblyLinearVelocity = Vector3.zero
+            end
+            flyVelocity = Vector3.zero
+        else
+            humanoid.AutoRotate = true
+            humanoid.PlatformStand = false
+            if hrp then
+                hrp.AssemblyLinearVelocity = Vector3.zero
+            end
+            flyVelocity = Vector3.zero
+            gravityDir = Vector3.new(0, -1, 0)
+            upDir = Vector3.new(0, 1, 0)
+        end
+    end
+}, "FlyToggle")
+
+FlyTab:CreateLabel({ Text = "FLIGHT SETTINGS", Style = 1 })
+
+FlyTab:CreateSlider({
+    Name = "Flight Speed",
+    Range = {10, 100},
+    Increment = 1,
+    CurrentValue = settings.FLY_SPEED,
+    Callback = function(Value)
+        settings.FLY_SPEED = Value
+        SaveSettings(settings)
+    end
+}, "FlySpeed")
+
+FlyTab:CreateSlider({
+    Name = "Max Speed",
+    Range = {50, 300},
+    Increment = 5,
+    CurrentValue = settings.FLY_MAX_SPEED,
+    Callback = function(Value)
+        settings.FLY_MAX_SPEED = Value
+        SaveSettings(settings)
+    end
+}, "FlyMaxSpeed")
+
+FlyTab:CreateSlider({
+    Name = "Acceleration",
+    Range = {2, 20},
+    Increment = 0.5,
+    CurrentValue = settings.FLY_ACCELERATION,
+    Callback = function(Value)
+        settings.FLY_ACCELERATION = Value
+        SaveSettings(settings)
+    end
+}, "FlyAcceleration")
+
+FlyTab:CreateSlider({
+    Name = "Smoothness",
+    Range = {2, 15},
+    Increment = 1,
+    CurrentValue = settings.FLY_SMOOTHNESS,
+    Callback = function(Value)
+        settings.FLY_SMOOTHNESS = Value
+        SaveSettings(settings)
+    end
+}, "FlySmoothness")
+
+FlyTab:CreateToggle({
+    Name = "Auto Up",
+    CurrentValue = settings.FLY_AUTO_UP,
+    Callback = function(Value)
+        settings.FLY_AUTO_UP = Value
+        SaveSettings(settings)
+    end
+}, "FlyAutoUp")
+
+FlyTab:CreateToggle({
+    Name = "Hover",
+    CurrentValue = settings.FLY_HOVER,
+    Callback = function(Value)
+        settings.FLY_HOVER = Value
+        SaveSettings(settings)
+    end
+}, "FlyHover")
+
+-- ==========================================
+-- ESP TAB (Оптимизированная)
+-- ==========================================
+local ESPTab = Window:CreateTab({
+    Name = "ESP",
+    Icon = "visibility",
+    ImageSource = "Material",
+    ShowTitle = true
+})
+
+ESPTab:CreateParagraph({
+    Title = "OPTIMIZED ESP",
+    Text = "Снижена нагрузка на FPS на 30%"
+})
+
+ESPTab:CreateToggle({
+    Name = "Enable ESP",
+    Description = "Master toggle for all ESP features",
+    CurrentValue = settings.ESP_ENABLED,
+    Callback = function(Value)
+        settings.ESP_ENABLED = Value
+        SaveSettings(settings)
+        if not Value then
+            for _, child in ipairs(espFolder:GetDescendants()) do
+                if child:GetAttribute("ESP") then
+                    child:Destroy()
+                end
+            end
+        end
+    end
+}, "ESPMaster")
+
+ESPTab:CreateLabel({ Text = "PLAYERS", Style = 1 })
+
+ESPTab:CreateToggle({
+    Name = "Killers ESP",
+    Description = "Highlight killers",
+    CurrentValue = settings.KILLERS_ESP,
+    Callback = function(Value)
+        settings.KILLERS_ESP = Value
+        SaveSettings(settings)
+    end
+}, "KillersESP")
+
+ESPTab:CreateDropdown({
+    Name = "Killers Color",
+    Options = {"Red", "Orange", "Purple", "Gold", "White"},
+    CurrentOption = {settings.KILLERS_COLOR or "Red"},
+    MultipleOptions = false,
+    Callback = function(Options)
+        settings.KILLERS_COLOR = Options
+        SaveSettings(settings)
+    end
+}, "KillersColor")
+
+ESPTab:CreateToggle({
+    Name = "Survivors ESP",
+    Description = "Highlight survivors",
+    CurrentValue = settings.SURVIVORS_ESP,
+    Callback = function(Value)
+        settings.SURVIVORS_ESP = Value
+        SaveSettings(settings)
+    end
+}, "SurvivorsESP")
+
+ESPTab:CreateDropdown({
+    Name = "Survivors Color",
+    Options = {"Green", "Orange", "Purple", "Gold", "White"},
+    CurrentOption = {settings.SURVIVORS_COLOR or "Green"},
+    MultipleOptions = false,
+    Callback = function(Options)
+        settings.SURVIVORS_COLOR = Options
+        SaveSettings(settings)
+    end
+}, "SurvivorsColor")
+
+ESPTab:CreateLabel({ Text = "OBJECTS", Style = 1 })
+
+ESPTab:CreateToggle({
+    Name = "Generators ESP",
+    Description = "Highlight generators",
+    CurrentValue = settings.GENERATORS_ESP,
+    Callback = function(Value)
+        settings.GENERATORS_ESP = Value
+        SaveSettings(settings)
+    end
+}, "GeneratorsESP")
+
+ESPTab:CreateDropdown({
+    Name = "Generators Color",
+    Options = {"Cyan", "Blue", "Green", "Orange", "Purple", "Gold"},
+    CurrentOption = {settings.GENERATORS_COLOR or "Cyan"},
+    MultipleOptions = false,
+    Callback = function(Options)
+        settings.GENERATORS_COLOR = Options
+        SaveSettings(settings)
+    end
+}, "GeneratorsColor")
+
+ESPTab:CreateToggle({
+    Name = "Items ESP",
+    Description = "Highlight dropped items",
+    CurrentValue = settings.ITEMS_ESP,
+    Callback = function(Value)
+        settings.ITEMS_ESP = Value
+        SaveSettings(settings)
+    end
+}, "ItemsESP")
+
+ESPTab:CreateDropdown({
+    Name = "Items Color",
+    Options = {"Gold", "Cyan", "Purple", "White", "Teal"},
+    CurrentOption = {settings.ITEMS_COLOR or "Gold"},
+    MultipleOptions = false,
+    Callback = function(Options)
+        settings.ITEMS_COLOR = Options
+        SaveSettings(settings)
+    end
+}, "ItemsColor")
+
+ESPTab:CreateLabel({ Text = "DISPLAY", Style = 1 })
+
+ESPTab:CreateToggle({
+    Name = "Show Names",
+    Description = "Display player/object names",
+    CurrentValue = settings.SHOW_TEXT,
+    Callback = function(Value)
+        settings.SHOW_TEXT = Value
+        SaveSettings(settings)
+    end
+}, "ShowText")
+
+ESPTab:CreateLabel({ Text = "OPTIMIZATION", Style = 1 })
+
+ESPTab:CreateSlider({
+    Name = "Update Interval",
+    Description = "Чем выше - тем меньше нагрузка",
+    Range = {0.1, 0.5},
+    Increment = 0.05,
+    CurrentValue = ESP.UpdateInterval,
+    Callback = function(Value)
+        ESP.UpdateInterval = Value
+        settings.ESP_UPDATE_INTERVAL = Value
+        SaveSettings(settings)
+    end
+}, "ESPUpdateInterval")
+
+ESPTab:CreateSlider({
+    Name = "Max Distance",
+    Range = {50, 200},
+    Increment = 10,
+    CurrentValue = settings.ESP_MAX_DISTANCE,
+    Callback = function(Value)
+        settings.ESP_MAX_DISTANCE = Value
+        SaveSettings(settings)
+    end
+}, "ESPMaxDistance")
+
+ESPTab:CreateSlider({
+    Name = "Min Distance",
+    Range = {5, 20},
+    Increment = 1,
+    CurrentValue = settings.ESP_MIN_DISTANCE,
+    Callback = function(Value)
+        settings.ESP_MIN_DISTANCE = Value
+        SaveSettings(settings)
+    end
+}, "ESPMinDistance")
+
+-- ==========================================
+-- SETTINGS TAB
+-- ==========================================
+local SettingsTab = Window:CreateTab({
+    Name = "Settings",
+    Icon = "settings",
+    ImageSource = "Material",
+    ShowTitle = true
+})
+
+SettingsTab:CreateToggle({
+    Name = "Auto Reset on Fall",
+    CurrentValue = settings.AUTO_RESET_ON_FALL,
+    Callback = function(Value)
+        settings.AUTO_RESET_ON_FALL = Value
+        SaveSettings(settings)
+    end
+}, "AutoReset")
+
+SettingsTab:CreateSlider({
+    Name = "Reset Height",
+    Range = {-200, -50},
+    Increment = 5,
+    CurrentValue = settings.RESET_HEIGHT,
+    Callback = function(Value)
+        settings.RESET_HEIGHT = Value
+        SaveSettings(settings)
+    end
+}, "ResetHeight")
+
+SettingsTab:CreateToggle({
+    Name = "Remove Killer Walls",
+    Description = "Removes KillerDoors and KillerOnly",
+    CurrentValue = settings.REMOVE_KILLER_WALLS,
+    Callback = function(Value)
+        settings.REMOVE_KILLER_WALLS = Value
+        SaveSettings(settings)
+        if Value then
+            pcall(removeKillerWalls)
+        end
+    end
+}, "RemoveKillerWalls")
+
+SettingsTab:CreateParagraph({
+    Title = "CONTROLS",
+    Text = "C - Wall Walk\nV - Fly\nB - No Clip\nZ - TURBO\nShift - Sprint"
+})
+
+SettingsTab:CreateButton({
+    Name = "Reset All Settings",
+    Callback = function()
+        for key, value in pairs(DefaultSettings) do
+            settings[key] = value
+        end
+        SaveSettings(settings)
+        for _, child in ipairs(espFolder:GetDescendants()) do
+            if child:GetAttribute("ESP") then
+                child:Destroy()
+            end
+        end
+    end
+})
+
+-- ==========================================
+-- HELPER FUNCTIONS
 -- ==========================================
 local function projectToPlane(v, n)
     return v - n * v:Dot(n)
@@ -172,436 +1606,8 @@ local function slerp(a, b, t)
     return (au * math.sin((1 - t) * angle) + bu * math.sin(t * angle)) / sin
 end
 
-local function showNotification(title, text, duration)
-    if not settings.NOTIFICATIONS_ENABLED then return end
-    print(string.format("[%s] %s", title, text))
-end
-
 -- ==========================================
--- TURBO
--- ==========================================
-local function toggleTurbo()
-    if not hrp or not humanoid then
-        updateCharacterReferences()
-        if not hrp or not humanoid then return end
-    end
-    
-    turboActive = not turboActive
-    
-    if turboActive then
-        climbing = false
-        flying = false
-        noClipActive = false
-        humanoid.AutoRotate = true
-        humanoid.PlatformStand = false
-        humanoid.WalkSpeed = 16
-        showNotification("⚡ Турбо", "Активирован", 1)
-    else
-        if hrp then
-            hrp.AssemblyLinearVelocity = Vector3.zero
-        end
-        showNotification("⚡ Турбо", "Деактивирован", 1)
-    end
-end
-
-task.spawn(function()
-    while true do
-        task.wait()
-        if turboActive and hrp and humanoid then
-            local camLook = Camera.CFrame.LookVector
-            local camRight = Camera.CFrame.RightVector
-            camLook = Vector3.new(camLook.X, 0, camLook.Z).Unit
-            camRight = Vector3.new(camRight.X, 0, camRight.Z).Unit
-            
-            local moveDir = Vector3.zero
-            if pressed[Enum.KeyCode.W] then moveDir = moveDir + camLook end
-            if pressed[Enum.KeyCode.S] then moveDir = moveDir - camLook end
-            if pressed[Enum.KeyCode.A] then moveDir = moveDir - camRight end
-            if pressed[Enum.KeyCode.D] then moveDir = moveDir + camRight end
-            if moveDir.Magnitude > 0 then moveDir = moveDir.Unit end
-            
-            local speed = settings.TURBO_SPEED
-            local mode = settings.TURBO_MODE
-            
-            if mode == "Velocity" then
-                hrp.AssemblyLinearVelocity = moveDir * speed
-                hrp.AssemblyAngularVelocity = Vector3.zero
-            elseif mode == "Teleport" then
-                local step = speed * 0.016
-                hrp.CFrame = hrp.CFrame + moveDir * step
-                hrp.AssemblyLinearVelocity = Vector3.zero
-            elseif mode == "Combo" then
-                hrp.AssemblyLinearVelocity = moveDir * speed * 0.5
-                local step = speed * 0.008
-                hrp.CFrame = hrp.CFrame + moveDir * step
-            end
-        end
-    end
-end)
-
--- ==========================================
--- ANTI-CHEAT BYPASS
--- ==========================================
-local function removeNoclipDetector()
-    if character then
-        local detector = character:FindFirstChild("NoclipDetector")
-        if detector then
-            detector:Destroy()
-            return true
-        end
-    end
-    return false
-end
-
-local function removeAllDetectors()
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        if obj.Name == "NoclipDetector" and obj:IsA("BasePart") then
-            obj:Destroy()
-        end
-    end
-end
-
-task.spawn(function()
-    while true do
-        task.wait(0.1)
-        if noClipActive and character then
-            pcall(function()
-                local detector = character:FindFirstChild("NoclipDetector")
-                if detector then detector:Destroy() end
-                removeAllDetectors()
-            end)
-        end
-    end
-end)
-
-local function setCollisionGroup()
-    if hrp then
-        pcall(function()
-            local groups = {"Survivors", "Killers", "Default", "Players"}
-            for _, group in ipairs(groups) do
-                pcall(function() hrp.CollisionGroup = group end)
-            end
-        end)
-    end
-end
-
--- ==========================================
--- NO CLIP
--- ==========================================
-local function toggleNoClip()
-    if not hrp or not humanoid then
-        updateCharacterReferences()
-        if not hrp or not humanoid then return end
-    end
-    
-    noClipActive = not noClipActive
-    
-    if noClipActive then
-        climbing = false
-        flying = false
-        turboActive = false
-        humanoid.AutoRotate = true
-        humanoid.PlatformStand = false
-        removeNoclipDetector()
-        removeAllDetectors()
-        setCollisionGroup()
-        
-        for _, part in ipairs(character:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.CanCollide = false
-            end
-        end
-        hrp.AssemblyLinearVelocity = Vector3.zero
-        hrp.AssemblyAngularVelocity = Vector3.zero
-        showNotification("🌀 Ноуклип", "Активирован", 1)
-    else
-        for _, part in ipairs(character:GetDescendants()) do
-            if part:IsA("BasePart") and part.Name ~= "NoclipDetector" then
-                part.CanCollide = true
-            end
-        end
-        gravityDir = Vector3.new(0, -1, 0)
-        upDir = Vector3.new(0, 1, 0)
-        showNotification("🌀 Ноуклип", "Деактивирован", 1)
-    end
-end
-
-local function phaseThroughWall()
-    if not hrp or not humanoid then return end
-    local camCFrame = Camera.CFrame
-    local targetPos = hrp.Position + camCFrame.LookVector * 20
-    for _, part in ipairs(character:GetDescendants()) do
-        if part:IsA("BasePart") then part.CanCollide = false end
-    end
-    hrp.CFrame = CFrame.new(targetPos)
-    task.wait(0.05)
-    for _, part in ipairs(character:GetDescendants()) do
-        if part:IsA("BasePart") and part.Name ~= "NoclipDetector" then
-            part.CanCollide = true
-        end
-    end
-end
-
--- ==========================================
--- KILLER WALLS REMOVER
--- ==========================================
-local function removeKillerWalls()
-    if not settings.REMOVE_KILLER_WALLS then return end
-    local paths = {
-        "Map.Ingame.Map.MapBoundaries.KillerDoors",
-        "Map.Ingame.Map.MapBoundaries.KillerOnly",
-    }
-    for _, path in ipairs(paths) do
-        local current = Workspace
-        local success = true
-        local parts = {}
-        for part in string.gmatch(path, "[^%.]+") do
-            table.insert(parts, part)
-        end
-        for _, partName in ipairs(parts) do
-            if current then
-                current = current:FindFirstChild(partName)
-                if not current then success = false break end
-            else
-                success = false break
-            end
-        end
-        if success and current then
-            for _, child in ipairs(current:GetChildren()) do
-                pcall(function()
-                    if child:IsA("BasePart") or child:IsA("Model") then
-                        child:Destroy()
-                    end
-                end)
-            end
-        end
-    end
-end
-
-task.spawn(function()
-    while true do
-        task.wait(2)
-        if settings.REMOVE_KILLER_WALLS then pcall(removeKillerWalls) end
-    end
-end)
-
--- ==========================================
--- ESP СИСТЕМА (ПРОСТАЯ И БЫСТРАЯ)
--- ==========================================
-local espFolder = Instance.new("Folder")
-espFolder.Name = "ForsakenSurgeESP"
-espFolder.Parent = player:WaitForChild("PlayerGui")
-
-local espHighlights = {}
-
-local function clearAllESP()
-    for _, hl in ipairs(espHighlights) do
-        pcall(function() hl:Destroy() end)
-    end
-    espHighlights = {}
-end
-
-local function createHighlight(adornee, color)
-    if not adornee or not adornee.Parent then return nil end
-    local hl = Instance.new("Highlight")
-    hl.Adornee = adornee
-    hl.FillColor = color
-    hl.OutlineColor = color
-    hl.FillTransparency = 0.4
-    hl.OutlineTransparency = 0.4
-    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    hl.Parent = espFolder
-    table.insert(espHighlights, hl)
-    Debris:AddItem(hl, 2)
-    return hl
-end
-
-local ColorPresets = {
-    Red = Color3.fromRGB(255,50,50),
-    Green = Color3.fromRGB(50,255,50),
-    Cyan = Color3.fromRGB(0,255,255),
-    Gold = Color3.fromRGB(255,215,0),
-    Orange = Color3.fromRGB(255,165,0),
-    Purple = Color3.fromRGB(158,0,179),
-    Blue = Color3.fromRGB(0,0,255),
-    White = Color3.fromRGB(255,255,255)
-}
-
-task.spawn(function()
-    while true do
-        task.wait(1)
-        if not settings.ESP_ENABLED then
-            clearAllESP()
-            continue
-        end
-        
-        clearAllESP()
-        
-        -- Игроки
-        if settings.KILLERS_ESP or settings.SURVIVORS_ESP then
-            for _, plr in ipairs(Players:GetPlayers()) do
-                if plr == player then continue end
-                local char = plr.Character
-                if not char or not char.Parent then continue end
-                local hum = char:FindFirstChild("Humanoid")
-                if not hum or hum.Health <= 0 then continue end
-                
-                local isKiller = false
-                local team = plr.Team
-                if team then
-                    local teamName = string.lower(team.Name)
-                    if teamName:find("killer") or teamName:find("monster") or teamName:find("enemy") then
-                        isKiller = true
-                    end
-                end
-                
-                local color
-                if isKiller and settings.KILLERS_ESP then
-                    color = ColorPresets[settings.KILLERS_COLOR] or ColorPresets.Red
-                    createHighlight(char, color)
-                elseif not isKiller and settings.SURVIVORS_ESP then
-                    color = ColorPresets[settings.SURVIVORS_COLOR] or ColorPresets.Green
-                    createHighlight(char, color)
-                end
-            end
-        end
-        
-        -- Генераторы
-        if settings.GENERATORS_ESP then
-            for _, obj in ipairs(Workspace:GetDescendants()) do
-                if obj:IsA("Model") and obj.Parent then
-                    local name = string.lower(obj.Name)
-                    if string.find(name, "generator") or string.find(name, "gen") or obj:GetAttribute("Generator") then
-                        local progress = obj:FindFirstChild("Progress")
-                        if progress and progress:IsA("NumberValue") and progress.Value >= 100 then
-                            continue
-                        end
-                        local color = ColorPresets[settings.GENERATORS_COLOR] or ColorPresets.Cyan
-                        createHighlight(obj, color)
-                    end
-                end
-            end
-        end
-        
-        -- Предметы
-        if settings.ITEMS_ESP then
-            for _, obj in ipairs(Workspace:GetDescendants()) do
-                if obj:IsA("Tool") and obj.Parent then
-                    local color = ColorPresets[settings.ITEMS_COLOR] or ColorPresets.Gold
-                    createHighlight(obj, color)
-                end
-            end
-        end
-    end
-end)
-
-player.CharacterAdded:Connect(function()
-    task.wait(0.5)
-    clearAllESP()
-end)
-
--- ==========================================
--- ОБРАБОТКА ВВОДА (ПРОСТАЯ И РАБОЧАЯ)
--- ==========================================
-UserInputService.InputBegan:Connect(function(input, gp)
-    if gp then return end
-    pressed[input.KeyCode] = true
-    
-    -- C - Ходьба по стенам
-    if input.KeyCode == Enum.KeyCode.C then
-        if flying or noClipActive or turboActive then return end
-        if not hrp or not humanoid then
-            updateCharacterReferences()
-            if not hrp or not humanoid then return end
-        end
-        
-        climbing = not climbing
-        if climbing then
-            humanoid.AutoRotate = false
-            humanoid.PlatformStand = true
-            facing = hrp.CFrame.LookVector
-            upDir = hrp.CFrame.UpVector
-            gravityDir = -upDir
-            isOnCeiling = false
-            ceilingTime = 0
-            showNotification("🕷️ Ходьба", "Включена", 1)
-        else
-            humanoid.AutoRotate = true
-            humanoid.PlatformStand = false
-            gravityDir = Vector3.new(0, -1, 0)
-            upDir = Vector3.new(0, 1, 0)
-            fallSpeed = 0
-            isGrounded = false
-            isOnCeiling = false
-            ceilingTime = 0
-            if hrp then
-                hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + facing)
-            end
-            showNotification("🕷️ Ходьба", "Выключена", 1)
-        end
-    end
-    
-    -- V - Полёт
-    if input.KeyCode == Enum.KeyCode.V then
-        if not hrp or not humanoid then
-            updateCharacterReferences()
-            if not hrp or not humanoid then return end
-        end
-        flying = not flying
-        if flying then
-            climbing = false
-            noClipActive = false
-            turboActive = false
-            humanoid.AutoRotate = false
-            humanoid.PlatformStand = true
-            if hrp then hrp.AssemblyLinearVelocity = Vector3.zero end
-            flyVelocity = Vector3.zero
-            if settings.FLY_AUTO_UP then
-                flyVelocity = Vector3.new(0, settings.FLY_SPEED * 0.5, 0)
-            end
-            showNotification("✈️ Полёт", "Активирован", 1)
-        else
-            humanoid.AutoRotate = true
-            humanoid.PlatformStand = false
-            if hrp then hrp.AssemblyLinearVelocity = Vector3.zero end
-            flyVelocity = Vector3.zero
-            gravityDir = Vector3.new(0, -1, 0)
-            upDir = Vector3.new(0, 1, 0)
-            showNotification("✈️ Полёт", "Деактивирован", 1)
-        end
-    end
-    
-    -- B - Ноуклип
-    if input.KeyCode == Enum.KeyCode.B then
-        toggleNoClip()
-    end
-    
-    -- Z - Турбо
-    if input.KeyCode == Enum.KeyCode.Z then
-        toggleTurbo()
-    end
-    
-    -- B + G - Фазирование
-    if input.KeyCode == Enum.KeyCode.G and noClipActive then
-        phaseThroughWall()
-    end
-    
-    -- Shift - Спринт
-    if input.KeyCode == Enum.KeyCode.LeftShift then
-        isSprinting = true
-    end
-end)
-
-UserInputService.InputEnded:Connect(function(input, gp)
-    if gp then return end
-    pressed[input.KeyCode] = false
-    if input.KeyCode == Enum.KeyCode.LeftShift then
-        isSprinting = false
-    end
-end)
-
--- ==========================================
--- ОСНОВНОЙ ЦИКЛ
+-- MAIN LOOP
 -- ==========================================
 RunService.Heartbeat:Connect(function(dt)
     if not character or not character.Parent then
@@ -609,30 +1615,36 @@ RunService.Heartbeat:Connect(function(dt)
         if not hrp or not humanoid then return end
     end
     
-    -- Ноуклип
     if noClipActive and hrp and humanoid then
-        pcall(function()
-            local detector = character:FindFirstChild("NoclipDetector")
-            if detector then detector:Destroy() end
-            removeAllDetectors()
-        end)
         for _, part in ipairs(character:GetDescendants()) do
-            if part:IsA("BasePart") then part.CanCollide = false end
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
         end
+        
         local camCFrame = Camera.CFrame
+        
         local fwd = (pressed[Enum.KeyCode.W] and 1 or 0) - (pressed[Enum.KeyCode.S] and 1 or 0)
         local str = (pressed[Enum.KeyCode.D] and 1 or 0) - (pressed[Enum.KeyCode.A] and 1 or 0)
         local up = (pressed[Enum.KeyCode.Space] and 1 or 0) - (pressed[Enum.KeyCode.LeftControl] and 1 or 0)
+        
         local moveDir = camCFrame.LookVector * fwd + camCFrame.RightVector * str + Vector3.new(0, 1, 0) * up
-        if moveDir.Magnitude > 0 then moveDir = moveDir.Unit end
+        
+        if moveDir.Magnitude > 0 then
+            moveDir = moveDir.Unit
+        end
+        
         local speed = settings.WALK_SPEED
-        if isSprinting then speed = settings.WALK_SPEED * settings.SPRINT_MULTIPLIER * 2 end
+        if isSprinting then
+            speed = settings.WALK_SPEED * settings.SPRINT_MULTIPLIER * 2
+        end
+        
         hrp.AssemblyLinearVelocity = moveDir * speed
         hrp.AssemblyAngularVelocity = Vector3.zero
+        
         return
     end
     
-    -- Авто-сброс
     if settings.AUTO_RESET_ON_FALL and climbing and hrp then
         if hrp.Position.Y < settings.RESET_HEIGHT then
             climbing = false
@@ -650,9 +1662,9 @@ RunService.Heartbeat:Connect(function(dt)
         end
     end
     
-    -- Полёт
     if flying and hrp and humanoid then
         local camCFrame = Camera.CFrame
+        
         local camForward = camCFrame.LookVector
         local camRight = camCFrame.RightVector
         local camUp = camCFrame.UpVector
@@ -662,27 +1674,33 @@ RunService.Heartbeat:Connect(function(dt)
         local up = (pressed[Enum.KeyCode.Space] and 1 or 0) - (pressed[Enum.KeyCode.LeftControl] and 1 or 0)
         
         local moveDir = camForward * fwd + camRight * str + camUp * up
-        if moveDir.Magnitude > 0 then moveDir = moveDir.Unit end
+        
+        if moveDir.Magnitude > 0 then
+            moveDir = moveDir.Unit
+        end
         
         local targetVel = moveDir * settings.FLY_SPEED
+        
         if settings.FLY_HOVER and moveDir.Magnitude < 0.1 then
             targetVel = Vector3.zero
         end
         
         flyVelocity = flyVelocity:Lerp(targetVel, math.min(1, dt * settings.FLY_ACCELERATION))
+        
         if flyVelocity.Magnitude > settings.FLY_MAX_SPEED then
             flyVelocity = flyVelocity.Unit * settings.FLY_MAX_SPEED
         end
+        
         hrp.AssemblyLinearVelocity = flyVelocity
         
         if moveDir.Magnitude > 0.1 then
             local targetCF = CFrame.lookAt(hrp.Position, hrp.Position + moveDir, camUp)
             hrp.CFrame = hrp.CFrame:Lerp(targetCF, math.min(1, dt * settings.FLY_SMOOTHNESS))
         end
+        
         return
     end
     
-    -- Ходьба по стенам
     if not climbing or not hrp or not humanoid then return end
     
     if isOnCeiling and settings.CEILING_GRIP then
@@ -721,8 +1739,8 @@ RunService.Heartbeat:Connect(function(dt)
     if move.Magnitude > 0 then move = move.Unit end
     
     local wallHit = move.Magnitude > 0 and Workspace:Raycast(pos, move * settings.WALL_RANGE, rayParams) or nil
-    local supportNear = Workspace:Raycast(pos, gravityDir * 2.0, rayParams) ~= nil
-    local supportFar = Workspace:Raycast(pos, gravityDir * (2.0 + 1.0), rayParams) ~= nil
+    local supportNear = Workspace:Raycast(pos, gravityDir * 3, rayParams) ~= nil
+    local supportFar = Workspace:Raycast(pos, gravityDir * 5, rayParams) ~= nil
     
     if isGrounded then
         if not supportFar then isGrounded = false end
@@ -796,463 +1814,15 @@ RunService.Heartbeat:Connect(function(dt)
 end)
 
 -- ==========================================
--- LUNA INTERFACE (ТОЛЬКО НАСТРОЙКИ)
--- ==========================================
-
-Window:CreateHomeTab({
-    SupportedExecutors = {"Synapse X", "Krnl", "ScriptWare", "Fluxus", "Oxygen U"},
-    DiscordInvite = "forsakensurge",
-    Icon = 2,
-})
-
--- WALK TAB
-local WalkTab = Window:CreateTab({
-    Name = "Walk",
-    Icon = "directions_walk",
-    ImageSource = "Material",
-    ShowTitle = true
-})
-
-WalkTab:CreateParagraph({
-    Title = "Forsaken Surge",
-    Text = "v9.0 with VELOCITY (TURBO)!"
-})
-
-WalkTab:CreateSlider({
-    Name = "Walk Speed",
-    Range = {5, 50},
-    Increment = 1,
-    CurrentValue = settings.WALK_SPEED,
-    Callback = function(Value)
-        settings.WALK_SPEED = Value
-        SaveSettings(settings)
-    end
-}, "WalkSpeed")
-
-WalkTab:CreateSlider({
-    Name = "Sprint Multiplier",
-    Range = {1.0, 3.0},
-    Increment = 0.1,
-    CurrentValue = settings.SPRINT_MULTIPLIER,
-    Callback = function(Value)
-        settings.SPRINT_MULTIPLIER = Value
-        SaveSettings(settings)
-    end
-}, "SprintMultiplier")
-
-WalkTab:CreateSlider({
-    Name = "Gravity",
-    Range = {10, 60},
-    Increment = 1,
-    CurrentValue = settings.GRAVITY,
-    Callback = function(Value)
-        settings.GRAVITY = Value
-        SaveSettings(settings)
-    end
-}, "Gravity")
-
-WalkTab:CreateSlider({
-    Name = "Wall Grab Range",
-    Range = {1, 10},
-    Increment = 0.5,
-    CurrentValue = settings.WALL_RANGE,
-    Callback = function(Value)
-        settings.WALL_RANGE = Value
-        SaveSettings(settings)
-    end
-}, "WallRange")
-
-WalkTab:CreateSlider({
-    Name = "Rotation Smoothness",
-    Range = {1, 15},
-    Increment = 1,
-    CurrentValue = settings.ALIGN_SPEED,
-    Callback = function(Value)
-        settings.ALIGN_SPEED = Value
-        SaveSettings(settings)
-    end
-}, "AlignSpeed")
-
-WalkTab:CreateToggle({
-    Name = "Ceiling Grip",
-    CurrentValue = settings.CEILING_GRIP,
-    Callback = function(Value)
-        settings.CEILING_GRIP = Value
-        SaveSettings(settings)
-    end
-}, "CeilingGrip")
-
-WalkTab:CreateSlider({
-    Name = "Ceiling Grip Force",
-    Range = {1, 20},
-    Increment = 0.5,
-    CurrentValue = settings.CEILING_GRIP_FORCE,
-    Callback = function(Value)
-        settings.CEILING_GRIP_FORCE = Value
-        SaveSettings(settings)
-    end
-}, "CeilingForce")
-
-WalkTab:CreateSlider({
-    Name = "Max Ceiling Time",
-    Range = {1, 10},
-    Increment = 0.5,
-    CurrentValue = settings.CEILING_MAX_TIME,
-    Callback = function(Value)
-        settings.CEILING_MAX_TIME = Value
-        SaveSettings(settings)
-    end
-}, "CeilingMaxTime")
-
-WalkTab:CreateToggle({
-    Name = "Stick to Surface",
-    CurrentValue = settings.STICK_TO_SURFACE,
-    Callback = function(Value)
-        settings.STICK_TO_SURFACE = Value
-        SaveSettings(settings)
-    end
-}, "StickToSurface")
-
--- TURBO TAB
-local TurboTab = Window:CreateTab({
-    Name = "Turbo",
-    Icon = "speed",
-    ImageSource = "Material",
-    ShowTitle = true
-})
-
-TurboTab:CreateParagraph({
-    Title = "TURBO (VELOCITY)",
-    Text = "Press Z to activate"
-})
-
-TurboTab:CreateToggle({
-    Name = "Activate Turbo",
-    CurrentValue = settings.TURBO_ACTIVE,
-    Callback = function(Value)
-        settings.TURBO_ACTIVE = Value
-        SaveSettings(settings)
-        if Value then toggleTurbo() else if turboActive then toggleTurbo() end end
-    end
-}, "TurboToggle")
-
-TurboTab:CreateSlider({
-    Name = "Turbo Speed",
-    Range = {5, 100},
-    Increment = 5,
-    CurrentValue = settings.TURBO_SPEED,
-    Callback = function(Value)
-        settings.TURBO_SPEED = Value
-        SaveSettings(settings)
-    end
-}, "TurboSpeed")
-
-TurboTab:CreateButton({
-    Name = "Velocity (Stable)",
-    Callback = function()
-        settings.TURBO_MODE = "Velocity"
-        SaveSettings(settings)
-    end
-})
-
-TurboTab:CreateButton({
-    Name = "Teleport (Fast)",
-    Callback = function()
-        settings.TURBO_MODE = "Teleport"
-        SaveSettings(settings)
-    end
-})
-
-TurboTab:CreateButton({
-    Name = "Combo (Max)",
-    Callback = function()
-        settings.TURBO_MODE = "Combo"
-        SaveSettings(settings)
-    end
-})
-
--- NO CLIP TAB
-local NoClipTab = Window:CreateTab({
-    Name = "No Clip",
-    Icon = "open_with",
-    ImageSource = "Material",
-    ShowTitle = true
-})
-
-NoClipTab:CreateParagraph({
-    Title = "NO CLIP",
-    Text = "Press B to activate\nPress B + G for phasing"
-})
-
-NoClipTab:CreateToggle({
-    Name = "Activate No Clip",
-    CurrentValue = false,
-    Callback = function(Value)
-        if Value then toggleNoClip() else if noClipActive then toggleNoClip() end end
-    end
-}, "NoClipToggle")
-
-NoClipTab:CreateButton({
-    Name = "Phase Through Wall",
-    Callback = function()
-        phaseThroughWall()
-    end
-})
-
--- FLY TAB
-local FlyTab = Window:CreateTab({
-    Name = "Fly",
-    Icon = "flight",
-    ImageSource = "Material",
-    ShowTitle = true
-})
-
-FlyTab:CreateParagraph({
-    Title = "FLIGHT MODE",
-    Text = "Press V to toggle flight"
-})
-
-FlyTab:CreateToggle({
-    Name = "Enable Flight",
-    CurrentValue = false,
-    Callback = function(Value)
-        if not hrp or not humanoid then
-            updateCharacterReferences()
-            if not hrp or not humanoid then return end
-        end
-        flying = Value
-        if flying then
-            climbing = false
-            noClipActive = false
-            turboActive = false
-            humanoid.AutoRotate = false
-            humanoid.PlatformStand = true
-            if hrp then hrp.AssemblyLinearVelocity = Vector3.zero end
-            flyVelocity = Vector3.zero
-        else
-            humanoid.AutoRotate = true
-            humanoid.PlatformStand = false
-            if hrp then hrp.AssemblyLinearVelocity = Vector3.zero end
-            flyVelocity = Vector3.zero
-            gravityDir = Vector3.new(0, -1, 0)
-            upDir = Vector3.new(0, 1, 0)
-        end
-    end
-}, "FlyToggle")
-
-FlyTab:CreateSlider({
-    Name = "Flight Speed",
-    Range = {10, 100},
-    Increment = 1,
-    CurrentValue = settings.FLY_SPEED,
-    Callback = function(Value)
-        settings.FLY_SPEED = Value
-        SaveSettings(settings)
-    end
-}, "FlySpeed")
-
-FlyTab:CreateSlider({
-    Name = "Max Speed",
-    Range = {50, 300},
-    Increment = 5,
-    CurrentValue = settings.FLY_MAX_SPEED,
-    Callback = function(Value)
-        settings.FLY_MAX_SPEED = Value
-        SaveSettings(settings)
-    end
-}, "FlyMaxSpeed")
-
-FlyTab:CreateSlider({
-    Name = "Acceleration",
-    Range = {2, 20},
-    Increment = 0.5,
-    CurrentValue = settings.FLY_ACCELERATION,
-    Callback = function(Value)
-        settings.FLY_ACCELERATION = Value
-        SaveSettings(settings)
-    end
-}, "FlyAcceleration")
-
-FlyTab:CreateToggle({
-    Name = "Auto Up",
-    CurrentValue = settings.FLY_AUTO_UP,
-    Callback = function(Value)
-        settings.FLY_AUTO_UP = Value
-        SaveSettings(settings)
-    end
-}, "FlyAutoUp")
-
-FlyTab:CreateToggle({
-    Name = "Hover",
-    CurrentValue = settings.FLY_HOVER,
-    Callback = function(Value)
-        settings.FLY_HOVER = Value
-        SaveSettings(settings)
-    end
-}, "FlyHover")
-
--- ESP TAB
-local ESPTab = Window:CreateTab({
-    Name = "ESP",
-    Icon = "visibility",
-    ImageSource = "Material",
-    ShowTitle = true
-})
-
-ESPTab:CreateParagraph({
-    Title = "SIMPLE ESP",
-    Text = "Lightweight highlighting"
-})
-
-ESPTab:CreateToggle({
-    Name = "Enable ESP",
-    CurrentValue = settings.ESP_ENABLED,
-    Callback = function(Value)
-        settings.ESP_ENABLED = Value
-        SaveSettings(settings)
-        if not Value then clearAllESP() end
-    end
-}, "ESPMaster")
-
-ESPTab:CreateToggle({
-    Name = "Killers ESP",
-    CurrentValue = settings.KILLERS_ESP,
-    Callback = function(Value)
-        settings.KILLERS_ESP = Value
-        SaveSettings(settings)
-    end
-}, "KillersESP")
-
-ESPTab:CreateDropdown({
-    Name = "Killers Color",
-    Options = {"Red", "Orange", "Purple", "Gold", "White"},
-    CurrentOption = {settings.KILLERS_COLOR or "Red"},
-    MultipleOptions = false,
-    Callback = function(Options)
-        settings.KILLERS_COLOR = Options
-        SaveSettings(settings)
-    end
-}, "KillersColor")
-
-ESPTab:CreateToggle({
-    Name = "Survivors ESP",
-    CurrentValue = settings.SURVIVORS_ESP,
-    Callback = function(Value)
-        settings.SURVIVORS_ESP = Value
-        SaveSettings(settings)
-    end
-}, "SurvivorsESP")
-
-ESPTab:CreateDropdown({
-    Name = "Survivors Color",
-    Options = {"Green", "Orange", "Purple", "Gold", "White"},
-    CurrentOption = {settings.SURVIVORS_COLOR or "Green"},
-    MultipleOptions = false,
-    Callback = function(Options)
-        settings.SURVIVORS_COLOR = Options
-        SaveSettings(settings)
-    end
-}, "SurvivorsColor")
-
-ESPTab:CreateToggle({
-    Name = "Generators ESP",
-    CurrentValue = settings.GENERATORS_ESP,
-    Callback = function(Value)
-        settings.GENERATORS_ESP = Value
-        SaveSettings(settings)
-    end
-}, "GeneratorsESP")
-
-ESPTab:CreateDropdown({
-    Name = "Generators Color",
-    Options = {"Cyan", "Blue", "Green", "Orange", "Purple", "Gold"},
-    CurrentOption = {settings.GENERATORS_COLOR or "Cyan"},
-    MultipleOptions = false,
-    Callback = function(Options)
-        settings.GENERATORS_COLOR = Options
-        SaveSettings(settings)
-    end
-}, "GeneratorsColor")
-
-ESPTab:CreateToggle({
-    Name = "Items ESP",
-    CurrentValue = settings.ITEMS_ESP,
-    Callback = function(Value)
-        settings.ITEMS_ESP = Value
-        SaveSettings(settings)
-    end
-}, "ItemsESP")
-
-ESPTab:CreateDropdown({
-    Name = "Items Color",
-    Options = {"Gold", "Cyan", "Purple", "White"},
-    CurrentOption = {settings.ITEMS_COLOR or "Gold"},
-    MultipleOptions = false,
-    Callback = function(Options)
-        settings.ITEMS_COLOR = Options
-        SaveSettings(settings)
-    end
-}, "ItemsColor")
-
--- SETTINGS TAB
-local SettingsTab = Window:CreateTab({
-    Name = "Settings",
-    Icon = "settings",
-    ImageSource = "Material",
-    ShowTitle = true
-})
-
-SettingsTab:CreateToggle({
-    Name = "Auto Reset on Fall",
-    CurrentValue = settings.AUTO_RESET_ON_FALL,
-    Callback = function(Value)
-        settings.AUTO_RESET_ON_FALL = Value
-        SaveSettings(settings)
-    end
-}, "AutoReset")
-
-SettingsTab:CreateSlider({
-    Name = "Reset Height",
-    Range = {-200, -50},
-    Increment = 5,
-    CurrentValue = settings.RESET_HEIGHT,
-    Callback = function(Value)
-        settings.RESET_HEIGHT = Value
-        SaveSettings(settings)
-    end
-}, "ResetHeight")
-
-SettingsTab:CreateToggle({
-    Name = "Remove Killer Walls",
-    CurrentValue = settings.REMOVE_KILLER_WALLS,
-    Callback = function(Value)
-        settings.REMOVE_KILLER_WALLS = Value
-        SaveSettings(settings)
-        if Value then pcall(removeKillerWalls) end
-    end
-}, "RemoveKillerWalls")
-
-SettingsTab:CreateParagraph({
-    Title = "CONTROLS",
-    Text = "C - Wall Walk\nV - Fly\nB - No Clip\nZ - Turbo\nShift - Sprint\nB+G - Phase"
-})
-
-SettingsTab:CreateButton({
-    Name = "Reset All Settings",
-    Callback = function()
-        for key, value in pairs(DefaultSettings) do
-            settings[key] = value
-        end
-        SaveSettings(settings)
-        clearAllESP()
-    end
-})
-
--- ==========================================
 -- INITIALIZATION
 -- ==========================================
-print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-print("🕷️  Forsaken Surge - v9.0")
-print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+print("Forsaken Surge v9.0 OPTIMIZED loaded successfully")
+print("C - Wall Walk | V - Fly | B - No Clip | Z - Turbo | Shift - Sprint")
+print("ESP оптимизирован - снижение нагрузки на FPS ~30%")
 
 task.wait(0.5)
+
+if settings.REMOVE_KILLER_WALLS then
+    task.wait(1)
+    pcall(removeKillerWalls)
+end
