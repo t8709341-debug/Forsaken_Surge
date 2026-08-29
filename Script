@@ -1,7 +1,3 @@
--- ==========================================
--- ПОЛНЫЙ ОПТИМИЗИРОВАННЫЙ СКРИПТ FORSAKEN SURGE V9.0
--- ==========================================
-
 local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-Softworks/Luna-Interface-Suite/refs/heads/main/source.lua", true))()
 
 -- ==========================================
@@ -9,7 +5,7 @@ local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-S
 -- ==========================================
 local Window = Luna:CreateWindow({
     Name = "Forsaken Surge",
-    Subtitle = "v9.0 | OPTIMIZED ESP",
+    Subtitle = "v9.0 | VELOCITY + TURBO",
     LogoID = nil,
     LoadingEnabled = true,
     LoadingTitle = "Forsaken Surge",
@@ -89,9 +85,8 @@ local DefaultSettings = {
     FLY_AUTO_UP = false,
     FLY_HOVER = false,
     
-    -- ESP SETTINGS (Оптимизированные)
+    -- ESP SETTINGS
     ESP_ENABLED = true,
-    ESP_UPDATE_INTERVAL = 0.2,
     KILLERS_ESP = true,
     KILLERS_COLOR = "Red",
     SURVIVORS_ESP = true,
@@ -101,18 +96,10 @@ local DefaultSettings = {
     ITEMS_ESP = true,
     ITEMS_COLOR = "Gold",
     SHOW_TEXT = true,
-    ESP_MAX_DISTANCE = 120,
-    ESP_MIN_DISTANCE = 8,
-    ESP_FADE_DISTANCE = true,
     
     TURBO_ACTIVE = false,
     TURBO_SPEED = 30,
     TURBO_MODE = "Velocity",
-    
-    -- Автогенератор
-    AUTO_GENERATOR = false,
-    GENERATOR_COOLDOWN = 3,
-    SPEED_UP_COOLDOWN = false
 }
 
 function LoadSettings()
@@ -137,32 +124,30 @@ end
 
 local settings = LoadSettings()
 
+-- ===== STATES =====
+local climbing = false
+local flying = false
+local noClipActive = false
+local turboActive = false
+local gravityDir = Vector3.new(0, -1, 0)
+local upDir = Vector3.new(0, 1, 0)
+local fallSpeed = 0
+local isGrounded = false
+local facing = Vector3.new(0, 0, -1)
+local pressed = {}
+local isSprinting = false
+local isOnCeiling = false
+local ceilingTime = 0
+local flyVelocity = Vector3.new(0, 0, 0)
+
+local rayParams = RaycastParams.new()
+rayParams.FilterType = Enum.RaycastFilterType.Exclude
+rayParams.RespectCanCollide = true
+
 -- ==========================================
--- ОПТИМИЗИРОВАННАЯ ESP СИСТЕМА
+-- ESP SYSTEM
 -- ==========================================
 
-local ESP = {
-    Enabled = true,
-    UpdateInterval = 0.2,
-    MaxDistance = 120,
-    MinDistance = 8,
-    Cache = {
-        Players = {},
-        Generators = {},
-        Items = {},
-        LastUpdate = 0,
-        UpdateTime = 0.5
-    },
-    Objects = {
-        Highlights = {},
-        Billboards = {},
-        Pool = {}
-    },
-    DistanceCheckInterval = 0.15,
-    FrameSkip = 0
-}
-
--- Цвета (кэшированные)
 local ColorPresets = {
     ["White"] = Color3.fromRGB(255,255,255),
     ["Teal"] = Color3.fromRGB(3,252,157),
@@ -179,272 +164,343 @@ local espFolder = Instance.new("Folder")
 espFolder.Name = "ForsakenSurgeESP"
 espFolder.Parent = player:WaitForChild("PlayerGui")
 
-local function GetESPColor(settingName, defaultColor)
-    local colorName = settings[settingName] or defaultColor
-    return ColorPresets[colorName] or ColorPresets[defaultColor]
-end
+local espHighlights = {}
+local espBillboards = {}
 
--- ==========================================
--- ОПТИМИЗИРОВАННОЕ СОЗДАНИЕ HIGHLIGHT
--- ==========================================
-
-local function CreateOptimizedHighlight(instance, color, distance)
-    if not instance or not instance.Parent then return nil end
-    
-    local highlight = Instance.new("Highlight")
-    highlight.FillColor = color
-    highlight.OutlineColor = color
-    highlight.FillTransparency = 0.7
-    highlight.OutlineTransparency = 0.3
-    highlight.Adornee = instance
-    highlight.Parent = instance
-    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    highlight:SetAttribute("ESP", true)
-    highlight:SetAttribute("Distance", distance or 0)
-    
-    return highlight
-end
-
-local function CreateOptimizedText(instance, text, color, distance)
-    if not instance or not instance.Parent then return nil end
-    
-    local billboard = Instance.new("BillboardGui")
-    billboard.Size = UDim2.new(0, 100, 0, 25)
-    billboard.StudsOffset = Vector3.new(0, 3, 0)
-    billboard.AlwaysOnTop = true
-    billboard.ResetOnSpawn = false
-    billboard.Adornee = instance
-    billboard:SetAttribute("ESP", true)
-    billboard:SetAttribute("Distance", distance or 0)
-    
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.BackgroundTransparency = 1
-    label.Text = text
-    label.TextColor3 = color
-    label.TextSize = 14
-    label.Font = Enum.Font.GothamBold
-    label.TextScaled = true
-    label.TextStrokeTransparency = 0
-    label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-    label.Parent = billboard
-    
-    billboard.Parent = instance
-    return billboard
-end
-
--- ==========================================
--- ОПТИМИЗИРОВАННОЕ ОБНОВЛЕНИЕ КЭША
--- ==========================================
-
-local function UpdateESPCache()
-    local now = tick()
-    if now - ESP.Cache.LastUpdate < 0.5 then return end
-    
-    ESP.Cache.Players = {}
-    ESP.Cache.Generators = {}
-    ESP.Cache.Items = {}
-    
-    -- Кэшируем игроков (только живых)
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= player then
-            local char = plr.Character
-            if char and char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0 then
-                local root = char:FindFirstChild("HumanoidRootPart")
-                if root then
-                    local isKiller = false
-                    local team = plr.Team
-                    if team then
-                        local teamName = team.Name:lower()
-                        if teamName:find("killer") or teamName:find("monster") or teamName:find("enemy") then
-                            isKiller = true
-                        end
-                    end
-                    table.insert(ESP.Cache.Players, {
-                        Player = plr,
-                        Character = char,
-                        Root = root,
-                        IsKiller = isKiller,
-                        Name = plr.Name
-                    })
-                end
-            end
-        end
+local function clearAllESP()
+    for _, hl in ipairs(espHighlights) do
+        pcall(function() hl:Destroy() end)
     end
-    
-    -- Кэшируем генераторы
-    if settings.GENERATORS_ESP then
-        for _, obj in ipairs(Workspace:GetDescendants()) do
-            if obj:IsA("Model") and obj.Parent then
-                local name = string.lower(obj.Name)
-                if string.find(name, "generator") or string.find(name, "gen") or obj:GetAttribute("Generator") then
-                    local progress = obj:FindFirstChild("Progress")
-                    if progress and progress.Value < 100 then
-                        local main = obj:FindFirstChild("Main") or obj:FindFirstChild("HumanoidRootPart") or obj
-                        table.insert(ESP.Cache.Generators, {
-                            Object = obj,
-                            Main = main,
-                            Name = obj.Name
-                        })
-                    end
-                end
-            end
-        end
+    espHighlights = {}
+    for _, bg in ipairs(espBillboards) do
+        pcall(function() bg:Destroy() end)
     end
-    
-    -- Кэшируем предметы
-    if settings.ITEMS_ESP then
-        for _, obj in ipairs(Workspace:GetDescendants()) do
-            if obj:IsA("Tool") and obj.Parent then
-                local main = obj:FindFirstChildWhichIsA("BasePart") or obj
-                table.insert(ESP.Cache.Items, {
-                    Object = obj,
-                    Main = main,
-                    Name = obj.Name
-                })
-            end
-        end
-    end
-    
-    ESP.Cache.LastUpdate = now
+    espBillboards = {}
 end
 
--- ==========================================
--- ОПТИМИЗИРОВАННАЯ ОТРИСОВКА ESP
--- ==========================================
+function GetValue(FeatureName)
+    return settings[FeatureName]
+end
 
-local function RenderESP()
-    if not settings.ESP_ENABLED then
-        -- Удаляем все ESP объекты
-        for _, child in ipairs(espFolder:GetDescendants()) do
-            if child:GetAttribute("ESP") then
-                child:Destroy()
-            end
-        end
+-- Function to check distance for highlight
+local function CheckHighlightDistance(Highlight, TargetRoot, Settings)
+    local Camera = TargetRoot and workspace.CurrentCamera
+    if not Camera or (Highlight:GetAttribute("Frozen") and not Settings.Instant) then return end
+    
+    local Distance = (Camera.CFrame.Position - TargetRoot.Position).Magnitude
+    local MinDistance = Settings.MinDistance or 10
+    local ShouldHide = Distance < MinDistance or Distance > 1200
+    
+    if ShouldHide and Highlight.FillTransparency ~= 1 then
+        local Tween = TweenService:Create(Highlight, TweenInfo.new(Settings.Instant and 0 or 0.1), {
+            FillTransparency = 1,
+            OutlineTransparency = 1
+        })
+        Tween.Parent = Highlight
+        Tween:Play()
+        Debris:AddItem(Tween, 0.2)
         return
     end
     
-    local cameraPos = Camera.CFrame.Position
-    local maxDist = settings.ESP_MAX_DISTANCE or 120
-    local minDist = settings.ESP_MIN_DISTANCE or 8
+    if not ShouldHide and Distance >= MinDistance and Distance < 1200 then
+        local TransparencyAmount = math.clamp(1 - math.clamp((Distance - MinDistance) / math.max(Settings.MaxDistance - MinDistance, 0.001), 0, 1), 0.45, 1)
+        if math.abs(Highlight.FillTransparency - TransparencyAmount) > 0 then
+            local Tween = TweenService:Create(Highlight, TweenInfo.new(Settings.Instant and 0 or 0.1), {
+                FillTransparency = math.clamp(TransparencyAmount + 0.05, 0, 1),
+                OutlineTransparency = TransparencyAmount <= 0.95 and TransparencyAmount - 0.05 or TransparencyAmount
+            })
+            Tween.Parent = Highlight
+            Tween:Play()
+            Debris:AddItem(Tween, 0.2)
+        end
+    end
+end
+
+-- Function to check distance for text
+local function CheckTextDistance(Text, TargetRoot, Settings)
+    local Camera = TargetRoot and workspace.CurrentCamera
+    if not Camera or (Text:GetAttribute("Frozen") and not Settings.Instant) then return end
     
-    -- Очищаем старые объекты (кэшируем для переиспользования)
-    local toRemove = {}
-    for _, child in ipairs(espFolder:GetDescendants()) do
-        if child:GetAttribute("ESP") then
-            local parent = child:GetAttribute("Parent")
-            if not parent or not parent.Parent then
-                table.insert(toRemove, child)
-            end
+    local Distance = (Camera.CFrame.Position - TargetRoot.Position).Magnitude
+    local MinDistance = Settings.MinDistance or 25
+    
+    if Distance > MinDistance and Distance < 1200 and Text.TextTransparency ~= 0 then
+        local Tween = TweenService:Create(Text, TweenInfo.new(Settings.Instant and 0 or 0.1), {
+            TextTransparency = 0,
+            TextStrokeTransparency = 0
+        })
+        Tween.Parent = TargetRoot
+        Tween:Play()
+        Debris:AddItem(Tween, 0.2)
+    elseif Distance <= MinDistance or Distance >= 1200 and Text.TextTransparency ~= 1 then
+        local Tween = TweenService:Create(Text, TweenInfo.new(Settings.Instant and 0 or 0.1), {
+            TextTransparency = 1,
+            TextStrokeTransparency = 1
+        })
+        Tween.Parent = TargetRoot
+        Tween:Play()
+        Debris:AddItem(Tween, 0.2)
+    end
+end
+
+-- Function to create dynamic highlight
+local function CreateDynamicHighlight(Enabled, ItemInstance, TargetRoot, Settings)
+    Settings = type(Settings) == "table" and Settings or {
+        MaxDistance = 100,
+        MinDistance = 10,
+        Color = Color3.new(1,1,1)
+    }
+    
+    if not settings.ESP_ENABLED then
+        Enabled = false
+    end
+    
+    local Highlight = nil
+    for _, child in ipairs(ItemInstance:GetChildren()) do
+        if child:IsA("Highlight") and child:GetAttribute("Dynamic") then
+            Highlight = child
+            break
         end
     end
     
-    for _, obj in ipairs(toRemove) do
-        obj:Destroy()
+    if Enabled then
+        if not Highlight then
+            Highlight = Instance.new("Highlight")
+            Highlight.Name = HttpService:GenerateGUID(false):sub(1,7)
+            Highlight.Archivable = false
+            
+            local H, S, V = Settings.Color:ToHSV()
+            Highlight.FillColor = Color3.fromHSV(H, S, V * 0.8)
+            Highlight.OutlineColor = Color3.fromHSV(H, S, V * 1.1)
+            Highlight:SetAttribute("Dynamic", true)
+            Highlight.Parent = ItemInstance
+            Highlight.Adornee = ItemInstance
+            Highlight.FillTransparency = 1
+            Highlight.OutlineTransparency = 1
+            table.insert(espHighlights, Highlight)
+            
+            CheckHighlightDistance(Highlight, TargetRoot, Settings)
+            
+            local Connection
+            Connection = workspace.CurrentCamera:GetPropertyChangedSignal("CameraSubject"):Connect(function()
+                if Highlight and Highlight.Parent then
+                    for i,v in Highlight:GetChildren() do 
+                        pcall(function() v:Cancel() end) 
+                    end
+                    Highlight.FillTransparency = 0.95
+                    Highlight.OutlineTransparency = 0.95
+                else
+                    Connection:Disconnect()
+                end
+            end)
+            
+            Highlight.Destroying:Once(function()
+                if Connection then
+                    Connection:Disconnect()
+                end
+            end)
+            
+            Highlight.Parent:GetPropertyChangedSignal("Parent"):Once(function()
+                Highlight:Destroy()
+            end)
+        else
+            local H, S, V = Settings.Color:ToHSV()
+            Highlight.FillColor = Color3.fromHSV(H, S, V * 0.8)
+            Highlight.OutlineColor = Color3.fromHSV(H, S, V * 1.1)
+            CheckHighlightDistance(Highlight, TargetRoot, Settings)
+        end
+    elseif Highlight then
+        Highlight:Destroy()
+    end
+end
+
+-- Function to create text
+local function CreateText(Enabled, ItemInstance, TargetRoot, Settings)
+    Settings = type(Settings) == "table" and Settings or {
+        MinDistance = 25,
+        Color = Color3.new(1,1,1)
+    }
+    
+    if not settings.ESP_ENABLED or not settings.SHOW_TEXT then
+        Enabled = false
     end
     
-    -- Отрисовка игроков
-    if settings.KILLERS_ESP or settings.SURVIVORS_ESP then
-        for _, data in ipairs(ESP.Cache.Players) do
-            if data.Root and data.Root.Parent then
-                local dist = (data.Root.Position - cameraPos).Magnitude
-                if dist < maxDist then
-                    local color
-                    local show = false
-                    
-                    if data.IsKiller and settings.KILLERS_ESP then
-                        color = GetESPColor("KILLERS_COLOR", "Red")
-                        show = true
-                    elseif not data.IsKiller and settings.SURVIVORS_ESP then
-                        color = GetESPColor("SURVIVORS_COLOR", "Green")
-                        show = true
+    local BillboardGui = nil
+    for _, child in ipairs(TargetRoot:GetChildren()) do
+        if child:IsA("BillboardGui") and child:GetAttribute("Dynamic") then
+            BillboardGui = child
+            break
+        end
+    end
+    
+    if Enabled then
+        if not BillboardGui then
+            BillboardGui = Instance.new("BillboardGui")
+            local TextLabel = Instance.new("TextLabel")
+            
+            BillboardGui.Name = HttpService:GenerateGUID(false):sub(1,7)
+            BillboardGui.Archivable = false
+            BillboardGui.Size = ItemInstance:IsA("Tool") and UDim2.new(1.5, 30, 0.75, 30) or UDim2.new(1.5,60,0.75,25)
+            BillboardGui.StudsOffset = ItemInstance:IsA("Tool") and Vector3.new(0,3,0) or Vector3.new(0,4,0)
+            BillboardGui.AlwaysOnTop = true
+            BillboardGui.ResetOnSpawn = false
+            BillboardGui.Adornee = TargetRoot
+            BillboardGui:SetAttribute("Dynamic", true)
+            table.insert(espBillboards, BillboardGui)
+            
+            TextLabel.Text = Settings.Text or "Unknown"
+            local H, S, V = Settings.Color:ToHSV()
+            TextLabel.TextColor3 = Color3.fromHSV(H, S, V * 1.1)
+            TextLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+            TextLabel.Position = UDim2.fromScale(0.5, 0.5)
+            TextLabel.Size = UDim2.fromScale(1, 1)
+            TextLabel.BackgroundTransparency = 1
+            TextLabel.TextScaled = true
+            TextLabel.Parent = BillboardGui
+            
+            BillboardGui.Parent = TargetRoot
+            CheckTextDistance(TextLabel, TargetRoot, Settings)
+            
+            local Connection
+            Connection = workspace.CurrentCamera:GetPropertyChangedSignal("CameraSubject"):Connect(function()
+                if BillboardGui and BillboardGui.Parent then
+                    for i,v in TextLabel:GetChildren() do 
+                        pcall(function() v:Cancel() end) 
                     end
-                    
-                    if show then
-                        -- Создаем highlight
-                        local highlight = CreateOptimizedHighlight(data.Character, color, dist)
-                        if highlight then
-                            highlight.Parent = espFolder
+                    TextLabel.TextTransparency = 0.95
+                    TextLabel.TextStrokeTransparency = 0.95
+                else
+                    Connection:Disconnect()
+                end
+            end)
+            
+            BillboardGui.Destroying:Once(function()
+                if Connection then
+                    Connection:Disconnect()
+                end
+            end)
+            
+            BillboardGui.Parent:GetPropertyChangedSignal("Parent"):Once(function()
+                BillboardGui:Destroy()
+            end)
+        else
+            local H, S, V = Settings.Color:ToHSV()
+            local TextLabel = BillboardGui.TextLabel
+            if TextLabel then
+                TextLabel.TextColor3 = Color3.fromHSV(H, S, V * 1.1)
+                CheckTextDistance(TextLabel, TargetRoot, Settings)
+            end
+        end
+    elseif BillboardGui then
+        BillboardGui:Destroy()
+    end
+end
+
+-- ESP Update Loop
+task.spawn(function()
+    while true do
+        task.wait(0.1)
+        pcall(function()
+            if not settings.ESP_ENABLED then
+                clearAllESP()
+                return
+            end
+            
+            -- Player ESP
+            for _, plr in ipairs(Players:GetPlayers()) do
+                task.spawn(function()
+                    if plr == player then return end
+                    local char = plr.Character
+                    if char and char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0 then
+                        local TargetRoot = char:FindFirstChild("HumanoidRootPart")
+                        if not TargetRoot then return end
+                        
+                        local isKiller = false
+                        local team = plr.Team
+                        if team then
+                            local teamName = team.Name:lower()
+                            if teamName:find("killer") or teamName:find("monster") or teamName:find("enemy") then
+                                isKiller = true
+                            end
                         end
                         
-                        -- Создаем текст
-                        if settings.SHOW_TEXT then
-                            local text = CreateOptimizedText(data.Character, data.Name, color, dist)
-                            if text then
-                                text.Parent = espFolder
+                        if isKiller and settings.KILLERS_ESP then
+                            local color = ColorPresets[settings.KILLERS_COLOR] or ColorPresets.Red
+                            CreateDynamicHighlight(true, char, TargetRoot, {
+                                MaxDistance = 100,
+                                MinDistance = 10,
+                                Color = color
+                            })
+                            CreateText(true, char, TargetRoot, {
+                                MinDistance = 25,
+                                Text = plr.Name,
+                                Color = color
+                            })
+                        elseif not isKiller and settings.SURVIVORS_ESP then
+                            local color = ColorPresets[settings.SURVIVORS_COLOR] or ColorPresets.Green
+                            CreateDynamicHighlight(true, char, TargetRoot, {
+                                MaxDistance = 100,
+                                MinDistance = 10,
+                                Color = color
+                            })
+                            CreateText(true, char, TargetRoot, {
+                                MinDistance = 25,
+                                Text = plr.Name,
+                                Color = color
+                            })
+                        else
+                            CreateDynamicHighlight(false, char)
+                            CreateText(false, char)
+                        end
+                    end
+                end)
+            end
+            
+            -- Generators ESP
+            if settings.GENERATORS_ESP then
+                for _, obj in ipairs(Workspace:GetDescendants()) do
+                    if obj:IsA("Model") and obj.Parent then
+                        local name = string.lower(obj.Name)
+                        if string.find(name, "generator") or string.find(name, "gen") or obj:GetAttribute("Generator") then
+                            local progress = obj:FindFirstChild("Progress")
+                            if progress and progress.Value >= 100 then
+                                CreateDynamicHighlight(false, obj)
+                                CreateText(false, obj)
+                            else
+                                local TargetRoot = obj:FindFirstChild("Main") or obj:FindFirstChild("HumanoidRootPart") or obj
+                                local color = ColorPresets[settings.GENERATORS_COLOR] or ColorPresets.Cyan
+                                CreateDynamicHighlight(true, obj, TargetRoot, {
+                                    MaxDistance = 100,
+                                    MinDistance = 12,
+                                    Color = color
+                                })
+                                CreateText(true, obj, TargetRoot, {
+                                    MinDistance = 25,
+                                    Text = obj.Name,
+                                    Color = color
+                                })
                             end
                         end
                     end
                 end
             end
-        end
-    end
-    
-    -- Отрисовка генераторов
-    if settings.GENERATORS_ESP then
-        for _, data in ipairs(ESP.Cache.Generators) do
-            if data.Main and data.Main.Parent then
-                local dist = (data.Main.Position - cameraPos).Magnitude
-                if dist < maxDist then
-                    local color = GetESPColor("GENERATORS_COLOR", "Cyan")
-                    
-                    local highlight = CreateOptimizedHighlight(data.Object, color, dist)
-                    if highlight then
-                        highlight.Parent = espFolder
-                    end
-                    
-                    if settings.SHOW_TEXT then
-                        local text = CreateOptimizedText(data.Object, "⚡ " .. data.Name, color, dist)
-                        if text then
-                            text.Parent = espFolder
-                        end
-                    end
-                end
-            end
-        end
-    end
-    
-    -- Отрисовка предметов
-    if settings.ITEMS_ESP then
-        for _, data in ipairs(ESP.Cache.Items) do
-            if data.Main and data.Main.Parent then
-                local dist = (data.Main.Position - cameraPos).Magnitude
-                if dist < maxDist then
-                    local color = GetESPColor("ITEMS_COLOR", "Gold")
-                    
-                    local highlight = CreateOptimizedHighlight(data.Object, color, dist)
-                    if highlight then
-                        highlight.Parent = espFolder
-                    end
-                    
-                    if settings.SHOW_TEXT then
-                        local text = CreateOptimizedText(data.Object, "📦 " .. data.Name, color, dist)
-                        if text then
-                            text.Parent = espFolder
-                        end
-                    end
-                end
-            end
-        end
-    end
-end
-
--- ==========================================
--- ОПТИМИЗИРОВАННЫЙ ESP ЦИКЛ
--- ==========================================
-
-task.spawn(function()
-    while true do
-        task.wait(ESP.UpdateInterval)
-        pcall(function()
-            if settings.ESP_ENABLED then
-                UpdateESPCache()
-                RenderESP()
-            else
-                -- Очистка
-                for _, child in ipairs(espFolder:GetDescendants()) do
-                    if child:GetAttribute("ESP") then
-                        child:Destroy()
+            
+            -- Items ESP
+            if settings.ITEMS_ESP then
+                for _, obj in ipairs(Workspace:GetDescendants()) do
+                    if obj:IsA("Tool") and obj.Parent then
+                        local TargetRoot = obj:FindFirstChildWhichIsA("BasePart") or obj
+                        local color = ColorPresets[settings.ITEMS_COLOR] or ColorPresets.Gold
+                        CreateDynamicHighlight(true, obj, TargetRoot, {
+                            MaxDistance = 100,
+                            MinDistance = 12,
+                            Color = color
+                        })
+                        CreateText(true, obj, TargetRoot, {
+                            MinDistance = 25,
+                            Text = obj.Name,
+                            Color = color
+                        })
                     end
                 end
             end
@@ -452,168 +508,9 @@ task.spawn(function()
     end
 end)
 
--- Очистка при смене персонажа
-player.CharacterAdded:Connect(function()
+player.CharacterAdded:Connect(function(char)
     task.wait(0.5)
-    for _, child in ipairs(espFolder:GetDescendants()) do
-        if child:GetAttribute("ESP") then
-            child:Destroy()
-        end
-    end
-    ESP.Cache.LastUpdate = 0
-end)
-
--- ==========================================
--- АВТОГЕНЕРАТОР (Оптимизированный)
--- ==========================================
-
-local AutoGen = {
-    IsRunning = false,
-    CurrentGenerator = nil,
-    RNG = Random.new(),
-    LastCheck = 0,
-    CheckInterval = 0.15,
-    CachedGenerators = {},
-    CacheTime = 0,
-    CacheLifetime = 2
-}
-
-local function GetCachedGenerators()
-    local now = tick()
-    if now - AutoGen.CacheTime > AutoGen.CacheLifetime then
-        AutoGen.CachedGenerators = {}
-        for _, obj in ipairs(Workspace:GetDescendants()) do
-            if obj:IsA("Model") and (obj.Name == "Generator" or string.find(string.lower(obj.Name), "generator")) and obj:FindFirstChild("Main") then
-                local progress = obj:FindFirstChild("Progress")
-                if progress and progress.Value < 100 then
-                    table.insert(AutoGen.CachedGenerators, obj)
-                end
-            end
-        end
-        AutoGen.CacheTime = now
-    end
-    return AutoGen.CachedGenerators
-end
-
-local function IsPlayersNear(distance)
-    if not hrp then return false end
-    
-    local pos = hrp.Position
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= player then
-            local char = plr.Character
-            if char then
-                local root = char:FindFirstChild("HumanoidRootPart")
-                if root and (root.Position - pos).Magnitude < distance then
-                    return true
-                end
-            end
-        end
-    end
-    return false
-end
-
-local function GetGenCooldown()
-    local baseCD = settings.GENERATOR_COOLDOWN or 3
-    local speedUp = settings.SPEED_UP_COOLDOWN
-    
-    if speedUp then
-        local playersNear = IsPlayersNear(32)
-        if not playersNear and baseCD > 2 then
-            return math.max(1.5, baseCD * 0.3)
-        end
-    end
-    
-    return baseCD
-end
-
-local function FixGenerator(generator)
-    if not generator or not generator.Parent then return false end
-    
-    local remotes = generator:FindFirstChild("Remotes")
-    local progress = generator:FindFirstChild("Progress")
-    if not remotes or not progress then return false end
-    
-    local remoteEvent = remotes:FindFirstChildOfClass("RemoteEvent")
-    if not remoteEvent then return false end
-    
-    if progress.Value >= 100 then return false end
-    
-    local cooldown = GetGenCooldown()
-    local variance = cooldown * 0.1
-    local delay = AutoGen.RNG:NextNumber(cooldown - variance, cooldown + variance)
-    task.wait(math.max(0.5, delay))
-    
-    if not AutoGen.IsRunning or not character then return false end
-    if progress.Value >= 100 then return false end
-    
-    remoteEvent:FireServer()
-    
-    local main = generator:FindFirstChild("Main")
-    if main then
-        -- Воспроизведение звука
-        local sound = Instance.new("Sound")
-        sound.SoundId = "rbxassetid://9120401844"
-        sound.Parent = main
-        sound:Play()
-        Debris:AddItem(sound, 2)
-    end
-    
-    return true
-end
-
-local function AutoGeneratorLoop()
-    if not settings.AUTO_GENERATOR then
-        AutoGen.IsRunning = false
-        return
-    end
-    
-    if not hrp or not character then return end
-    if AutoGen.IsRunning then return end
-    
-    local generators = GetCachedGenerators()
-    if #generators == 0 then return end
-    
-    local nearest = nil
-    local nearestDist = math.huge
-    local pos = hrp.Position
-    
-    for _, gen in ipairs(generators) do
-        local main = gen:FindFirstChild("Main")
-        if main then
-            local dist = (main.Position - pos).Magnitude
-            if dist < nearestDist and dist < 7 then
-                nearestDist = dist
-                nearest = gen
-            end
-        end
-    end
-    
-    if not nearest then return end
-    
-    AutoGen.IsRunning = true
-    AutoGen.CurrentGenerator = nearest
-    
-    FixGenerator(nearest)
-    
-    AutoGen.IsRunning = false
-    AutoGen.CurrentGenerator = nil
-    AutoGen.CacheTime = 0
-end
-
--- Запуск автогенератора
-task.spawn(function()
-    while true do
-        task.wait(0.15)
-        pcall(AutoGeneratorLoop)
-    end
-end)
-
-player.CharacterAdded:Connect(function()
-    task.wait(0.5)
-    AutoGen.CacheTime = 0
-    AutoGen.IsRunning = false
-    AutoGen.CurrentGenerator = nil
+    clearAllESP()
 end)
 
 -- ==========================================
@@ -763,6 +660,96 @@ task.spawn(function()
 end)
 
 -- ==========================================
+-- ANTI-CHEAT BYPASS
+-- ==========================================
+local function removeNoclipDetector()
+    if character then
+        local detector = character:FindFirstChild("NoclipDetector")
+        if detector then
+            detector:Destroy()
+            return true
+        end
+    end
+    return false
+end
+
+local function blockNoclipDetector()
+    if character then
+        local detector = character:FindFirstChild("NoclipDetector")
+        if detector and detector:IsA("BasePart") then
+            detector.CanCollide = false
+            detector.Transparency = 1
+            detector.Size = Vector3.new(0.1, 0.1, 0.1)
+            return true
+        end
+    end
+    return false
+end
+
+local function hookAntiCheat()
+    local acModule = nil
+    local modules = {
+        ReplicatedStorage:FindFirstChild("Modules"),
+        ReplicatedStorage:FindFirstChild("AntiCheat"),
+        game:GetService("ServerScriptService"):FindFirstChild("Server"),
+        game:GetService("ServerScriptService"):FindFirstChild("Modules"),
+    }
+    
+    for _, container in ipairs(modules) do
+        if container then
+            for _, child in ipairs(container:GetDescendants()) do
+                if child.Name:lower():find("noclip") or child.Name:lower():find("anticheat") or child.Name:lower():find("antinoclip") then
+                    acModule = child
+                    break
+                end
+            end
+        end
+    end
+    
+    if acModule then
+        pcall(function()
+            if acModule:FindFirstChild("Check") then
+                acModule.Check = function(...)
+                    return
+                end
+            end
+            
+            if acModule:FindFirstChild("Init") then
+                acModule.Init = function(...)
+                    return {Cancelled = true}
+                end
+            end
+        end)
+    end
+end
+
+local function removeAllDetectors()
+    for _, char in ipairs(Workspace:GetDescendants()) do
+        if char.Name == "NoclipDetector" and char:IsA("BasePart") then
+            char:Destroy()
+        end
+    end
+end
+
+local function setCollisionGroup()
+    if hrp then
+        pcall(function()
+            local groups = {
+                "Survivors",
+                "Killers",
+                "Default",
+                "Players"
+            }
+            for _, group in ipairs(groups) do
+                pcall(function()
+                    hrp.CollisionGroup = group
+                end)
+            end
+        end)
+    end
+end
+
+-- ==========================================
 -- NO CLIP (TOGGLE B)
 -- ==========================================
 local function toggleNoClip()
@@ -780,6 +767,12 @@ local function toggleNoClip()
         
         humanoid.AutoRotate = true
         humanoid.PlatformStand = false
+        
+        removeNoclipDetector()
+        blockNoclipDetector()
+        hookAntiCheat()
+        removeAllDetectors()
+        setCollisionGroup()
         
         for _, part in ipairs(character:GetDescendants()) do
             if part:IsA("BasePart") then
@@ -799,6 +792,34 @@ local function toggleNoClip()
         
         gravityDir = Vector3.new(0, -1, 0)
         upDir = Vector3.new(0, 1, 0)
+    end
+end
+
+local function phaseThroughWall()
+    if not hrp or not humanoid then return end
+    
+    local camCFrame = Camera.CFrame
+    local forward = camCFrame.LookVector
+    local targetPos = hrp.Position + forward * 20
+    
+    local ray = Workspace:Raycast(hrp.Position, forward * 25, rayParams)
+    if ray then
+        targetPos = ray.Position + ray.Normal * 3
+    end
+    
+    for _, part in ipairs(character:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = false
+        end
+    end
+    
+    hrp.CFrame = CFrame.new(targetPos)
+    
+    task.wait(0.05)
+    for _, part in ipairs(character:GetDescendants()) do
+        if part:IsA("BasePart") and part.Name ~= "NoclipDetector" then
+            part.CanCollide = true
+        end
     end
 end
 
@@ -858,24 +879,16 @@ task.spawn(function()
     end
 end)
 
+Workspace.ChildAdded:Connect(function()
+    if settings.REMOVE_KILLER_WALLS then
+        task.wait(0.5)
+        pcall(removeKillerWalls)
+    end
+end)
+
 -- ==========================================
 -- INPUT HANDLING
 -- ==========================================
-local pressed = {}
-local isSprinting = false
-local climbing = false
-local flying = false
-local noClipActive = false
-local turboActive = false
-local isOnCeiling = false
-local ceilingTime = 0
-local fallSpeed = 0
-local isGrounded = false
-local facing = Vector3.new(0, 0, -1)
-local gravityDir = Vector3.new(0, -1, 0)
-local upDir = Vector3.new(0, 1, 0)
-local flyVelocity = Vector3.new(0, 0, 0)
-
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
     pressed[input.KeyCode] = true
@@ -894,6 +907,10 @@ UserInputService.InputBegan:Connect(function(input, gp)
     
     if input.KeyCode == Enum.KeyCode.Z then
         toggleTurbo()
+    end
+    
+    if input.KeyCode == Enum.KeyCode.G and noClipActive then
+        phaseThroughWall()
     end
     
     if input.KeyCode == Enum.KeyCode.LeftShift then
@@ -931,7 +948,7 @@ local WalkTab = Window:CreateTab({
 
 WalkTab:CreateParagraph({
     Title = "Forsaken Surge",
-    Text = "v9.0 with OPTIMIZED ESP!"
+    Text = "v9.0 with VELOCITY (TURBO)!"
 })
 
 WalkTab:CreateLabel({ Text = "MOVEMENT", Style = 1 })
@@ -1035,57 +1052,6 @@ WalkTab:CreateToggle({
         SaveSettings(settings)
     end
 }, "StickToSurface")
-
--- ==========================================
--- AUTO GENERATOR TAB
--- ==========================================
-local AutoGenTab = Window:CreateTab({
-    Name = "Auto Gen",
-    Icon = "build",
-    ImageSource = "Material",
-    ShowTitle = true
-})
-
-AutoGenTab:CreateParagraph({
-    Title = "AUTO GENERATOR",
-    Text = "Автоматически чинит генераторы"
-})
-
-AutoGenTab:CreateToggle({
-    Name = "Auto Generator",
-    Description = "Автоматически чинит генераторы",
-    CurrentValue = settings.AUTO_GENERATOR,
-    Callback = function(Value)
-        settings.AUTO_GENERATOR = Value
-        SaveSettings(settings)
-        if not Value then
-            AutoGen.IsRunning = false
-            AutoGen.CurrentGenerator = nil
-        end
-    end
-}, "AutoGenerator")
-
-AutoGenTab:CreateSlider({
-    Name = "Generator Cooldown",
-    Description = "Задержка между фиксами (сек)",
-    Range = {1.5, 8},
-    Increment = 0.25,
-    CurrentValue = settings.GENERATOR_COOLDOWN,
-    Callback = function(Value)
-        settings.GENERATOR_COOLDOWN = Value
-        SaveSettings(settings)
-    end
-}, "GeneratorCooldown")
-
-AutoGenTab:CreateToggle({
-    Name = "Speed Up When Alone",
-    Description = "Ускоряет фикс, если рядом никого нет",
-    CurrentValue = settings.SPEED_UP_COOLDOWN,
-    Callback = function(Value)
-        settings.SPEED_UP_COOLDOWN = Value
-        SaveSettings(settings)
-    end
-}, "SpeedUpCooldown")
 
 -- ==========================================
 -- TURBO TAB
@@ -1216,7 +1182,7 @@ local NoClipTab = Window:CreateTab({
 
 NoClipTab:CreateParagraph({
     Title = "NO CLIP + BYPASS",
-    Text = "Press B to activate\nAnti-cheat fully bypassed!"
+    Text = "Press B to activate\nPress B + G for phasing\nAnti-cheat fully bypassed!"
 })
 
 NoClipTab:CreateToggle({
@@ -1232,6 +1198,33 @@ NoClipTab:CreateToggle({
         end
     end
 }, "NoClipToggle")
+
+NoClipTab:CreateButton({
+    Name = "Phase Through Wall",
+    Description = "Teleports 20 studs forward",
+    Callback = function()
+        phaseThroughWall()
+    end
+})
+
+NoClipTab:CreateButton({
+    Name = "Remove All NoclipDetectors",
+    Callback = function()
+        removeAllDetectors()
+    end
+})
+
+NoClipTab:CreateButton({
+    Name = "Hook Anti-Cheat",
+    Callback = function()
+        hookAntiCheat()
+    end
+})
+
+NoClipTab:CreateParagraph({
+    Title = "Bypass Instructions",
+    Text = "1. Press B - enter no clip mode\n2. Automatically removes NoclipDetector\n3. Intercepts anti-cheat module\n4. Fly/walk through everything without bans!"
+})
 
 -- ==========================================
 -- FLY TAB
@@ -1347,7 +1340,7 @@ FlyTab:CreateToggle({
 }, "FlyHover")
 
 -- ==========================================
--- ESP TAB (Оптимизированная)
+-- ESP TAB
 -- ==========================================
 local ESPTab = Window:CreateTab({
     Name = "ESP",
@@ -1357,8 +1350,8 @@ local ESPTab = Window:CreateTab({
 })
 
 ESPTab:CreateParagraph({
-    Title = "OPTIMIZED ESP",
-    Text = "Снижена нагрузка на FPS на 30%"
+    Title = "ADVANCED ESP",
+    Text = "Full dynamic highlighting with distance fading"
 })
 
 ESPTab:CreateToggle({
@@ -1369,11 +1362,7 @@ ESPTab:CreateToggle({
         settings.ESP_ENABLED = Value
         SaveSettings(settings)
         if not Value then
-            for _, child in ipairs(espFolder:GetDescendants()) do
-                if child:GetAttribute("ESP") then
-                    child:Destroy()
-                end
-            end
+            clearAllESP()
         end
     end
 }, "ESPMaster")
@@ -1478,42 +1467,10 @@ ESPTab:CreateToggle({
     end
 }, "ShowText")
 
-ESPTab:CreateLabel({ Text = "OPTIMIZATION", Style = 1 })
-
-ESPTab:CreateSlider({
-    Name = "Update Interval",
-    Description = "Чем выше - тем меньше нагрузка",
-    Range = {0.1, 0.5},
-    Increment = 0.05,
-    CurrentValue = ESP.UpdateInterval,
-    Callback = function(Value)
-        ESP.UpdateInterval = Value
-        settings.ESP_UPDATE_INTERVAL = Value
-        SaveSettings(settings)
-    end
-}, "ESPUpdateInterval")
-
-ESPTab:CreateSlider({
-    Name = "Max Distance",
-    Range = {50, 200},
-    Increment = 10,
-    CurrentValue = settings.ESP_MAX_DISTANCE,
-    Callback = function(Value)
-        settings.ESP_MAX_DISTANCE = Value
-        SaveSettings(settings)
-    end
-}, "ESPMaxDistance")
-
-ESPTab:CreateSlider({
-    Name = "Min Distance",
-    Range = {5, 20},
-    Increment = 1,
-    CurrentValue = settings.ESP_MIN_DISTANCE,
-    Callback = function(Value)
-        settings.ESP_MIN_DISTANCE = Value
-        SaveSettings(settings)
-    end
-}, "ESPMinDistance")
+ESPTab:CreateParagraph({
+    Title = "HOW IT WORKS",
+    Text = "• Dynamic highlights with distance fading\n• Colors change based on distance\n• Names appear when close enough\n• Auto-hides completed generators"
+})
 
 -- ==========================================
 -- SETTINGS TAB
@@ -1560,7 +1517,7 @@ SettingsTab:CreateToggle({
 
 SettingsTab:CreateParagraph({
     Title = "CONTROLS",
-    Text = "C - Wall Walk\nV - Fly\nB - No Clip\nZ - TURBO\nShift - Sprint"
+    Text = "C - Wall Walk\nV - Fly\nB - No Clip (anti-cheat bypass!)\nZ - TURBO (super run!)\nB+G - Phase through walls\nShift - Sprint"
 })
 
 SettingsTab:CreateButton({
@@ -1570,11 +1527,7 @@ SettingsTab:CreateButton({
             settings[key] = value
         end
         SaveSettings(settings)
-        for _, child in ipairs(espFolder:GetDescendants()) do
-            if child:GetAttribute("ESP") then
-                child:Destroy()
-            end
-        end
+        clearAllESP()
     end
 })
 
@@ -1616,6 +1569,13 @@ RunService.Heartbeat:Connect(function(dt)
     end
     
     if noClipActive and hrp and humanoid then
+        pcall(function()
+            local detector = character:FindFirstChild("NoclipDetector")
+            if detector then
+                detector:Destroy()
+            end
+        end)
+        
         for _, part in ipairs(character:GetDescendants()) do
             if part:IsA("BasePart") then
                 part.CanCollide = false
@@ -1739,8 +1699,8 @@ RunService.Heartbeat:Connect(function(dt)
     if move.Magnitude > 0 then move = move.Unit end
     
     local wallHit = move.Magnitude > 0 and Workspace:Raycast(pos, move * settings.WALL_RANGE, rayParams) or nil
-    local supportNear = Workspace:Raycast(pos, gravityDir * 3, rayParams) ~= nil
-    local supportFar = Workspace:Raycast(pos, gravityDir * 5, rayParams) ~= nil
+    local supportNear = Workspace:Raycast(pos, gravityDir * settings.SNAP_DISTANCE, rayParams) ~= nil
+    local supportFar = Workspace:Raycast(pos, gravityDir * (settings.SNAP_DISTANCE + settings.GROUND_MARGIN), rayParams) ~= nil
     
     if isGrounded then
         if not supportFar then isGrounded = false end
@@ -1816,9 +1776,8 @@ end)
 -- ==========================================
 -- INITIALIZATION
 -- ==========================================
-print("Forsaken Surge v9.0 OPTIMIZED loaded successfully")
+print("Forsaken Surge v9.0 loaded successfully")
 print("C - Wall Walk | V - Fly | B - No Clip | Z - Turbo | Shift - Sprint")
-print("ESP оптимизирован - снижение нагрузки на FPS ~30%")
 
 task.wait(0.5)
 
