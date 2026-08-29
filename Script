@@ -1,5 +1,10 @@
 local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-Softworks/Luna-Interface-Suite/refs/heads/main/source.lua", true))()
 
+
+--I used LUNA UI because I'm too lazy to make the interface myself. It's essentially an open source project, so you can improve it!
+
+--I used LUNA UI because I'm too lazy to make the interface myself. It's essentially an open source project, so you can improve it!
+
 -- ==========================================
 -- MAIN WINDOW
 -- ==========================================
