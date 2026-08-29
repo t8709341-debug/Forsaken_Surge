@@ -25,12 +25,9 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 local HttpService = game:GetService("HttpService")
-local TweenService = game:GetService("TweenService")
 local Debris = game:GetService("Debris")
 local Camera = Workspace.CurrentCamera
-local StarterGui = game:GetService("StarterGui")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TeleportService = game:GetService("TeleportService")
 
 local player = Players.LocalPlayer
 
@@ -38,18 +35,15 @@ local player = Players.LocalPlayer
 local character = nil
 local humanoid = nil
 local hrp = nil
-local noclipDetector = nil
 
 local function updateCharacterReferences()
     character = player.Character
     if character then
         humanoid = character:FindFirstChild("Humanoid")
         hrp = character:FindFirstChild("HumanoidRootPart")
-        noclipDetector = character:FindFirstChild("NoclipDetector")
     else
         humanoid = nil
         hrp = nil
-        noclipDetector = nil
     end
 end
 
@@ -64,36 +58,22 @@ end
 local SaveFile = MyDataFolder .. "/Settings.json"
 
 local DefaultSettings = {
-    CLIMB_KEY = "C",
-    SPRINT_KEY = "LeftShift",
-    DASH_KEY = "W",
-    FLY_KEY = "V",
-    NO_CLIP_KEY = "B",
-    TURBO_KEY = "Z",
-    SNAP_DISTANCE = 2.0,
-    GROUND_MARGIN = 1.0,
-    WALL_RANGE = 4.5,
     WALK_SPEED = 16,
     SPRINT_MULTIPLIER = 2.0,
-    DASH_SPEED = 50,
-    DASH_COOLDOWN = 0.8,
-    DASH_DURATION = 0.15,
     GRAVITY = 30,
+    WALL_RANGE = 4.5,
     ALIGN_SPEED = 6,
     GRAVITY_LERP_SPEED = 5,
     STICK_TO_SURFACE = true,
     FALL_OFFSET = 3,
     FALL_LIMIT = 20,
     SMOOTHNESS = 15,
-    ANTI_CHEAT_INTERVAL = 0.1,
     CEILING_GRIP = true,
     CEILING_GRIP_FORCE = 8,
     CEILING_MAX_TIME = 4.0,
     AUTO_RESET_ON_FALL = true,
     RESET_HEIGHT = -100,
     NOTIFICATIONS_ENABLED = true,
-    UI_ANIMATIONS = true,
-    SHOW_WALL_INFO = true,
     
     REMOVE_KILLER_WALLS = false,
     
@@ -116,7 +96,6 @@ local DefaultSettings = {
     TURBO_ACTIVE = false,
     TURBO_SPEED = 30,
     TURBO_MODE = "Velocity",
-    TURBO_STEP = 5,
 }
 
 function LoadSettings()
@@ -141,25 +120,6 @@ end
 
 local settings = LoadSettings()
 
--- ===== APPLY SETTINGS =====
-local function getKeyCode(keyName)
-    local success, result = pcall(function()
-        return Enum.KeyCode[keyName]
-    end)
-    if success and result then
-        return result
-    end
-    return Enum.KeyCode.C
-end
-
-local function getKeyName(keyCode)
-    if type(keyCode) == "string" then
-        return keyCode
-    end
-    local name = tostring(keyCode)
-    return name:gsub("Enum.KeyCode.", "")
-end
-
 -- ===== STATES =====
 local climbing = false
 local flying = false
@@ -176,20 +136,84 @@ local isOnCeiling = false
 local ceilingTime = 0
 local flyVelocity = Vector3.new(0, 0, 0)
 
-local dashCooldown = 0
-local dashActive = false
-local dashTimer = 0
-local dashDir = Vector3.new(0, 0, 0)
-local lastDashPressTime = 0
-
 local rayParams = RaycastParams.new()
 rayParams.FilterType = Enum.RaycastFilterType.Exclude
 rayParams.RespectCanCollide = true
 
 -- ==========================================
--- VELOCITY (TURBO) SYSTEM
+-- WALL WALK (TOGGLE C)
 -- ==========================================
+local function toggleClimb()
+    if flying or noClipActive or turboActive then return end
+    
+    if not hrp or not humanoid then
+        updateCharacterReferences()
+        if not hrp or not humanoid then return end
+    end
+    
+    climbing = not climbing
+    if climbing then
+        humanoid.AutoRotate = false
+        humanoid.PlatformStand = true
+        facing = hrp.CFrame.LookVector
+        upDir = hrp.CFrame.UpVector
+        gravityDir = -upDir
+        isOnCeiling = false
+        ceilingTime = 0
+    else
+        humanoid.AutoRotate = true
+        humanoid.PlatformStand = false
+        gravityDir = Vector3.new(0, -1, 0)
+        upDir = Vector3.new(0, 1, 0)
+        fallSpeed = 0
+        isGrounded = false
+        isOnCeiling = false
+        ceilingTime = 0
+        if hrp then
+            hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + facing)
+        end
+    end
+end
 
+-- ==========================================
+-- FLY (TOGGLE V)
+-- ==========================================
+local function toggleFly()
+    if not hrp or not humanoid then
+        updateCharacterReferences()
+        if not hrp or not humanoid then return end
+    end
+    
+    flying = not flying
+    
+    if flying then
+        climbing = false
+        noClipActive = false
+        turboActive = false
+        humanoid.AutoRotate = false
+        humanoid.PlatformStand = true
+        if hrp then
+            hrp.AssemblyLinearVelocity = Vector3.zero
+        end
+        flyVelocity = Vector3.zero
+        if settings.FLY_AUTO_UP then
+            flyVelocity = Vector3.new(0, settings.FLY_SPEED * 0.5, 0)
+        end
+    else
+        humanoid.AutoRotate = true
+        humanoid.PlatformStand = false
+        if hrp then
+            hrp.AssemblyLinearVelocity = Vector3.zero
+        end
+        flyVelocity = Vector3.zero
+        gravityDir = Vector3.new(0, -1, 0)
+        upDir = Vector3.new(0, 1, 0)
+    end
+end
+
+-- ==========================================
+-- TURBO (TOGGLE Z)
+-- ==========================================
 local function toggleTurbo()
     if not hrp or not humanoid then
         updateCharacterReferences()
@@ -265,7 +289,6 @@ end)
 -- ==========================================
 -- ANTI-CHEAT BYPASS
 -- ==========================================
-
 local function removeNoclipDetector()
     if character then
         local detector = character:FindFirstChild("NoclipDetector")
@@ -335,26 +358,6 @@ local function removeAllDetectors()
     end
 end
 
-task.spawn(function()
-    while true do
-        task.wait(0.1)
-        if noClipActive and character then
-            pcall(function()
-                local detector = character:FindFirstChild("NoclipDetector")
-                if detector then
-                    detector:Destroy()
-                end
-                
-                for _, obj in ipairs(Workspace:GetDescendants()) do
-                    if obj.Name == "NoclipDetector" and obj:IsA("BasePart") then
-                        obj:Destroy()
-                    end
-                end
-            end)
-        end
-    end
-end)
-
 local function setCollisionGroup()
     if hrp then
         pcall(function()
@@ -373,27 +376,8 @@ local function setCollisionGroup()
     end
 end
 
-local function teleportBypass(targetPos)
-    if not hrp then return end
-    
-    for _, part in ipairs(character:GetDescendants()) do
-        if part:IsA("BasePart") then
-            part.CanCollide = false
-        end
-    end
-    
-    hrp.CFrame = CFrame.new(targetPos)
-    
-    task.wait(0.05)
-    for _, part in ipairs(character:GetDescendants()) do
-        if part:IsA("BasePart") and part.Name ~= "NoclipDetector" then
-            part.CanCollide = true
-        end
-    end
-end
-
 -- ==========================================
--- NO CLIP
+-- NO CLIP (TOGGLE B)
 -- ==========================================
 local function toggleNoClip()
     if not hrp or not humanoid then
@@ -450,20 +434,29 @@ local function phaseThroughWall()
         targetPos = ray.Position + ray.Normal * 3
     end
     
-    teleportBypass(targetPos)
+    for _, part in ipairs(character:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = false
+        end
+    end
+    
+    hrp.CFrame = CFrame.new(targetPos)
+    
+    task.wait(0.05)
+    for _, part in ipairs(character:GetDescendants()) do
+        if part:IsA("BasePart") and part.Name ~= "NoclipDetector" then
+            part.CanCollide = true
+        end
+    end
 end
 
 -- ==========================================
 -- KILLER WALLS REMOVER
 -- ==========================================
-local killedWalls = {}
-
 local function removeKillerWalls()
     if not settings.REMOVE_KILLER_WALLS then 
         return 
     end
-    
-    local found = 0
     
     local paths = {
         "Map.Ingame.Map.MapBoundaries.KillerDoors",
@@ -493,16 +486,10 @@ local function removeKillerWalls()
         end
         
         if success and current then
-            local toDestroy = {}
             for _, child in ipairs(current:GetChildren()) do
-                table.insert(toDestroy, child)
-            end
-            for _, child in ipairs(toDestroy) do
                 pcall(function()
                     if child:IsA("BasePart") or child:IsA("Model") or child:IsA("Part") or child:IsA("MeshPart") then
-                        table.insert(killedWalls, child)
                         child:Destroy()
-                        found = found + 1
                     end
                 end)
             end
@@ -622,6 +609,46 @@ end)
 player.CharacterAdded:Connect(function(char)
     task.wait(0.5)
     pcall(rebuildESP)
+end)
+
+-- ==========================================
+-- INPUT HANDLING
+-- ==========================================
+UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
+    pressed[input.KeyCode] = true
+    
+    if input.KeyCode == Enum.KeyCode.C then
+        toggleClimb()
+    end
+    
+    if input.KeyCode == Enum.KeyCode.V then
+        toggleFly()
+    end
+    
+    if input.KeyCode == Enum.KeyCode.B then
+        toggleNoClip()
+    end
+    
+    if input.KeyCode == Enum.KeyCode.Z then
+        toggleTurbo()
+    end
+    
+    if input.KeyCode == Enum.KeyCode.G and noClipActive then
+        phaseThroughWall()
+    end
+    
+    if input.KeyCode == Enum.KeyCode.LeftShift then
+        isSprinting = true
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input, gp)
+    if gp then return end
+    pressed[input.KeyCode] = false
+    if input.KeyCode == Enum.KeyCode.LeftShift then
+        isSprinting = false
+    end
 end)
 
 -- ==========================================
@@ -763,7 +790,7 @@ local TurboTab = Window:CreateTab({
 
 TurboTab:CreateParagraph({
     Title = "TURBO (VELOCITY)",
-    Text = "Press Z to activate\nBypasses all speed limits!\nFlexible settings from 5 to 100"
+    Text = "Press Z to activate\nBypasses all speed limits!"
 })
 
 TurboTab:CreateToggle({
@@ -785,7 +812,6 @@ TurboTab:CreateToggle({
 
 TurboTab:CreateSlider({
     Name = "Turbo Speed",
-    Description = "5, 10, 15, 20... up to 100",
     Range = {5, 100},
     Increment = 5,
     CurrentValue = settings.TURBO_SPEED,
@@ -799,7 +825,6 @@ TurboTab:CreateLabel({ Text = "QUICK PRESETS", Style = 1 })
 
 TurboTab:CreateButton({
     Name = "10 - Slow",
-    Description = "For precise control",
     Callback = function()
         settings.TURBO_SPEED = 10
         SaveSettings(settings)
@@ -808,7 +833,6 @@ TurboTab:CreateButton({
 
 TurboTab:CreateButton({
     Name = "30 - Normal Run",
-    Description = "Comfortable speed",
     Callback = function()
         settings.TURBO_SPEED = 30
         SaveSettings(settings)
@@ -817,7 +841,6 @@ TurboTab:CreateButton({
 
 TurboTab:CreateButton({
     Name = "50 - Fast",
-    Description = "Accelerated run",
     Callback = function()
         settings.TURBO_SPEED = 50
         SaveSettings(settings)
@@ -826,7 +849,6 @@ TurboTab:CreateButton({
 
 TurboTab:CreateButton({
     Name = "80 - Very Fast",
-    Description = "Almost flying",
     Callback = function()
         settings.TURBO_SPEED = 80
         SaveSettings(settings)
@@ -835,7 +857,6 @@ TurboTab:CreateButton({
 
 TurboTab:CreateButton({
     Name = "100 - Maximum",
-    Description = "Extreme speed!",
     Callback = function()
         settings.TURBO_SPEED = 100
         SaveSettings(settings)
@@ -846,7 +867,7 @@ TurboTab:CreateLabel({ Text = "WORKING MODES", Style = 1 })
 
 TurboTab:CreateButton({
     Name = "Velocity (Stable)",
-    Description = "Smooth acceleration, current mode: " .. settings.TURBO_MODE,
+    Description = "Current mode: " .. settings.TURBO_MODE,
     Callback = function()
         settings.TURBO_MODE = "Velocity"
         SaveSettings(settings)
@@ -855,7 +876,6 @@ TurboTab:CreateButton({
 
 TurboTab:CreateButton({
     Name = "Teleport (Fast)",
-    Description = "Instant dashes",
     Callback = function()
         settings.TURBO_MODE = "Teleport"
         SaveSettings(settings)
@@ -864,16 +884,10 @@ TurboTab:CreateButton({
 
 TurboTab:CreateButton({
     Name = "Combo (Max)",
-    Description = "Best of both",
     Callback = function()
         settings.TURBO_MODE = "Combo"
         SaveSettings(settings)
     end
-})
-
-TurboTab:CreateParagraph({
-    Title = "Mode Descriptions",
-    Text = "Velocity - smooth acceleration, stable\nTeleport - instant dashes, very fast\nCombo - best of both"
 })
 
 TurboTab:CreateParagraph({
@@ -898,7 +912,6 @@ NoClipTab:CreateParagraph({
 
 NoClipTab:CreateToggle({
     Name = "Activate No Clip",
-    Description = "Goes through EVERYTHING! + Anti-cheat bypass",
     CurrentValue = false,
     Callback = function(Value)
         if Value then
@@ -921,7 +934,6 @@ NoClipTab:CreateButton({
 
 NoClipTab:CreateButton({
     Name = "Remove All NoclipDetectors",
-    Description = "Removes all anti-cheat detectors",
     Callback = function()
         removeAllDetectors()
     end
@@ -929,7 +941,6 @@ NoClipTab:CreateButton({
 
 NoClipTab:CreateButton({
     Name = "Hook Anti-Cheat",
-    Description = "Attempts to intercept anti-cheat module",
     Callback = function()
         hookAntiCheat()
     end
@@ -937,7 +948,7 @@ NoClipTab:CreateButton({
 
 NoClipTab:CreateParagraph({
     Title = "Bypass Instructions",
-    Text = "1. Press B - enter no clip mode\n2. Automatically removes NoclipDetector\n3. Intercepts anti-cheat module\n4. Fly/walk through everything without bans!\n5. Press B - exit no clip"
+    Text = "1. Press B - enter no clip mode\n2. Automatically removes NoclipDetector\n3. Intercepts anti-cheat module\n4. Fly/walk through everything without bans!"
 })
 
 -- ==========================================
@@ -957,7 +968,6 @@ FlyTab:CreateParagraph({
 
 FlyTab:CreateToggle({
     Name = "Enable Flight",
-    Description = "Press V to activate",
     CurrentValue = false,
     Callback = function(Value)
         if not hrp or not humanoid then
@@ -1038,7 +1048,6 @@ FlyTab:CreateSlider({
 
 FlyTab:CreateToggle({
     Name = "Auto Up",
-    Description = "Automatically fly up on start",
     CurrentValue = settings.FLY_AUTO_UP,
     Callback = function(Value)
         settings.FLY_AUTO_UP = Value
@@ -1048,7 +1057,6 @@ FlyTab:CreateToggle({
 
 FlyTab:CreateToggle({
     Name = "Hover",
-    Description = "Stop in place without movement",
     CurrentValue = settings.FLY_HOVER,
     Callback = function(Value)
         settings.FLY_HOVER = Value
@@ -1073,7 +1081,6 @@ ESPTab:CreateParagraph({
 
 ESPTab:CreateToggle({
     Name = "Player Highlight",
-    Description = "Constant tracking",
     CurrentValue = settings.PLAYER_ESP,
     Callback = function(Value)
         settings.PLAYER_ESP = Value
@@ -1084,7 +1091,6 @@ ESPTab:CreateToggle({
 
 ESPTab:CreateToggle({
     Name = "Generator Highlight",
-    Description = "Search by name and attributes",
     CurrentValue = settings.ESP_GEN,
     Callback = function(Value)
         settings.ESP_GEN = Value
@@ -1095,7 +1101,6 @@ ESPTab:CreateToggle({
 
 ESPTab:CreateToggle({
     Name = "Item Highlight",
-    Description = "Tool with ItemRoot",
     CurrentValue = settings.ESP_ITEMS,
     Callback = function(Value)
         settings.ESP_ITEMS = Value
@@ -1140,235 +1145,6 @@ ESPTab:CreateColorPicker({
 }, "GeneratorColor")
 
 -- ==========================================
--- DASH TAB
--- ==========================================
-local DashTab = Window:CreateTab({
-    Name = "Dash",
-    Icon = "flash_on",
-    ImageSource = "Material",
-    ShowTitle = true
-})
-
-DashTab:CreateParagraph({
-    Title = "DASH",
-    Text = "Double tap W quickly to dash forward"
-})
-
-DashTab:CreateSlider({
-    Name = "Dash Speed",
-    Range = {20, 150},
-    Increment = 5,
-    CurrentValue = settings.DASH_SPEED,
-    Callback = function(Value)
-        settings.DASH_SPEED = Value
-        SaveSettings(settings)
-    end
-}, "DashSpeed")
-
-DashTab:CreateSlider({
-    Name = "Dash Cooldown",
-    Range = {0.2, 3.0},
-    Increment = 0.1,
-    CurrentValue = settings.DASH_COOLDOWN,
-    Callback = function(Value)
-        settings.DASH_COOLDOWN = Value
-        SaveSettings(settings)
-    end
-}, "DashCooldown")
-
--- ==========================================
--- CONTROLS TAB (KEYBINDS with Click-to-Select)
--- ==========================================
-local ControlsTab = Window:CreateTab({
-    Name = "Controls",
-    Icon = "keyboard",
-    ImageSource = "Material",
-    ShowTitle = true
-})
-
-ControlsTab:CreateParagraph({
-    Title = "KEYBINDS",
-    Text = "Click on any key to change it\nPress any key on your keyboard to assign"
-})
-
--- Climb Key
-ControlsTab:CreateKeybind({
-    Name = "Wall Walk Key",
-    Description = "Press to toggle wall walking",
-    CurrentKeybind = settings.CLIMB_KEY or "C",
-    HoldToInteract = false,
-    Callback = function()
-        if flying or noClipActive or turboActive then return end
-        
-        if not hrp or not humanoid then
-            updateCharacterReferences()
-            if not hrp or not humanoid then return end
-        end
-        
-        climbing = not climbing
-        if climbing then
-            humanoid.AutoRotate = false
-            humanoid.PlatformStand = true
-            facing = hrp.CFrame.LookVector
-            upDir = hrp.CFrame.UpVector
-            gravityDir = -upDir
-            isOnCeiling = false
-            ceilingTime = 0
-        else
-            humanoid.AutoRotate = true
-            humanoid.PlatformStand = false
-            gravityDir = Vector3.new(0, -1, 0)
-            upDir = Vector3.new(0, 1, 0)
-            fallSpeed = 0
-            isGrounded = false
-            isOnCeiling = false
-            ceilingTime = 0
-            if hrp then
-                hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + facing)
-            end
-        end
-    end,
-    ChangedCallback = function(NewKey)
-        settings.CLIMB_KEY = NewKey
-        SaveSettings(settings)
-    end,
-}, "ClimbBind")
-
--- Sprint Key
-ControlsTab:CreateKeybind({
-    Name = "Sprint Key",
-    Description = "Hold to sprint",
-    CurrentKeybind = settings.SPRINT_KEY or "LeftShift",
-    HoldToInteract = true,
-    Callback = function()
-        isSprinting = not isSprinting
-    end,
-    ChangedCallback = function(NewKey)
-        settings.SPRINT_KEY = NewKey
-        SaveSettings(settings)
-    end,
-}, "SprintBind")
-
--- Fly Key
-ControlsTab:CreateKeybind({
-    Name = "Fly Key",
-    Description = "Press to toggle flight",
-    CurrentKeybind = settings.FLY_KEY or "V",
-    HoldToInteract = false,
-    Callback = function()
-        if not hrp or not humanoid then
-            updateCharacterReferences()
-            if not hrp or not humanoid then return end
-        end
-        
-        flying = not flying
-        
-        if flying then
-            climbing = false
-            noClipActive = false
-            turboActive = false
-            humanoid.AutoRotate = false
-            humanoid.PlatformStand = true
-            if hrp then
-                hrp.AssemblyLinearVelocity = Vector3.zero
-            end
-            flyVelocity = Vector3.zero
-            if settings.FLY_AUTO_UP then
-                flyVelocity = Vector3.new(0, settings.FLY_SPEED * 0.5, 0)
-            end
-        else
-            humanoid.AutoRotate = true
-            humanoid.PlatformStand = false
-            if hrp then
-                hrp.AssemblyLinearVelocity = Vector3.zero
-            end
-            flyVelocity = Vector3.zero
-            gravityDir = Vector3.new(0, -1, 0)
-            upDir = Vector3.new(0, 1, 0)
-        end
-    end,
-    ChangedCallback = function(NewKey)
-        settings.FLY_KEY = NewKey
-        SaveSettings(settings)
-    end,
-}, "FlyBind")
-
--- No Clip Key
-ControlsTab:CreateKeybind({
-    Name = "No Clip Key",
-    Description = "Press to toggle no clip",
-    CurrentKeybind = settings.NO_CLIP_KEY or "B",
-    HoldToInteract = false,
-    Callback = function()
-        toggleNoClip()
-    end,
-    ChangedCallback = function(NewKey)
-        settings.NO_CLIP_KEY = NewKey
-        SaveSettings(settings)
-    end,
-}, "NoClipBind")
-
--- Turbo Key
-ControlsTab:CreateKeybind({
-    Name = "Turbo Key",
-    Description = "Press to toggle turbo mode",
-    CurrentKeybind = settings.TURBO_KEY or "Z",
-    HoldToInteract = false,
-    Callback = function()
-        toggleTurbo()
-    end,
-    ChangedCallback = function(NewKey)
-        settings.TURBO_KEY = NewKey
-        SaveSettings(settings)
-    end,
-}, "TurboBind")
-
--- Dash Key
-ControlsTab:CreateKeybind({
-    Name = "Dash Key",
-    Description = "Press to dash (works in wall walk mode)",
-    CurrentKeybind = settings.DASH_KEY or "W",
-    HoldToInteract = false,
-    Callback = function()
-        if flying or noClipActive or turboActive then return end
-        if not hrp then
-            updateCharacterReferences()
-            if not hrp then return end
-        end
-        
-        -- Single press dash (no double tap needed)
-        if dashCooldown <= 0 and climbing and hrp then
-            local forward = hrp.CFrame.LookVector
-            dashDir = projectToPlane(forward, gravityDir).Unit
-            if dashDir.Magnitude < 0.1 then
-                dashDir = projectToPlane(hrp.CFrame.RightVector, gravityDir).Unit
-            end
-            dashActive = true
-            dashTimer = settings.DASH_DURATION
-            dashCooldown = settings.DASH_COOLDOWN
-        end
-    end,
-    ChangedCallback = function(NewKey)
-        settings.DASH_KEY = NewKey
-        SaveSettings(settings)
-    end,
-}, "DashBind")
-
--- Phase Through Wall (B + G is a combo, keep as separate button)
-ControlsTab:CreateParagraph({
-    Title = "COMBO KEY",
-    Text = "B + G - Phase through walls (only works in No Clip mode)"
-})
-
-ControlsTab:CreateButton({
-    Name = "Phase Through Wall",
-    Description = "Teleports 20 studs forward",
-    Callback = function()
-        phaseThroughWall()
-    end
-})
-
--- ==========================================
 -- SETTINGS TAB
 -- ==========================================
 local SettingsTab = Window:CreateTab({
@@ -1399,15 +1175,6 @@ SettingsTab:CreateSlider({
 }, "ResetHeight")
 
 SettingsTab:CreateToggle({
-    Name = "Notifications",
-    CurrentValue = settings.NOTIFICATIONS_ENABLED,
-    Callback = function(Value)
-        settings.NOTIFICATIONS_ENABLED = Value
-        SaveSettings(settings)
-    end
-}, "Notifications")
-
-SettingsTab:CreateToggle({
     Name = "Remove Killer Walls",
     Description = "Removes KillerDoors and KillerOnly",
     CurrentValue = settings.REMOVE_KILLER_WALLS,
@@ -1421,8 +1188,8 @@ SettingsTab:CreateToggle({
 }, "RemoveKillerWalls")
 
 SettingsTab:CreateParagraph({
-    Title = "CURRENT CONTROLS",
-    Text = "Wall Walk: " .. settings.CLIMB_KEY .. "\nFly: " .. settings.FLY_KEY .. "\nNo Clip: " .. settings.NO_CLIP_KEY .. "\nTurbo: " .. settings.TURBO_KEY .. "\nSprint: " .. settings.SPRINT_KEY .. "\nDash: " .. settings.DASH_KEY .. "\nPhase: B + G"
+    Title = "CONTROLS",
+    Text = "C - Wall Walk\nV - Fly\nB - No Clip (anti-cheat bypass!)\nZ - TURBO (super run!)\nB+G - Phase through walls\nShift - Sprint"
 })
 
 SettingsTab:CreateButton({
@@ -1436,24 +1203,6 @@ SettingsTab:CreateButton({
         pcall(rebuildESP)
     end
 })
-
--- ==========================================
--- INPUT HANDLING (FOR COMBO KEYS)
--- ==========================================
-UserInputService.InputBegan:Connect(function(input, gp)
-    if gp then return end
-    pressed[input.KeyCode] = true
-    
-    -- Phase through wall: B + G
-    if input.KeyCode == Enum.KeyCode.G and noClipActive then
-        phaseThroughWall()
-    end
-end)
-
-UserInputService.InputEnded:Connect(function(input, gp)
-    if gp then return end
-    pressed[input.KeyCode] = false
-end)
 
 -- ==========================================
 -- HELPER FUNCTIONS
@@ -1490,10 +1239,6 @@ RunService.Heartbeat:Connect(function(dt)
     if not character or not character.Parent then
         updateCharacterReferences()
         if not hrp or not humanoid then return end
-    end
-    
-    if dashCooldown > 0 then
-        dashCooldown = dashCooldown - dt
     end
     
     if noClipActive and hrp and humanoid then
@@ -1673,15 +1418,6 @@ RunService.Heartbeat:Connect(function(dt)
     
     local vel = projectToPlane(move * currentSpeed, gravityDir)
     
-    if dashActive then
-        dashTimer = dashTimer - dt
-        local dashForce = dashDir * settings.DASH_SPEED
-        vel = vel + dashForce
-        if dashTimer <= 0 then
-            dashActive = false
-        end
-    end
-    
     if isGrounded then
         fallSpeed = 0
         if settings.STICK_TO_SURFACE then
@@ -1705,9 +1441,6 @@ RunService.Heartbeat:Connect(function(dt)
     hrp.AssemblyAngularVelocity = Vector3.zero
     
     local desiredFacing = move.Magnitude > 0 and projectToPlane(move, gravityDir).Unit or facing
-    if dashActive then
-        desiredFacing = dashDir
-    end
     facing = facing:Lerp(desiredFacing, math.min(1, dt * settings.ALIGN_SPEED))
     
     hrp.CFrame = hrp.CFrame:Lerp(makeCFrame(pos, facing, upDir), math.min(1, dt * settings.ALIGN_SPEED))
@@ -1717,7 +1450,7 @@ end)
 -- INITIALIZATION
 -- ==========================================
 print("Forsaken Surge v9.0 loaded successfully")
-print("Press RightShift to open menu (configurable in Controls tab)")
+print("C - Wall Walk | V - Fly | B - No Clip | Z - Turbo | Shift - Sprint")
 
 task.wait(0.5)
 pcall(rebuildESP)
