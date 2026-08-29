@@ -5,7 +5,7 @@ local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-S
 -- ==========================================
 local Window = Luna:CreateWindow({
     Name = "Forsaken Surge",
-    Subtitle = "v9.0 | VELOCITY + TURBO + WALL WALK",
+    Subtitle = "v9.0 | VELOCITY + TURBO + WALL WALK + ESP",
     LogoID = nil,
     LoadingEnabled = true,
     LoadingTitle = "Forsaken Surge",
@@ -59,10 +59,6 @@ end
 local SaveFile = MyDataFolder .. "/Settings.json"
 
 local DefaultSettings = {
-    -- WALL WALK SETTINGS (ВСЁ из первого файла)
-    CLIMB_KEY = "C",
-    SNAP_DISTANCE = 2.0,
-    GROUND_MARGIN = 1.0,
     WALK_SPEED = 16,
     SPRINT_MULTIPLIER = 2.0,
     GRAVITY = 30,
@@ -149,7 +145,7 @@ rayParams.FilterType = Enum.RaycastFilterType.Exclude
 rayParams.RespectCanCollide = true
 
 -- ==========================================
--- ESP SYSTEM
+-- ESP SYSTEM (ИЗ ПЕРВОГО ФАЙЛА)
 -- ==========================================
 
 local ColorPresets = {
@@ -180,10 +176,6 @@ local function clearAllESP()
         pcall(function() bg:Destroy() end)
     end
     espBillboards = {}
-end
-
-function GetValue(FeatureName)
-    return settings[FeatureName]
 end
 
 -- Function to check distance for highlight
@@ -518,7 +510,7 @@ player.CharacterAdded:Connect(function(char)
 end)
 
 -- ==========================================
--- HELPER FUNCTIONS (ИЗ ПЕРВОГО ФАЙЛА - ВСЁ)
+-- HELPER FUNCTIONS
 -- ==========================================
 
 local function projectToPlane(v, n)
@@ -546,18 +538,17 @@ local function slerp(a, b, t)
     return (au * math.sin((1 - t) * angle) + bu * math.sin(t * angle)) / sin
 end
 
-local function showNotification(title, text, duration)
+local function showNotification(title, text)
     if not settings.NOTIFICATIONS_ENABLED then return end
     print(string.format("[%s] %s", title, text))
 end
 
 -- ==========================================
--- WALL WALK (TOGGLE C) - ИЗ ПЕРВОГО ФАЙЛА
+-- WALL WALK
 -- ==========================================
 
 local function toggleClimb()
     if flying or noClipActive or turboActive then return end
-    
     if not hrp or not humanoid then
         updateCharacterReferences()
         if not hrp or not humanoid then return end
@@ -572,7 +563,7 @@ local function toggleClimb()
         gravityDir = -upDir
         isOnCeiling = false
         ceilingTime = 0
-        showNotification("🕷️ Ходьба", "Включена", 1)
+        showNotification("🕷️ Ходьба", "Включена")
     else
         humanoid.AutoRotate = true
         humanoid.PlatformStand = false
@@ -585,12 +576,12 @@ local function toggleClimb()
         if hrp then
             hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + facing)
         end
-        showNotification("🕷️ Ходьба", "Выключена", 1)
+        showNotification("🕷️ Ходьба", "Выключена")
     end
 end
 
 -- ==========================================
--- FLY (TOGGLE V)
+-- FLY
 -- ==========================================
 local function toggleFly()
     if not hrp or not humanoid then
@@ -599,36 +590,72 @@ local function toggleFly()
     end
     
     flying = not flying
-    
     if flying then
         climbing = false
         noClipActive = false
         turboActive = false
         humanoid.AutoRotate = false
         humanoid.PlatformStand = true
-        if hrp then
-            hrp.AssemblyLinearVelocity = Vector3.zero
-        end
+        if hrp then hrp.AssemblyLinearVelocity = Vector3.zero end
         flyVelocity = Vector3.zero
-        if settings.FLY_AUTO_UP then
-            flyVelocity = Vector3.new(0, settings.FLY_SPEED * 0.5, 0)
-        end
-        showNotification("✈️ Полёт", "Активирован", 1)
+        showNotification("✈️ Полёт", "Активирован")
     else
         humanoid.AutoRotate = true
         humanoid.PlatformStand = false
-        if hrp then
-            hrp.AssemblyLinearVelocity = Vector3.zero
-        end
+        if hrp then hrp.AssemblyLinearVelocity = Vector3.zero end
         flyVelocity = Vector3.zero
         gravityDir = Vector3.new(0, -1, 0)
         upDir = Vector3.new(0, 1, 0)
-        showNotification("✈️ Полёт", "Деактивирован", 1)
+        showNotification("✈️ Полёт", "Деактивирован")
     end
 end
 
 -- ==========================================
--- TURBO (TOGGLE Z)
+-- NO CLIP
+-- ==========================================
+local function toggleNoClip()
+    if not hrp or not humanoid then
+        updateCharacterReferences()
+        if not hrp or not humanoid then return end
+    end
+    
+    noClipActive = not noClipActive
+    
+    if noClipActive then
+        climbing = false
+        flying = false
+        turboActive = false
+        
+        humanoid.AutoRotate = true
+        humanoid.PlatformStand = false
+        
+        -- Удаление детектора
+        local detector = character:FindFirstChild("NoclipDetector")
+        if detector then detector:Destroy() end
+        
+        for _, part in ipairs(character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+        
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
+        showNotification("🌀 Ноуклип", "Активирован")
+    else
+        for _, part in ipairs(character:GetDescendants()) do
+            if part:IsA("BasePart") and part.Name ~= "NoclipDetector" then
+                part.CanCollide = true
+            end
+        end
+        gravityDir = Vector3.new(0, -1, 0)
+        upDir = Vector3.new(0, 1, 0)
+        showNotification("🌀 Ноуклип", "Деактивирован")
+    end
+end
+
+-- ==========================================
+-- TURBO
 -- ==========================================
 local function toggleTurbo()
     if not hrp or not humanoid then
@@ -642,23 +669,22 @@ local function toggleTurbo()
         climbing = false
         flying = false
         noClipActive = false
-        
         humanoid.AutoRotate = true
         humanoid.PlatformStand = false
         humanoid.WalkSpeed = 16
-        showNotification("⚡ Турбо", "Активирован", 1)
+        showNotification("⚡ Турбо", "Активирован")
     else
-        if hrp then
-            hrp.AssemblyLinearVelocity = Vector3.zero
-        end
-        showNotification("⚡ Турбо", "Деактивирован", 1)
+        if hrp then hrp.AssemblyLinearVelocity = Vector3.zero end
+        showNotification("⚡ Турбо", "Деактивирован")
     end
 end
 
+-- ==========================================
+-- TURBO LOOP
+-- ==========================================
 task.spawn(function()
     while true do
         task.wait()
-        
         if turboActive and hrp and humanoid then
             local camLook = Camera.CFrame.LookVector
             local camRight = Camera.CFrame.RightVector
@@ -668,22 +694,12 @@ task.spawn(function()
             
             local moveDir = Vector3.zero
             
-            if pressed[Enum.KeyCode.W] then
-                moveDir = moveDir + camLook
-            end
-            if pressed[Enum.KeyCode.S] then
-                moveDir = moveDir - camLook
-            end
-            if pressed[Enum.KeyCode.A] then
-                moveDir = moveDir - camRight
-            end
-            if pressed[Enum.KeyCode.D] then
-                moveDir = moveDir + camRight
-            end
+            if pressed[Enum.KeyCode.W] then moveDir = moveDir + camLook end
+            if pressed[Enum.KeyCode.S] then moveDir = moveDir - camLook end
+            if pressed[Enum.KeyCode.A] then moveDir = moveDir - camRight end
+            if pressed[Enum.KeyCode.D] then moveDir = moveDir + camRight end
             
-            if moveDir.Magnitude > 0 then
-                moveDir = moveDir.Unit
-            end
+            if moveDir.Magnitude > 0 then moveDir = moveDir.Unit end
             
             local speed = settings.TURBO_SPEED
             local mode = settings.TURBO_MODE
@@ -705,179 +721,10 @@ task.spawn(function()
 end)
 
 -- ==========================================
--- ANTI-CHEAT BYPASS (ИЗ ПЕРВОГО ФАЙЛА)
--- ==========================================
-local function removeNoclipDetector()
-    if character then
-        local detector = character:FindFirstChild("NoclipDetector")
-        if detector then
-            detector:Destroy()
-            return true
-        end
-    end
-    return false
-end
-
-local function blockNoclipDetector()
-    if character then
-        local detector = character:FindFirstChild("NoclipDetector")
-        if detector and detector:IsA("BasePart") then
-            detector.CanCollide = false
-            detector.Transparency = 1
-            detector.Size = Vector3.new(0.1, 0.1, 0.1)
-            return true
-        end
-    end
-    return false
-end
-
-local function hookAntiCheat()
-    local acModule = nil
-    local modules = {
-        ReplicatedStorage:FindFirstChild("Modules"),
-        ReplicatedStorage:FindFirstChild("AntiCheat"),
-        game:GetService("ServerScriptService"):FindFirstChild("Server"),
-        game:GetService("ServerScriptService"):FindFirstChild("Modules"),
-    }
-    
-    for _, container in ipairs(modules) do
-        if container then
-            for _, child in ipairs(container:GetDescendants()) do
-                if child.Name:lower():find("noclip") or child.Name:lower():find("anticheat") or child.Name:lower():find("antinoclip") then
-                    acModule = child
-                    break
-                end
-            end
-        end
-    end
-    
-    if acModule then
-        pcall(function()
-            if acModule:FindFirstChild("Check") then
-                acModule.Check = function(...)
-                    return
-                end
-            end
-            
-            if acModule:FindFirstChild("Init") then
-                acModule.Init = function(...)
-                    return {Cancelled = true}
-                end
-            end
-        end)
-    end
-end
-
-local function removeAllDetectors()
-    for _, char in ipairs(Workspace:GetDescendants()) do
-        if char.Name == "NoclipDetector" and char:IsA("BasePart") then
-            char:Destroy()
-        end
-    end
-end
-
-local function setCollisionGroup()
-    if hrp then
-        pcall(function()
-            local groups = {
-                "Survivors",
-                "Killers",
-                "Default",
-                "Players"
-            }
-            for _, group in ipairs(groups) do
-                pcall(function()
-                    hrp.CollisionGroup = group
-                end)
-            end
-        end)
-    end
-end
-
--- ==========================================
--- NO CLIP (TOGGLE B) - ИЗ ПЕРВОГО ФАЙЛА
--- ==========================================
-local function toggleNoClip()
-    if not hrp or not humanoid then
-        updateCharacterReferences()
-        if not hrp or not humanoid then return end
-    end
-    
-    noClipActive = not noClipActive
-    
-    if noClipActive then
-        climbing = false
-        flying = false
-        turboActive = false
-        
-        humanoid.AutoRotate = true
-        humanoid.PlatformStand = false
-        
-        removeNoclipDetector()
-        blockNoclipDetector()
-        hookAntiCheat()
-        removeAllDetectors()
-        setCollisionGroup()
-        
-        for _, part in ipairs(character:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.CanCollide = false
-            end
-        end
-        
-        hrp.AssemblyLinearVelocity = Vector3.zero
-        hrp.AssemblyAngularVelocity = Vector3.zero
-        showNotification("🌀 Ноуклип", "Активирован + обход античита", 2)
-        
-    else
-        for _, part in ipairs(character:GetDescendants()) do
-            if part:IsA("BasePart") and part.Name ~= "NoclipDetector" then
-                part.CanCollide = true
-            end
-        end
-        
-        gravityDir = Vector3.new(0, -1, 0)
-        upDir = Vector3.new(0, 1, 0)
-        showNotification("🌀 Ноуклип", "Деактивирован", 1)
-    end
-end
-
-local function phaseThroughWall()
-    if not hrp or not humanoid then return end
-    
-    local camCFrame = Camera.CFrame
-    local forward = camCFrame.LookVector
-    local targetPos = hrp.Position + forward * 20
-    
-    local ray = Workspace:Raycast(hrp.Position, forward * 25, rayParams)
-    if ray then
-        targetPos = ray.Position + ray.Normal * 3
-    end
-    
-    for _, part in ipairs(character:GetDescendants()) do
-        if part:IsA("BasePart") then
-            part.CanCollide = false
-        end
-    end
-    
-    hrp.CFrame = CFrame.new(targetPos)
-    
-    task.wait(0.05)
-    for _, part in ipairs(character:GetDescendants()) do
-        if part:IsA("BasePart") and part.Name ~= "NoclipDetector" then
-            part.CanCollide = true
-        end
-    end
-    showNotification("🌀 Фазирование", "Проход сквозь стену!", 0.5)
-end
-
--- ==========================================
 -- KILLER WALLS REMOVER
 -- ==========================================
 local function removeKillerWalls()
-    if not settings.REMOVE_KILLER_WALLS then 
-        return 
-    end
+    if not settings.REMOVE_KILLER_WALLS then return end
     
     local paths = {
         "Map.Ingame.Map.MapBoundaries.KillerDoors",
@@ -909,7 +756,7 @@ local function removeKillerWalls()
         if success and current then
             for _, child in ipairs(current:GetChildren()) do
                 pcall(function()
-                    if child:IsA("BasePart") or child:IsA("Model") or child:IsA("Part") or child:IsA("MeshPart") then
+                    if child:IsA("BasePart") or child:IsA("Model") then
                         child:Destroy()
                     end
                 end)
@@ -927,13 +774,6 @@ task.spawn(function()
     end
 end)
 
-Workspace.ChildAdded:Connect(function()
-    if settings.REMOVE_KILLER_WALLS then
-        task.wait(0.5)
-        pcall(removeKillerWalls)
-    end
-end)
-
 -- ==========================================
 -- INPUT HANDLING
 -- ==========================================
@@ -941,37 +781,17 @@ UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
     pressed[input.KeyCode] = true
     
-    if input.KeyCode == Enum.KeyCode.C then
-        toggleClimb()
-    end
-    
-    if input.KeyCode == Enum.KeyCode.V then
-        toggleFly()
-    end
-    
-    if input.KeyCode == Enum.KeyCode.B then
-        toggleNoClip()
-    end
-    
-    if input.KeyCode == Enum.KeyCode.Z then
-        toggleTurbo()
-    end
-    
-    if input.KeyCode == Enum.KeyCode.G and noClipActive then
-        phaseThroughWall()
-    end
-    
-    if input.KeyCode == Enum.KeyCode.LeftShift then
-        isSprinting = true
-    end
+    if input.KeyCode == Enum.KeyCode.C then toggleClimb() end
+    if input.KeyCode == Enum.KeyCode.V then toggleFly() end
+    if input.KeyCode == Enum.KeyCode.B then toggleNoClip() end
+    if input.KeyCode == Enum.KeyCode.Z then toggleTurbo() end
+    if input.KeyCode == Enum.KeyCode.LeftShift then isSprinting = true end
 end)
 
 UserInputService.InputEnded:Connect(function(input, gp)
     if gp then return end
     pressed[input.KeyCode] = false
-    if input.KeyCode == Enum.KeyCode.LeftShift then
-        isSprinting = false
-    end
+    if input.KeyCode == Enum.KeyCode.LeftShift then isSprinting = false end
 end)
 
 -- ==========================================
@@ -984,9 +804,7 @@ Window:CreateHomeTab({
     Icon = 2,
 })
 
--- ==========================================
--- WALL WALK TAB (ВСЕ НАСТРОЙКИ ИЗ ПЕРВОГО ФАЙЛА)
--- ==========================================
+-- WALL WALK TAB
 local WallWalkTab = Window:CreateTab({
     Name = "Wall Walk",
     Icon = "directions_walk",
@@ -996,7 +814,7 @@ local WallWalkTab = Window:CreateTab({
 
 WallWalkTab:CreateParagraph({
     Title = "🕷️ SURFACE WALK PRO",
-    Text = "v9.0 | Полная система ходьбы по стенам\nНажми C для включения"
+    Text = "Нажми C для включения ходьбы по стенам"
 })
 
 WallWalkTab:CreateLabel({ Text = "ДВИЖЕНИЕ", Style = 1 })
@@ -1010,7 +828,7 @@ WallWalkTab:CreateSlider({
         settings.WALK_SPEED = Value
         SaveSettings(settings)
     end
-}, "WalkSpeed")
+})
 
 WallWalkTab:CreateSlider({
     Name = "Множитель спринта",
@@ -1021,7 +839,7 @@ WallWalkTab:CreateSlider({
         settings.SPRINT_MULTIPLIER = Value
         SaveSettings(settings)
     end
-}, "SprintMultiplier")
+})
 
 WallWalkTab:CreateSlider({
     Name = "Гравитация",
@@ -1032,9 +850,9 @@ WallWalkTab:CreateSlider({
         settings.GRAVITY = Value
         SaveSettings(settings)
     end
-}, "Gravity")
+})
 
-WallWalkTab:CreateLabel({ Text = "ДАЛЬНОСТЬ И ПЛАВНОСТЬ", Style = 1 })
+WallWalkTab:CreateLabel({ Text = "ДАЛЬНОСТЬ", Style = 1 })
 
 WallWalkTab:CreateSlider({
     Name = "Дальность захвата",
@@ -1045,7 +863,7 @@ WallWalkTab:CreateSlider({
         settings.WALL_RANGE = Value
         SaveSettings(settings)
     end
-}, "WallRange")
+})
 
 WallWalkTab:CreateSlider({
     Name = "Плавность поворота",
@@ -1056,33 +874,21 @@ WallWalkTab:CreateSlider({
         settings.ALIGN_SPEED = Value
         SaveSettings(settings)
     end
-}, "AlignSpeed")
-
-WallWalkTab:CreateSlider({
-    Name = "Скорость адаптации гравитации",
-    Range = {1, 15},
-    Increment = 0.5,
-    CurrentValue = settings.GRAVITY_LERP_SPEED,
-    Callback = function(Value)
-        settings.GRAVITY_LERP_SPEED = Value
-        SaveSettings(settings)
-    end
-}, "GravityLerpSpeed")
+})
 
 WallWalkTab:CreateLabel({ Text = "ПОТОЛОК", Style = 1 })
 
 WallWalkTab:CreateToggle({
     Name = "Фиксация на потолке",
-    Description = "Позволяет ходить по потолку",
     CurrentValue = settings.CEILING_GRIP,
     Callback = function(Value)
         settings.CEILING_GRIP = Value
         SaveSettings(settings)
     end
-}, "CeilingGrip")
+})
 
 WallWalkTab:CreateSlider({
-    Name = "Сила прижатия к потолку",
+    Name = "Сила прижатия",
     Range = {1, 20},
     Increment = 0.5,
     CurrentValue = settings.CEILING_GRIP_FORCE,
@@ -1090,7 +896,7 @@ WallWalkTab:CreateSlider({
         settings.CEILING_GRIP_FORCE = Value
         SaveSettings(settings)
     end
-}, "CeilingForce")
+})
 
 WallWalkTab:CreateSlider({
     Name = "Макс. время на потолке",
@@ -1101,19 +907,16 @@ WallWalkTab:CreateSlider({
         settings.CEILING_MAX_TIME = Value
         SaveSettings(settings)
     end
-}, "CeilingMaxTime")
+})
 
 WallWalkTab:CreateToggle({
     Name = "Прилипание к поверхности",
-    Description = "Автоматическое удержание на стенах",
     CurrentValue = settings.STICK_TO_SURFACE,
     Callback = function(Value)
         settings.STICK_TO_SURFACE = Value
         SaveSettings(settings)
     end
-}, "StickToSurface")
-
-WallWalkTab:CreateLabel({ Text = "БЕЗОПАСНОСТЬ", Style = 1 })
+})
 
 WallWalkTab:CreateToggle({
     Name = "Авто-сброс при падении",
@@ -1122,27 +925,9 @@ WallWalkTab:CreateToggle({
         settings.AUTO_RESET_ON_FALL = Value
         SaveSettings(settings)
     end
-}, "AutoReset")
-
-WallWalkTab:CreateSlider({
-    Name = "Высота сброса",
-    Range = {-200, -50},
-    Increment = 5,
-    CurrentValue = settings.RESET_HEIGHT,
-    Callback = function(Value)
-        settings.RESET_HEIGHT = Value
-        SaveSettings(settings)
-    end
-}, "ResetHeight")
-
-WallWalkTab:CreateParagraph({
-    Title = "КАК ЭТО РАБОТАЕТ",
-    Text = "• Нажми C для включения ходьбы по стенам\n• Ходи по любым поверхностям\n• Плавная адаптация гравитации\n• Фиксация на потолке с ограничением времени\n• Работает со спринтом и турбо"
 })
 
--- ==========================================
 -- TURBO TAB
--- ==========================================
 local TurboTab = Window:CreateTab({
     Name = "Turbo",
     Icon = "speed",
@@ -1151,26 +936,19 @@ local TurboTab = Window:CreateTab({
 })
 
 TurboTab:CreateParagraph({
-    Title = "TURBO (VELOCITY)",
-    Text = "Press Z to activate\nBypasses all speed limits!"
+    Title = "TURBO",
+    Text = "Press Z to activate"
 })
 
 TurboTab:CreateToggle({
     Name = "Activate Turbo",
-    Description = "Massive speed via Velocity",
     CurrentValue = settings.TURBO_ACTIVE,
     Callback = function(Value)
         settings.TURBO_ACTIVE = Value
         SaveSettings(settings)
-        if Value then
-            toggleTurbo()
-        else
-            if turboActive then
-                toggleTurbo()
-            end
-        end
+        if Value then toggleTurbo() else if turboActive then toggleTurbo() end end
     end
-}, "TurboToggle")
+})
 
 TurboTab:CreateSlider({
     Name = "Turbo Speed",
@@ -1181,55 +959,10 @@ TurboTab:CreateSlider({
         settings.TURBO_SPEED = Value
         SaveSettings(settings)
     end
-}, "TurboSpeed")
-
-TurboTab:CreateLabel({ Text = "QUICK PRESETS", Style = 1 })
-
-TurboTab:CreateButton({
-    Name = "10 - Slow",
-    Callback = function()
-        settings.TURBO_SPEED = 10
-        SaveSettings(settings)
-    end
 })
 
 TurboTab:CreateButton({
-    Name = "30 - Normal Run",
-    Callback = function()
-        settings.TURBO_SPEED = 30
-        SaveSettings(settings)
-    end
-})
-
-TurboTab:CreateButton({
-    Name = "50 - Fast",
-    Callback = function()
-        settings.TURBO_SPEED = 50
-        SaveSettings(settings)
-    end
-})
-
-TurboTab:CreateButton({
-    Name = "80 - Very Fast",
-    Callback = function()
-        settings.TURBO_SPEED = 80
-        SaveSettings(settings)
-    end
-})
-
-TurboTab:CreateButton({
-    Name = "100 - Maximum",
-    Callback = function()
-        settings.TURBO_SPEED = 100
-        SaveSettings(settings)
-    end
-})
-
-TurboTab:CreateLabel({ Text = "WORKING MODES", Style = 1 })
-
-TurboTab:CreateButton({
-    Name = "Velocity (Stable)",
-    Description = "Current mode: " .. settings.TURBO_MODE,
+    Name = "Mode: Velocity",
     Callback = function()
         settings.TURBO_MODE = "Velocity"
         SaveSettings(settings)
@@ -1237,7 +970,7 @@ TurboTab:CreateButton({
 })
 
 TurboTab:CreateButton({
-    Name = "Teleport (Fast)",
+    Name = "Mode: Teleport",
     Callback = function()
         settings.TURBO_MODE = "Teleport"
         SaveSettings(settings)
@@ -1245,21 +978,14 @@ TurboTab:CreateButton({
 })
 
 TurboTab:CreateButton({
-    Name = "Combo (Max)",
+    Name = "Mode: Combo",
     Callback = function()
         settings.TURBO_MODE = "Combo"
         SaveSettings(settings)
     end
 })
 
-TurboTab:CreateParagraph({
-    Title = "CURRENT SETTINGS",
-    Text = "Speed: " .. settings.TURBO_SPEED .. "\nMode: " .. settings.TURBO_MODE
-})
-
--- ==========================================
 -- NO CLIP TAB
--- ==========================================
 local NoClipTab = Window:CreateTab({
     Name = "No Clip",
     Icon = "open_with",
@@ -1268,54 +994,19 @@ local NoClipTab = Window:CreateTab({
 })
 
 NoClipTab:CreateParagraph({
-    Title = "NO CLIP + BYPASS",
-    Text = "Press B to activate\nPress B + G for phasing\nAnti-cheat fully bypassed!"
+    Title = "NO CLIP",
+    Text = "Press B to activate"
 })
 
 NoClipTab:CreateToggle({
     Name = "Activate No Clip",
     CurrentValue = false,
     Callback = function(Value)
-        if Value then
-            toggleNoClip()
-        else
-            if noClipActive then
-                toggleNoClip()
-            end
-        end
-    end
-}, "NoClipToggle")
-
-NoClipTab:CreateButton({
-    Name = "Phase Through Wall",
-    Description = "Teleports 20 studs forward",
-    Callback = function()
-        phaseThroughWall()
+        if Value then toggleNoClip() else if noClipActive then toggleNoClip() end end
     end
 })
 
-NoClipTab:CreateButton({
-    Name = "Remove All NoclipDetectors",
-    Callback = function()
-        removeAllDetectors()
-    end
-})
-
-NoClipTab:CreateButton({
-    Name = "Hook Anti-Cheat",
-    Callback = function()
-        hookAntiCheat()
-    end
-})
-
-NoClipTab:CreateParagraph({
-    Title = "Bypass Instructions",
-    Text = "1. Press B - enter no clip mode\n2. Automatically removes NoclipDetector\n3. Intercepts anti-cheat module\n4. Fly/walk through everything without bans!"
-})
-
--- ==========================================
 -- FLY TAB
--- ==========================================
 local FlyTab = Window:CreateTab({
     Name = "Fly",
     Icon = "flight",
@@ -1325,7 +1016,7 @@ local FlyTab = Window:CreateTab({
 
 FlyTab:CreateParagraph({
     Title = "FLIGHT MODE",
-    Text = "Press V to toggle flight"
+    Text = "Press V to toggle"
 })
 
 FlyTab:CreateToggle({
@@ -1336,33 +1027,25 @@ FlyTab:CreateToggle({
             updateCharacterReferences()
             if not hrp or not humanoid then return end
         end
-        
         flying = Value
-        
         if flying then
             climbing = false
             noClipActive = false
             turboActive = false
             humanoid.AutoRotate = false
             humanoid.PlatformStand = true
-            if hrp then
-                hrp.AssemblyLinearVelocity = Vector3.zero
-            end
+            if hrp then hrp.AssemblyLinearVelocity = Vector3.zero end
             flyVelocity = Vector3.zero
         else
             humanoid.AutoRotate = true
             humanoid.PlatformStand = false
-            if hrp then
-                hrp.AssemblyLinearVelocity = Vector3.zero
-            end
+            if hrp then hrp.AssemblyLinearVelocity = Vector3.zero end
             flyVelocity = Vector3.zero
             gravityDir = Vector3.new(0, -1, 0)
             upDir = Vector3.new(0, 1, 0)
         end
     end
-}, "FlyToggle")
-
-FlyTab:CreateLabel({ Text = "FLIGHT SETTINGS", Style = 1 })
+})
 
 FlyTab:CreateSlider({
     Name = "Flight Speed",
@@ -1373,7 +1056,7 @@ FlyTab:CreateSlider({
         settings.FLY_SPEED = Value
         SaveSettings(settings)
     end
-}, "FlySpeed")
+})
 
 FlyTab:CreateSlider({
     Name = "Max Speed",
@@ -1384,38 +1067,7 @@ FlyTab:CreateSlider({
         settings.FLY_MAX_SPEED = Value
         SaveSettings(settings)
     end
-}, "FlyMaxSpeed")
-
-FlyTab:CreateSlider({
-    Name = "Acceleration",
-    Range = {2, 20},
-    Increment = 0.5,
-    CurrentValue = settings.FLY_ACCELERATION,
-    Callback = function(Value)
-        settings.FLY_ACCELERATION = Value
-        SaveSettings(settings)
-    end
-}, "FlyAcceleration")
-
-FlyTab:CreateSlider({
-    Name = "Smoothness",
-    Range = {2, 15},
-    Increment = 1,
-    CurrentValue = settings.FLY_SMOOTHNESS,
-    Callback = function(Value)
-        settings.FLY_SMOOTHNESS = Value
-        SaveSettings(settings)
-    end
-}, "FlySmoothness")
-
-FlyTab:CreateToggle({
-    Name = "Auto Up",
-    CurrentValue = settings.FLY_AUTO_UP,
-    Callback = function(Value)
-        settings.FLY_AUTO_UP = Value
-        SaveSettings(settings)
-    end
-}, "FlyAutoUp")
+})
 
 FlyTab:CreateToggle({
     Name = "Hover",
@@ -1424,11 +1076,9 @@ FlyTab:CreateToggle({
         settings.FLY_HOVER = Value
         SaveSettings(settings)
     end
-}, "FlyHover")
+})
 
--- ==========================================
 -- ESP TAB
--- ==========================================
 local ESPTab = Window:CreateTab({
     Name = "ESP",
     Icon = "visibility",
@@ -1443,28 +1093,24 @@ ESPTab:CreateParagraph({
 
 ESPTab:CreateToggle({
     Name = "Enable ESP",
-    Description = "Master toggle for all ESP features",
     CurrentValue = settings.ESP_ENABLED,
     Callback = function(Value)
         settings.ESP_ENABLED = Value
         SaveSettings(settings)
-        if not Value then
-            clearAllESP()
-        end
+        if not Value then clearAllESP() end
     end
-}, "ESPMaster")
+})
 
 ESPTab:CreateLabel({ Text = "PLAYERS", Style = 1 })
 
 ESPTab:CreateToggle({
     Name = "Killers ESP",
-    Description = "Highlight killers",
     CurrentValue = settings.KILLERS_ESP,
     Callback = function(Value)
         settings.KILLERS_ESP = Value
         SaveSettings(settings)
     end
-}, "KillersESP")
+})
 
 ESPTab:CreateDropdown({
     Name = "Killers Color",
@@ -1475,17 +1121,16 @@ ESPTab:CreateDropdown({
         settings.KILLERS_COLOR = Options
         SaveSettings(settings)
     end
-}, "KillersColor")
+})
 
 ESPTab:CreateToggle({
     Name = "Survivors ESP",
-    Description = "Highlight survivors",
     CurrentValue = settings.SURVIVORS_ESP,
     Callback = function(Value)
         settings.SURVIVORS_ESP = Value
         SaveSettings(settings)
     end
-}, "SurvivorsESP")
+})
 
 ESPTab:CreateDropdown({
     Name = "Survivors Color",
@@ -1496,19 +1141,18 @@ ESPTab:CreateDropdown({
         settings.SURVIVORS_COLOR = Options
         SaveSettings(settings)
     end
-}, "SurvivorsColor")
+})
 
 ESPTab:CreateLabel({ Text = "OBJECTS", Style = 1 })
 
 ESPTab:CreateToggle({
     Name = "Generators ESP",
-    Description = "Highlight generators",
     CurrentValue = settings.GENERATORS_ESP,
     Callback = function(Value)
         settings.GENERATORS_ESP = Value
         SaveSettings(settings)
     end
-}, "GeneratorsESP")
+})
 
 ESPTab:CreateDropdown({
     Name = "Generators Color",
@@ -1519,17 +1163,16 @@ ESPTab:CreateDropdown({
         settings.GENERATORS_COLOR = Options
         SaveSettings(settings)
     end
-}, "GeneratorsColor")
+})
 
 ESPTab:CreateToggle({
     Name = "Items ESP",
-    Description = "Highlight dropped items",
     CurrentValue = settings.ITEMS_ESP,
     Callback = function(Value)
         settings.ITEMS_ESP = Value
         SaveSettings(settings)
     end
-}, "ItemsESP")
+})
 
 ESPTab:CreateDropdown({
     Name = "Items Color",
@@ -1540,28 +1183,18 @@ ESPTab:CreateDropdown({
         settings.ITEMS_COLOR = Options
         SaveSettings(settings)
     end
-}, "ItemsColor")
-
-ESPTab:CreateLabel({ Text = "DISPLAY", Style = 1 })
+})
 
 ESPTab:CreateToggle({
     Name = "Show Names",
-    Description = "Display player/object names",
     CurrentValue = settings.SHOW_TEXT,
     Callback = function(Value)
         settings.SHOW_TEXT = Value
         SaveSettings(settings)
     end
-}, "ShowText")
-
-ESPTab:CreateParagraph({
-    Title = "HOW IT WORKS",
-    Text = "• Dynamic highlights with distance fading\n• Colors change based on distance\n• Names appear when close enough\n• Auto-hides completed generators"
 })
 
--- ==========================================
 -- SETTINGS TAB
--- ==========================================
 local SettingsTab = Window:CreateTab({
     Name = "Settings",
     Icon = "settings",
@@ -1571,34 +1204,30 @@ local SettingsTab = Window:CreateTab({
 
 SettingsTab:CreateToggle({
     Name = "Remove Killer Walls",
-    Description = "Removes KillerDoors and KillerOnly",
     CurrentValue = settings.REMOVE_KILLER_WALLS,
     Callback = function(Value)
         settings.REMOVE_KILLER_WALLS = Value
         SaveSettings(settings)
-        if Value then
-            pcall(removeKillerWalls)
-        end
+        if Value then pcall(removeKillerWalls) end
     end
-}, "RemoveKillerWalls")
+})
 
 SettingsTab:CreateToggle({
     Name = "Notifications",
-    Description = "Show status notifications",
     CurrentValue = settings.NOTIFICATIONS_ENABLED,
     Callback = function(Value)
         settings.NOTIFICATIONS_ENABLED = Value
         SaveSettings(settings)
     end
-}, "Notifications")
+})
 
 SettingsTab:CreateParagraph({
     Title = "CONTROLS",
-    Text = "C - Wall Walk (ходьба по стенам)\nV - Fly (полёт)\nB - No Clip (ноуклип + обход античита)\nZ - TURBO (супер-бег!)\nB+G - Phase through walls (фазирование)\nShift - Sprint (спринт)"
+    Text = "C - Wall Walk\nV - Fly\nB - No Clip\nZ - Turbo\nShift - Sprint"
 })
 
 SettingsTab:CreateButton({
-    Name = "Reset All Settings",
+    Name = "Reset Settings",
     Callback = function()
         for key, value in pairs(DefaultSettings) do
             settings[key] = value
@@ -1609,7 +1238,7 @@ SettingsTab:CreateButton({
 })
 
 -- ==========================================
--- MAIN LOOP (ИЗ ПЕРВОГО ФАЙЛА - ПОЛНОСТЬЮ)
+-- MAIN WALL WALK LOOP
 -- ==========================================
 RunService.Heartbeat:Connect(function(dt)
     if not character or not character.Parent then
@@ -1619,13 +1248,6 @@ RunService.Heartbeat:Connect(function(dt)
     
     -- NO CLIP MODE
     if noClipActive and hrp and humanoid then
-        pcall(function()
-            local detector = character:FindFirstChild("NoclipDetector")
-            if detector then
-                detector:Destroy()
-            end
-        end)
-        
         for _, part in ipairs(character:GetDescendants()) do
             if part:IsA("BasePart") then
                 part.CanCollide = false
@@ -1633,29 +1255,22 @@ RunService.Heartbeat:Connect(function(dt)
         end
         
         local camCFrame = Camera.CFrame
-        
         local fwd = (pressed[Enum.KeyCode.W] and 1 or 0) - (pressed[Enum.KeyCode.S] and 1 or 0)
         local str = (pressed[Enum.KeyCode.D] and 1 or 0) - (pressed[Enum.KeyCode.A] and 1 or 0)
         local up = (pressed[Enum.KeyCode.Space] and 1 or 0) - (pressed[Enum.KeyCode.LeftControl] and 1 or 0)
         
         local moveDir = camCFrame.LookVector * fwd + camCFrame.RightVector * str + Vector3.new(0, 1, 0) * up
-        
-        if moveDir.Magnitude > 0 then
-            moveDir = moveDir.Unit
-        end
+        if moveDir.Magnitude > 0 then moveDir = moveDir.Unit end
         
         local speed = settings.WALK_SPEED
-        if isSprinting then
-            speed = settings.WALK_SPEED * settings.SPRINT_MULTIPLIER * 2
-        end
+        if isSprinting then speed = settings.WALK_SPEED * settings.SPRINT_MULTIPLIER * 2 end
         
         hrp.AssemblyLinearVelocity = moveDir * speed
         hrp.AssemblyAngularVelocity = Vector3.zero
-        
         return
     end
     
-    -- AUTO RESET ON FALL (ИЗ ПЕРВОГО ФАЙЛА)
+    -- AUTO RESET ON FALL
     if settings.AUTO_RESET_ON_FALL and climbing and hrp then
         if hrp.Position.Y < settings.RESET_HEIGHT then
             climbing = false
@@ -1669,7 +1284,6 @@ RunService.Heartbeat:Connect(function(dt)
             isGrounded = false
             isOnCeiling = false
             ceilingTime = 0
-            showNotification("🔄 Сброс", "Падение в бездну", 1)
             return
         end
     end
@@ -1677,7 +1291,6 @@ RunService.Heartbeat:Connect(function(dt)
     -- FLY MODE
     if flying and hrp and humanoid then
         local camCFrame = Camera.CFrame
-        
         local camForward = camCFrame.LookVector
         local camRight = camCFrame.RightVector
         local camUp = camCFrame.UpVector
@@ -1687,19 +1300,12 @@ RunService.Heartbeat:Connect(function(dt)
         local up = (pressed[Enum.KeyCode.Space] and 1 or 0) - (pressed[Enum.KeyCode.LeftControl] and 1 or 0)
         
         local moveDir = camForward * fwd + camRight * str + camUp * up
-        
-        if moveDir.Magnitude > 0 then
-            moveDir = moveDir.Unit
-        end
+        if moveDir.Magnitude > 0 then moveDir = moveDir.Unit end
         
         local targetVel = moveDir * settings.FLY_SPEED
-        
-        if settings.FLY_HOVER and moveDir.Magnitude < 0.1 then
-            targetVel = Vector3.zero
-        end
+        if settings.FLY_HOVER and moveDir.Magnitude < 0.1 then targetVel = Vector3.zero end
         
         flyVelocity = flyVelocity:Lerp(targetVel, math.min(1, dt * settings.FLY_ACCELERATION))
-        
         if flyVelocity.Magnitude > settings.FLY_MAX_SPEED then
             flyVelocity = flyVelocity.Unit * settings.FLY_MAX_SPEED
         end
@@ -1710,14 +1316,12 @@ RunService.Heartbeat:Connect(function(dt)
             local targetCF = CFrame.lookAt(hrp.Position, hrp.Position + moveDir, camUp)
             hrp.CFrame = hrp.CFrame:Lerp(targetCF, math.min(1, dt * settings.FLY_SMOOTHNESS))
         end
-        
         return
     end
     
-    -- WALL WALK MODE (ИЗ ПЕРВОГО ФАЙЛА - ПОЛНОСТЬЮ)
+    -- WALL WALK MODE
     if not climbing or not hrp or not humanoid then return end
     
-    -- CEILING TIME CHECK (ИЗ ПЕРВОГО ФАЙЛА)
     if isOnCeiling and settings.CEILING_GRIP then
         ceilingTime = ceilingTime + dt
         if ceilingTime > settings.CEILING_MAX_TIME then
@@ -1730,7 +1334,6 @@ RunService.Heartbeat:Connect(function(dt)
             isGrounded = false
             isOnCeiling = false
             ceilingTime = 0
-            showNotification("🌌 Падение", "Время на потолке истекло", 1)
             return
         end
     else
@@ -1740,7 +1343,6 @@ RunService.Heartbeat:Connect(function(dt)
     local pos = hrp.Position
     local camCFrame = Camera.CFrame
     
-    -- Get movement direction relative to surface (ИЗ ПЕРВОГО ФАЙЛА)
     local camForward = projectToPlane(camCFrame.LookVector, upDir)
     if camForward.Magnitude > 0.001 then
         camForward = camForward.Unit
@@ -1755,19 +1357,16 @@ RunService.Heartbeat:Connect(function(dt)
     local move = camForward * fwd + camRight * str
     if move.Magnitude > 0 then move = move.Unit end
     
-    -- Raycast for surfaces (ИЗ ПЕРВОГО ФАЙЛА)
     local wallHit = move.Magnitude > 0 and Workspace:Raycast(pos, move * settings.WALL_RANGE, rayParams) or nil
     local supportNear = Workspace:Raycast(pos, gravityDir * settings.SNAP_DISTANCE, rayParams) ~= nil
     local supportFar = Workspace:Raycast(pos, gravityDir * (settings.SNAP_DISTANCE + settings.GROUND_MARGIN), rayParams) ~= nil
     
-    -- Ground detection (ИЗ ПЕРВОГО ФАЙЛА)
     if isGrounded then
         if not supportFar then isGrounded = false end
     else
         if supportNear then isGrounded = true end
     end
     
-    -- Gravity direction adaptation (ИЗ ПЕРВОГО ФАЙЛА)
     local targetGravity = gravityDir
     if isGrounded and wallHit and wallHit.Normal then
         targetGravity = -wallHit.Normal
@@ -1779,19 +1378,14 @@ RunService.Heartbeat:Connect(function(dt)
         end
     end
     
-    -- Smooth gravity transition (ИЗ ПЕРВОГО ФАЙЛА)
     gravityDir = slerp(gravityDir, targetGravity, math.min(1, dt * settings.GRAVITY_LERP_SPEED))
     upDir = -gravityDir
     
-    -- Ceiling detection (ИЗ ПЕРВОГО ФАЙЛА)
     isOnCeiling = false
     if isGrounded and wallHit and wallHit.Normal then
-        if wallHit.Normal.Y < -0.5 then
-            isOnCeiling = true
-        end
+        if wallHit.Normal.Y < -0.5 then isOnCeiling = true end
     end
     
-    -- Calculate movement speed (ИЗ ПЕРВОГО ФАЙЛА)
     local currentGravity = settings.GRAVITY
     local useGripForce = settings.FALL_OFFSET
     local currentSpeed = settings.WALK_SPEED
@@ -1800,17 +1394,14 @@ RunService.Heartbeat:Connect(function(dt)
         currentSpeed = settings.WALK_SPEED * settings.SPRINT_MULTIPLIER
     end
     
-    -- Ceiling mode (ИЗ ПЕРВОГО ФАЙЛА)
     if isOnCeiling and settings.CEILING_GRIP then
         currentGravity = 0
         useGripForce = settings.CEILING_GRIP_FORCE
         fallSpeed = 0
     end
     
-    -- Calculate velocity (ИЗ ПЕРВОГО ФАЙЛА)
     local vel = projectToPlane(move * currentSpeed, gravityDir)
     
-    -- Ground/fall physics (ИЗ ПЕРВОГО ФАЙЛА)
     if isGrounded then
         fallSpeed = 0
         if settings.STICK_TO_SURFACE then
@@ -1824,22 +1415,18 @@ RunService.Heartbeat:Connect(function(dt)
         vel = vel + gravityDir * fallSpeed
     end
     
-    -- Apply world gravity if not on ceiling (ИЗ ПЕРВОГО ФАЙЛА)
     if not (isOnCeiling and settings.CEILING_GRIP) then
         vel = vel + Vector3.new(0, Workspace.Gravity, 0) * dt
     end
     
-    -- Smooth velocity application (ИЗ ПЕРВОГО ФАЙЛА)
     local currentVel = hrp.AssemblyLinearVelocity
     local newVel = currentVel:Lerp(vel, math.min(1, dt * settings.SMOOTHNESS))
     hrp.AssemblyLinearVelocity = newVel
     hrp.AssemblyAngularVelocity = Vector3.zero
     
-    -- Smooth rotation (ИЗ ПЕРВОГО ФАЙЛА)
     local desiredFacing = move.Magnitude > 0 and projectToPlane(move, gravityDir).Unit or facing
     facing = facing:Lerp(desiredFacing, math.min(1, dt * settings.ALIGN_SPEED))
     
-    -- Apply rotation with smoothing (ИЗ ПЕРВОГО ФАЙЛА)
     hrp.CFrame = hrp.CFrame:Lerp(makeCFrame(pos, facing, upDir), math.min(1, dt * settings.ALIGN_SPEED))
 end)
 
@@ -1847,12 +1434,19 @@ end)
 -- INITIALIZATION
 -- ==========================================
 print("═══════════════════════════════════════════════════════")
-print("🕷️  Forsaken Surge v9.0 - WALL WALK ULTIMATE")
+print("🕷️ Forsaken Surge v9.0 - FULL VERSION")
+print("═══════════════════════════════════════════════════════")
+print("✅ Wall Walk (ходьба по стенам)")
+print("✅ Fly (полёт)")
+print("✅ No Clip (ноуклип)")
+print("✅ Turbo (турбо)")
+print("✅ ESP (подсветка)")
+print("✅ Killer Walls Remover")
+print("═══════════════════════════════════════════════════════")
+print("🔑 C - Wall Walk | V - Fly | B - No Clip | Z - Turbo")
 print("═══════════════════════════════════════════════════════")
 
-
 task.wait(0.5)
-
 if settings.REMOVE_KILLER_WALLS then
     task.wait(1)
     pcall(removeKillerWalls)
