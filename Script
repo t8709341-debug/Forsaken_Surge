@@ -1,24 +1,24 @@
 local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-Softworks/Luna-Interface-Suite/refs/heads/main/source.lua", true))()
 
 -- ==========================================
--- ГЛАВНОЕ ОКНО
+-- MAIN WINDOW
 -- ==========================================
 local Window = Luna:CreateWindow({
-	Name = "🕷️ Surface Walk PRO",
-	Subtitle = "v9.0 | VELOCITY + TURBO",
-	LogoID = nil,
-	LoadingEnabled = true,
-	LoadingTitle = "🕷️ Surface Walk PRO",
-	LoadingSubtitle = "Загрузка модулей...",
-	ConfigSettings = {
-		RootFolder = nil,
-		ConfigFolder = "SurfaceWalkPRO"
-	},
-	KeySystem = false
+    Name = "Surface Walk PRO",
+    Subtitle = "v9.0 | VELOCITY + TURBO",
+    LogoID = nil,
+    LoadingEnabled = true,
+    LoadingTitle = "Surface Walk PRO",
+    LoadingSubtitle = "Loading modules...",
+    ConfigSettings = {
+        RootFolder = nil,
+        ConfigFolder = "SurfaceWalkPRO"
+    },
+    KeySystem = false
 })
 
 -- ==========================================
--- СЛУЖБЫ И ПЕРЕМЕННЫЕ
+-- SERVICES AND VARIABLES
 -- ==========================================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -34,7 +34,7 @@ local TeleportService = game:GetService("TeleportService")
 
 local player = Players.LocalPlayer
 
--- ===== ПЕРЕМЕННЫЕ ПЕРСОНАЖА =====
+-- ===== CHARACTER VARIABLES =====
 local character = nil
 local humanoid = nil
 local hrp = nil
@@ -55,7 +55,7 @@ end
 
 updateCharacterReferences()
 
--- ===== СИСТЕМА СОХРАНЕНИЯ =====
+-- ===== SAVE SYSTEM =====
 local MyDataFolder = "SurfaceWalkData"
 if not isfolder(MyDataFolder) then
     makefolder(MyDataFolder)
@@ -114,11 +114,10 @@ local DefaultSettings = {
     ESP_COLOR_GENERATOR = {255, 200, 50},
     ESP_COLOR_ITEM = {0, 200, 255},
     
-    -- TURBO (НОВЫЕ НАСТРОЙКИ)
     TURBO_ACTIVE = false,
-    TURBO_SPEED = 30,  -- теперь до 100
+    TURBO_SPEED = 30,
     TURBO_MODE = "Velocity",
-    TURBO_STEP = 5,    -- шаг изменения
+    TURBO_STEP = 5,
 }
 
 function LoadSettings()
@@ -143,7 +142,7 @@ end
 
 local settings = LoadSettings()
 
--- ===== ПРИМЕНЯЕМ НАСТРОЙКИ =====
+-- ===== APPLY SETTINGS =====
 local CLIMB_KEY = Enum.KeyCode[settings.CLIMB_KEY] or Enum.KeyCode.C
 local MENU_KEY = Enum.KeyCode[settings.MENU_KEY] or Enum.KeyCode.X
 local SPRINT_KEY = Enum.KeyCode[settings.SPRINT_KEY] or Enum.KeyCode.LeftShift
@@ -152,7 +151,7 @@ local FLY_KEY = Enum.KeyCode[settings.FLY_KEY] or Enum.KeyCode.V
 local NO_CLIP_KEY = Enum.KeyCode[settings.NO_CLIP_KEY] or Enum.KeyCode.B
 local TURBO_KEY = Enum.KeyCode[settings.TURBO_KEY] or Enum.KeyCode.Z
 
--- ===== СОСТОЯНИЯ =====
+-- ===== STATES =====
 local climbing = false
 local flying = false
 local noClipActive = false
@@ -168,7 +167,6 @@ local isOnCeiling = false
 local ceilingTime = 0
 local flyVelocity = Vector3.new(0, 0, 0)
 
--- Рывок
 local dashCooldown = 0
 local dashActive = false
 local dashTimer = 0
@@ -176,13 +174,12 @@ local dashDir = Vector3.new(0, 0, 0)
 local wPressCount = 0
 local lastWPressed = 0
 
--- Рейкаст
 local rayParams = RaycastParams.new()
 rayParams.FilterType = Enum.RaycastFilterType.Exclude
 rayParams.RespectCanCollide = true
 
 -- ==========================================
--- VELOCITY (СУПЕР-БЕГ) СИСТЕМА
+-- VELOCITY (TURBO) SYSTEM
 -- ==========================================
 
 local function toggleTurbo()
@@ -201,17 +198,13 @@ local function toggleTurbo()
         humanoid.AutoRotate = true
         humanoid.PlatformStand = false
         humanoid.WalkSpeed = 16
-        
-        print("💨 TURBO АКТИВИРОВАН! Скорость: " .. settings.TURBO_SPEED)
     else
         if hrp then
             hrp.AssemblyLinearVelocity = Vector3.zero
         end
-        print("💨 TURBO ДЕАКТИВИРОВАН")
     end
 end
 
--- Основной цикл TURBO
 task.spawn(function()
     while true do
         task.wait()
@@ -252,7 +245,7 @@ task.spawn(function()
                 local step = speed * 0.016
                 hrp.CFrame = hrp.CFrame + moveDir * step
                 hrp.AssemblyLinearVelocity = Vector3.zero
-            elseif mode == "Комбо" then
+            elseif mode == "Combo" then
                 hrp.AssemblyLinearVelocity = moveDir * speed * 0.5
                 local step = speed * 0.008
                 hrp.CFrame = hrp.CFrame + moveDir * step
@@ -262,7 +255,7 @@ task.spawn(function()
 end)
 
 -- ==========================================
--- ОБХОД АНТИЧИТА
+-- ANTI-CHEAT BYPASS
 -- ==========================================
 
 local function removeNoclipDetector()
@@ -392,7 +385,7 @@ local function teleportBypass(targetPos)
 end
 
 -- ==========================================
--- НОУКЛИП
+-- NO CLIP
 -- ==========================================
 local function toggleNoClip()
     if not hrp or not humanoid then
@@ -425,8 +418,6 @@ local function toggleNoClip()
         hrp.AssemblyLinearVelocity = Vector3.zero
         hrp.AssemblyAngularVelocity = Vector3.zero
         
-        print("🌀 НОУКЛИП АКТИВИРОВАН + АНТИЧИТ ОБХОД")
-        
     else
         for _, part in ipairs(character:GetDescendants()) do
             if part:IsA("BasePart") and part.Name ~= "NoclipDetector" then
@@ -436,8 +427,6 @@ local function toggleNoClip()
         
         gravityDir = Vector3.new(0, -1, 0)
         upDir = Vector3.new(0, 1, 0)
-        
-        print("🌀 НОУКЛИП ДЕАКТИВИРОВАН")
     end
 end
 
@@ -454,11 +443,10 @@ local function phaseThroughWall()
     end
     
     teleportBypass(targetPos)
-    print("🌀 ФАЗИРОВАНИЕ сквозь стену!")
 end
 
 -- ==========================================
--- УДАЛЕНИЕ СТЕН
+-- KILLER WALLS REMOVER
 -- ==========================================
 local killedWalls = {}
 
@@ -511,10 +499,6 @@ local function removeKillerWalls()
                 end)
             end
         end
-    end
-    
-    if found > 0 then
-        print("🧹 Удалено стен: " .. found .. " стен убийц")
     end
 end
 
@@ -585,7 +569,7 @@ local function rebuildESP()
                     local team = plr.Team
                     if team then
                         local teamName = team.Name:lower()
-                        if teamName:find("killer") or teamName:find("monster") or teamName:find("враг") then
+                        if teamName:find("killer") or teamName:find("monster") or teamName:find("enemy") then
                             color = Color3.fromRGB(unpack(settings.ESP_COLOR_KILLER))
                         end
                     end
@@ -633,7 +617,7 @@ player.CharacterAdded:Connect(function(char)
 end)
 
 -- ==========================================
--- LUNA ИНТЕРФЕЙС
+-- LUNA INTERFACE
 -- ==========================================
 
 Window:CreateHomeTab({
@@ -643,24 +627,24 @@ Window:CreateHomeTab({
 })
 
 -- ==========================================
--- ВКЛАДКА ХОДЬБА
+-- WALK TAB
 -- ==========================================
 local WalkTab = Window:CreateTab({
-    Name = "🚶 Ходьба",
+    Name = "Walk",
     Icon = "directions_walk",
     ImageSource = "Material",
     ShowTitle = true
 })
 
 WalkTab:CreateParagraph({
-    Title = "🕷️ Surface Walk PRO",
-    Text = "v9.0 с VELOCITY (СУПЕР-БЕГ)!"
+    Title = "Surface Walk PRO",
+    Text = "v9.0 with VELOCITY (TURBO)!"
 })
 
-WalkTab:CreateLabel({ Text = "🏃 ДВИЖЕНИЕ", Style = 1 })
+WalkTab:CreateLabel({ Text = "MOVEMENT", Style = 1 })
 
 WalkTab:CreateSlider({
-    Name = "Скорость ходьбы",
+    Name = "Walk Speed",
     Range = {5, 50},
     Increment = 1,
     CurrentValue = settings.WALK_SPEED,
@@ -671,7 +655,7 @@ WalkTab:CreateSlider({
 }, "WalkSpeed")
 
 WalkTab:CreateSlider({
-    Name = "Множитель спринта",
+    Name = "Sprint Multiplier",
     Range = {1.0, 3.0},
     Increment = 0.1,
     CurrentValue = settings.SPRINT_MULTIPLIER,
@@ -682,7 +666,7 @@ WalkTab:CreateSlider({
 }, "SprintMultiplier")
 
 WalkTab:CreateSlider({
-    Name = "Гравитация",
+    Name = "Gravity",
     Range = {10, 60},
     Increment = 1,
     CurrentValue = settings.GRAVITY,
@@ -692,10 +676,10 @@ WalkTab:CreateSlider({
     end
 }, "Gravity")
 
-WalkTab:CreateLabel({ Text = "📏 ДАЛЬНОСТЬ", Style = 1 })
+WalkTab:CreateLabel({ Text = "RANGE", Style = 1 })
 
 WalkTab:CreateSlider({
-    Name = "Дальность захвата стены",
+    Name = "Wall Grab Range",
     Range = {1, 10},
     Increment = 0.5,
     CurrentValue = settings.WALL_RANGE,
@@ -706,7 +690,7 @@ WalkTab:CreateSlider({
 }, "WallRange")
 
 WalkTab:CreateSlider({
-    Name = "Плавность поворота",
+    Name = "Rotation Smoothness",
     Range = {1, 15},
     Increment = 1,
     CurrentValue = settings.ALIGN_SPEED,
@@ -716,11 +700,11 @@ WalkTab:CreateSlider({
     end
 }, "AlignSpeed")
 
-WalkTab:CreateLabel({ Text = "🌌 ПОТОЛОК", Style = 1 })
+WalkTab:CreateLabel({ Text = "CEILING", Style = 1 })
 
 WalkTab:CreateToggle({
-    Name = "Фиксация на потолке",
-    Description = "Позволяет ходить по потолку",
+    Name = "Ceiling Grip",
+    Description = "Allows walking on ceilings",
     CurrentValue = settings.CEILING_GRIP,
     Callback = function(Value)
         settings.CEILING_GRIP = Value
@@ -729,7 +713,7 @@ WalkTab:CreateToggle({
 }, "CeilingGrip")
 
 WalkTab:CreateSlider({
-    Name = "Сила прижатия к потолку",
+    Name = "Ceiling Grip Force",
     Range = {1, 20},
     Increment = 0.5,
     CurrentValue = settings.CEILING_GRIP_FORCE,
@@ -740,7 +724,7 @@ WalkTab:CreateSlider({
 }, "CeilingForce")
 
 WalkTab:CreateSlider({
-    Name = "Макс. время на потолке",
+    Name = "Max Ceiling Time",
     Range = {1, 10},
     Increment = 0.5,
     CurrentValue = settings.CEILING_MAX_TIME,
@@ -751,7 +735,7 @@ WalkTab:CreateSlider({
 }, "CeilingMaxTime")
 
 WalkTab:CreateToggle({
-    Name = "Прилипание к поверхности",
+    Name = "Stick to Surface",
     CurrentValue = settings.STICK_TO_SURFACE,
     Callback = function(Value)
         settings.STICK_TO_SURFACE = Value
@@ -760,23 +744,23 @@ WalkTab:CreateToggle({
 }, "StickToSurface")
 
 -- ==========================================
--- ВКЛАДКА TURBO (VELOCITY) - ГИБКИЕ НАСТРОЙКИ
+-- TURBO TAB
 -- ==========================================
 local TurboTab = Window:CreateTab({
-    Name = "💨 Turbo",
+    Name = "Turbo",
     Icon = "speed",
     ImageSource = "Material",
     ShowTitle = true
 })
 
 TurboTab:CreateParagraph({
-    Title = "💨 СУПЕР-БЕГ (VELOCITY)",
-    Text = "Нажми Z для активации\nОбходит все ограничения скорости!\nГибкие настройки от 5 до 100"
+    Title = "TURBO (VELOCITY)",
+    Text = "Press Z to activate\nBypasses all speed limits!\nFlexible settings from 5 to 100"
 })
 
 TurboTab:CreateToggle({
-    Name = "💨 Активировать Turbo",
-    Description = "Огромная скорость через Velocity",
+    Name = "Activate Turbo",
+    Description = "Massive speed via Velocity",
     CurrentValue = settings.TURBO_ACTIVE,
     Callback = function(Value)
         settings.TURBO_ACTIVE = Value
@@ -791,143 +775,122 @@ TurboTab:CreateToggle({
     end
 }, "TurboToggle")
 
--- ГИБКИЙ СЛАЙДЕР С МАЛЫМИ ЗНАЧЕНИЯМИ
 TurboTab:CreateSlider({
-    Name = "Скорость Turbo",
-    Description = "5, 10, 15, 20... до 100",
+    Name = "Turbo Speed",
+    Description = "5, 10, 15, 20... up to 100",
     Range = {5, 100},
-    Increment = 5,  -- Шаг 5: 5, 10, 15, 20...
+    Increment = 5,
     CurrentValue = settings.TURBO_SPEED,
     Callback = function(Value)
         settings.TURBO_SPEED = Value
         SaveSettings(settings)
-        print("💨 Скорость Turbo: " .. Value)
     end
 }, "TurboSpeed")
 
--- ДОПОЛНИТЕЛЬНЫЕ КНОПКИ ДЛЯ БЫСТРОЙ УСТАНОВКИ
-TurboTab:CreateLabel({ Text = "⚡ БЫСТРЫЕ ПРЕСЕТЫ", Style = 1 })
+TurboTab:CreateLabel({ Text = "QUICK PRESETS", Style = 1 })
 
 TurboTab:CreateButton({
-    Name = "🐢 10 - Медленно",
-    Description = "Для точного контроля",
+    Name = "10 - Slow",
+    Description = "For precise control",
     Callback = function()
         settings.TURBO_SPEED = 10
         SaveSettings(settings)
-        print("💨 Скорость установлена: 10")
     end
 })
 
 TurboTab:CreateButton({
-    Name = "🏃 30 - Обычный бег",
-    Description = "Комфортная скорость",
+    Name = "30 - Normal Run",
+    Description = "Comfortable speed",
     Callback = function()
         settings.TURBO_SPEED = 30
         SaveSettings(settings)
-        print("💨 Скорость установлена: 30")
     end
 })
 
 TurboTab:CreateButton({
-    Name = "🚀 50 - Быстрый",
-    Description = "Ускоренный бег",
+    Name = "50 - Fast",
+    Description = "Accelerated run",
     Callback = function()
         settings.TURBO_SPEED = 50
         SaveSettings(settings)
-        print("💨 Скорость установлена: 50")
     end
 })
 
 TurboTab:CreateButton({
-    Name = "⚡ 80 - Очень быстрый",
-    Description = "Почти полёт",
+    Name = "80 - Very Fast",
+    Description = "Almost flying",
     Callback = function()
         settings.TURBO_SPEED = 80
         SaveSettings(settings)
-        print("💨 Скорость установлена: 80")
     end
 })
 
 TurboTab:CreateButton({
-    Name = "💫 100 - Максимум",
-    Description = "Огромная скорость!",
+    Name = "100 - Maximum",
+    Description = "Extreme speed!",
     Callback = function()
         settings.TURBO_SPEED = 100
         SaveSettings(settings)
-        print("💨 Скорость установлена: 100 (МАКСИМУМ)")
     end
 })
 
--- ВЫБОР РЕЖИМА
-TurboTab:CreateLabel({ Text = "📊 РЕЖИМЫ РАБОТЫ", Style = 1 })
+TurboTab:CreateLabel({ Text = "WORKING MODES", Style = 1 })
 
 TurboTab:CreateButton({
-    Name = "⚡ Velocity (стабильный)",
-    Description = "Плавный разгон, текущий режим: " .. settings.TURBO_MODE,
+    Name = "Velocity (Stable)",
+    Description = "Smooth acceleration, current mode: " .. settings.TURBO_MODE,
     Callback = function()
         settings.TURBO_MODE = "Velocity"
         SaveSettings(settings)
-        print("🔧 Режим: Velocity")
-        if turboActive then
-            print("💨 Turbo обновлён!")
-        end
     end
 })
 
 TurboTab:CreateButton({
-    Name = "⚡ Teleport (быстрый)",
-    Description = "Мгновенные рывки",
+    Name = "Teleport (Fast)",
+    Description = "Instant dashes",
     Callback = function()
         settings.TURBO_MODE = "Teleport"
         SaveSettings(settings)
-        print("🔧 Режим: Teleport")
-        if turboActive then
-            print("💨 Turbo обновлён!")
-        end
     end
 })
 
 TurboTab:CreateButton({
-    Name = "⚡ Комбо (макс)",
-    Description = "Лучшее из двух",
+    Name = "Combo (Max)",
+    Description = "Best of both",
     Callback = function()
-        settings.TURBO_MODE = "Комбо"
+        settings.TURBO_MODE = "Combo"
         SaveSettings(settings)
-        print("🔧 Режим: Комбо")
-        if turboActive then
-            print("💨 Turbo обновлён!")
-        end
     end
 })
 
 TurboTab:CreateParagraph({
-    Title = "📊 Описание режимов",
-    Text = "Velocity - плавный разгон, стабильный\nTeleport - мгновенные рывки, очень быстро\nКомбо - лучшее из двух"
+    Title = "Mode Descriptions",
+    Text = "Velocity - smooth acceleration, stable\nTeleport - instant dashes, very fast\nCombo - best of both"
 })
 
 TurboTab:CreateParagraph({
-    Title = "💡 ТЕКУЩИЕ НАСТРОЙКИ",
-    Text = "Скорость: " .. settings.TURBO_SPEED .. "\nРежим: " .. settings.TURBO_MODE
+    Title = "CURRENT SETTINGS",
+    Text = "Speed: " .. settings.TURBO_SPEED .. "\nMode: " .. settings.TURBO_MODE
 })
 
 -- ==========================================
--- ВКЛАДКА НОУКЛИП
+-- NO CLIP TAB
 -- ==========================================
 local NoClipTab = Window:CreateTab({
-    Name = "🌀 Ноуклип",
+    Name = "No Clip",
     Icon = "open_with",
     ImageSource = "Material",
     ShowTitle = true
 })
 
 NoClipTab:CreateParagraph({
-    Title = "🌀 ЛЮТЫЙ НОУКЛИП + ОБХОД",
-    Text = "Нажми B для активации\nНажми B + G для фазирования\nАнтичит полностью обойдён!"
+    Title = "NO CLIP + BYPASS",
+    Text = "Press B to activate\nPress B + G for phasing\nAnti-cheat fully bypassed!"
 })
 
 NoClipTab:CreateToggle({
-    Name = "🌀 Активировать ноуклип",
-    Description = "Проходит через ВСЁ! + Обход античита",
+    Name = "Activate No Clip",
+    Description = "Goes through EVERYTHING! + Anti-cheat bypass",
     CurrentValue = false,
     Callback = function(Value)
         if Value then
@@ -941,54 +904,52 @@ NoClipTab:CreateToggle({
 }, "NoClipToggle")
 
 NoClipTab:CreateButton({
-    Name = "🌀 Фазирование сквозь стену",
-    Description = "Телепортирует на 20 студий вперёд",
+    Name = "Phase Through Wall",
+    Description = "Teleports 20 studs forward",
     Callback = function()
         phaseThroughWall()
     end
 })
 
 NoClipTab:CreateButton({
-    Name = "🛡️ Удалить все NoclipDetector",
-    Description = "Удаляет все детекторы античита",
+    Name = "Remove All NoclipDetectors",
+    Description = "Removes all anti-cheat detectors",
     Callback = function()
         removeAllDetectors()
-        print("✅ Все NoclipDetector удалены")
     end
 })
 
 NoClipTab:CreateButton({
-    Name = "🔧 Перехватить античит",
-    Description = "Пытается перехватить модуль античита",
+    Name = "Hook Anti-Cheat",
+    Description = "Attempts to intercept anti-cheat module",
     Callback = function()
         hookAntiCheat()
-        print("🔧 Античит перехвачен")
     end
 })
 
 NoClipTab:CreateParagraph({
-    Title = "💡 Инструкция по обходу",
-    Text = "1. Нажми B - войти в режим ноуклипа\n2. Автоматически удаляется NoclipDetector\n3. Перехватывается модуль античита\n4. Летай/ходи сквозь всё без банов!\n5. Нажми B - выйти из ноуклипа"
+    Title = "Bypass Instructions",
+    Text = "1. Press B - enter no clip mode\n2. Automatically removes NoclipDetector\n3. Intercepts anti-cheat module\n4. Fly/walk through everything without bans!\n5. Press B - exit no clip"
 })
 
 -- ==========================================
--- ВКЛАДКА ПОЛЁТА
+-- FLY TAB
 -- ==========================================
 local FlyTab = Window:CreateTab({
-    Name = "✈️ Полёт",
+    Name = "Fly",
     Icon = "flight",
     ImageSource = "Material",
     ShowTitle = true
 })
 
 FlyTab:CreateParagraph({
-    Title = "✈️ РЕЖИМ ПОЛЁТА",
-    Text = "Нажми V для входа/выхода из полёта"
+    Title = "FLIGHT MODE",
+    Text = "Press V to toggle flight"
 })
 
 FlyTab:CreateToggle({
-    Name = "Включить полёт",
-    Description = "Нажми V для активации",
+    Name = "Enable Flight",
+    Description = "Press V to activate",
     CurrentValue = false,
     Callback = function(Value)
         if not hrp or not humanoid then
@@ -1008,7 +969,6 @@ FlyTab:CreateToggle({
                 hrp.AssemblyLinearVelocity = Vector3.zero
             end
             flyVelocity = Vector3.zero
-            print("✈️ Полёт Активирован")
         else
             humanoid.AutoRotate = true
             humanoid.PlatformStand = false
@@ -1018,15 +978,14 @@ FlyTab:CreateToggle({
             flyVelocity = Vector3.zero
             gravityDir = Vector3.new(0, -1, 0)
             upDir = Vector3.new(0, 1, 0)
-            print("✈️ Полёт Деактивирован")
         end
     end
 }, "FlyToggle")
 
-FlyTab:CreateLabel({ Text = "⚡ НАСТРОЙКИ ПОЛЁТА", Style = 1 })
+FlyTab:CreateLabel({ Text = "FLIGHT SETTINGS", Style = 1 })
 
 FlyTab:CreateSlider({
-    Name = "Скорость полёта",
+    Name = "Flight Speed",
     Range = {10, 100},
     Increment = 1,
     CurrentValue = settings.FLY_SPEED,
@@ -1037,7 +996,7 @@ FlyTab:CreateSlider({
 }, "FlySpeed")
 
 FlyTab:CreateSlider({
-    Name = "Максимальная скорость",
+    Name = "Max Speed",
     Range = {50, 300},
     Increment = 5,
     CurrentValue = settings.FLY_MAX_SPEED,
@@ -1048,7 +1007,7 @@ FlyTab:CreateSlider({
 }, "FlyMaxSpeed")
 
 FlyTab:CreateSlider({
-    Name = "Ускорение",
+    Name = "Acceleration",
     Range = {2, 20},
     Increment = 0.5,
     CurrentValue = settings.FLY_ACCELERATION,
@@ -1059,7 +1018,7 @@ FlyTab:CreateSlider({
 }, "FlyAcceleration")
 
 FlyTab:CreateSlider({
-    Name = "Плавность",
+    Name = "Smoothness",
     Range = {2, 15},
     Increment = 1,
     CurrentValue = settings.FLY_SMOOTHNESS,
@@ -1070,8 +1029,8 @@ FlyTab:CreateSlider({
 }, "FlySmoothness")
 
 FlyTab:CreateToggle({
-    Name = "Авто-подъём",
-    Description = "Автоматически лететь вверх при старте",
+    Name = "Auto Up",
+    Description = "Automatically fly up on start",
     CurrentValue = settings.FLY_AUTO_UP,
     Callback = function(Value)
         settings.FLY_AUTO_UP = Value
@@ -1080,8 +1039,8 @@ FlyTab:CreateToggle({
 }, "FlyAutoUp")
 
 FlyTab:CreateToggle({
-    Name = "Парение",
-    Description = "Останавливаться на месте без движения",
+    Name = "Hover",
+    Description = "Stop in place without movement",
     CurrentValue = settings.FLY_HOVER,
     Callback = function(Value)
         settings.FLY_HOVER = Value
@@ -1090,23 +1049,23 @@ FlyTab:CreateToggle({
 }, "FlyHover")
 
 -- ==========================================
--- Вкладка "ESP"
+-- ESP TAB
 -- ==========================================
 local ESPTab = Window:CreateTab({
-    Name = "👁️ ESP",
+    Name = "ESP",
     Icon = "visibility",
     ImageSource = "Material",
     ShowTitle = true
 })
 
 ESPTab:CreateParagraph({
-    Title = "👁️ СТАБИЛЬНЫЙ ESP",
-    Text = "Полная перезагрузка каждые 1.5 секунды"
+    Title = "STABLE ESP",
+    Text = "Full refresh every 1.5 seconds"
 })
 
 ESPTab:CreateToggle({
-    Name = "Подсветка игроков",
-    Description = "Постоянное отслеживание",
+    Name = "Player Highlight",
+    Description = "Constant tracking",
     CurrentValue = settings.PLAYER_ESP,
     Callback = function(Value)
         settings.PLAYER_ESP = Value
@@ -1116,8 +1075,8 @@ ESPTab:CreateToggle({
 }, "PlayerESP")
 
 ESPTab:CreateToggle({
-    Name = "Подсветка генераторов",
-    Description = "Поиск по имени и атрибутам",
+    Name = "Generator Highlight",
+    Description = "Search by name and attributes",
     CurrentValue = settings.ESP_GEN,
     Callback = function(Value)
         settings.ESP_GEN = Value
@@ -1127,8 +1086,8 @@ ESPTab:CreateToggle({
 }, "GenESP")
 
 ESPTab:CreateToggle({
-    Name = "Подсветка предметов",
-    Description = "Tool с ItemRoot",
+    Name = "Item Highlight",
+    Description = "Tool with ItemRoot",
     CurrentValue = settings.ESP_ITEMS,
     Callback = function(Value)
         settings.ESP_ITEMS = Value
@@ -1137,10 +1096,10 @@ ESPTab:CreateToggle({
     end
 }, "ItemESP")
 
-ESPTab:CreateLabel({ Text = "🎨 ЦВЕТА", Style = 1 })
+ESPTab:CreateLabel({ Text = "COLORS", Style = 1 })
 
 ESPTab:CreateColorPicker({
-    Name = "Цвет Убийц",
+    Name = "Killer Color",
     Color = Color3.fromRGB(unpack(settings.ESP_COLOR_KILLER)),
     Flag = "KillerColor",
     Callback = function(Value)
@@ -1151,7 +1110,7 @@ ESPTab:CreateColorPicker({
 }, "KillerColor")
 
 ESPTab:CreateColorPicker({
-    Name = "Цвет Выживших",
+    Name = "Survivor Color",
     Color = Color3.fromRGB(unpack(settings.ESP_COLOR_SURVIVOR)),
     Flag = "SurvivorColor",
     Callback = function(Value)
@@ -1162,7 +1121,7 @@ ESPTab:CreateColorPicker({
 }, "SurvivorColor")
 
 ESPTab:CreateColorPicker({
-    Name = "Цвет Генераторов",
+    Name = "Generator Color",
     Color = Color3.fromRGB(unpack(settings.ESP_COLOR_GENERATOR)),
     Flag = "GeneratorColor",
     Callback = function(Value)
@@ -1173,22 +1132,22 @@ ESPTab:CreateColorPicker({
 }, "GeneratorColor")
 
 -- ==========================================
--- Вкладка "Рывок"
+-- DASH TAB
 -- ==========================================
 local DashTab = Window:CreateTab({
-    Name = "⚡ Рывок",
+    Name = "Dash",
     Icon = "flash_on",
     ImageSource = "Material",
     ShowTitle = true
 })
 
 DashTab:CreateParagraph({
-    Title = "⚡ РЫВОК",
-    Text = "Дважды быстро нажми W для рывка вперёд"
+    Title = "DASH",
+    Text = "Double tap W quickly to dash forward"
 })
 
 DashTab:CreateSlider({
-    Name = "Скорость рывка",
+    Name = "Dash Speed",
     Range = {20, 150},
     Increment = 5,
     CurrentValue = settings.DASH_SPEED,
@@ -1199,7 +1158,7 @@ DashTab:CreateSlider({
 }, "DashSpeed")
 
 DashTab:CreateSlider({
-    Name = "Перезарядка рывка",
+    Name = "Dash Cooldown",
     Range = {0.2, 3.0},
     Increment = 0.1,
     CurrentValue = settings.DASH_COOLDOWN,
@@ -1210,17 +1169,17 @@ DashTab:CreateSlider({
 }, "DashCooldown")
 
 -- ==========================================
--- Вкладка "Настройки"
+-- SETTINGS TAB
 -- ==========================================
 local SettingsTab = Window:CreateTab({
-    Name = "⚙️ Настройки",
+    Name = "Settings",
     Icon = "settings",
     ImageSource = "Material",
     ShowTitle = true
 })
 
 SettingsTab:CreateToggle({
-    Name = "Авто-сброс при падении",
+    Name = "Auto Reset on Fall",
     CurrentValue = settings.AUTO_RESET_ON_FALL,
     Callback = function(Value)
         settings.AUTO_RESET_ON_FALL = Value
@@ -1229,7 +1188,7 @@ SettingsTab:CreateToggle({
 }, "AutoReset")
 
 SettingsTab:CreateSlider({
-    Name = "Высота сброса",
+    Name = "Reset Height",
     Range = {-200, -50},
     Increment = 5,
     CurrentValue = settings.RESET_HEIGHT,
@@ -1240,7 +1199,7 @@ SettingsTab:CreateSlider({
 }, "ResetHeight")
 
 SettingsTab:CreateToggle({
-    Name = "Уведомления",
+    Name = "Notifications",
     CurrentValue = settings.NOTIFICATIONS_ENABLED,
     Callback = function(Value)
         settings.NOTIFICATIONS_ENABLED = Value
@@ -1249,28 +1208,25 @@ SettingsTab:CreateToggle({
 }, "Notifications")
 
 SettingsTab:CreateToggle({
-    Name = "🧹 Удалять стены убийц",
-    Description = "Удаляет KillerDoors и KillerOnly",
+    Name = "Remove Killer Walls",
+    Description = "Removes KillerDoors and KillerOnly",
     CurrentValue = settings.REMOVE_KILLER_WALLS,
     Callback = function(Value)
         settings.REMOVE_KILLER_WALLS = Value
         SaveSettings(settings)
         if Value then
             pcall(removeKillerWalls)
-            print("🧹 Удаление стен Активировано")
-        else
-            print("🧹 Удаление стен Деактивировано")
         end
     end
 }, "RemoveKillerWalls")
 
 SettingsTab:CreateParagraph({
-    Title = "⌨️ УПРАВЛЕНИЕ",
-    Text = "C - Ходьба по стенам\nV - Полёт\nB - Ноуклип (обход античита!)\nZ - TURBO (супер-бег!)\nB+G - Фазирование\nShift - Спринт\nW W - Рывок\nX - Меню"
+    Title = "CONTROLS",
+    Text = "C - Wall Walk\nV - Fly\nB - No Clip (anti-cheat bypass!)\nZ - TURBO (super run!)\nB+G - Phase through walls\nShift - Sprint\nW W - Dash forward\nX - Menu"
 })
 
 SettingsTab:CreateButton({
-    Name = "🔄 Сбросить все настройки",
+    Name = "Reset All Settings",
     Callback = function()
         for key, value in pairs(DefaultSettings) do
             settings[key] = value
@@ -1278,33 +1234,28 @@ SettingsTab:CreateButton({
         SaveSettings(settings)
         clearAllESP()
         pcall(rebuildESP)
-        print("✅ Настройки восстановлены")
     end
 })
 
 -- ==========================================
--- ОБРАБОТКА ВВОДА
+-- INPUT HANDLING
 -- ==========================================
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
     pressed[input.KeyCode] = true
     
-    -- TURBO (Z)
     if input.KeyCode == TURBO_KEY then
         toggleTurbo()
     end
     
-    -- Ноуклип (B)
     if input.KeyCode == NO_CLIP_KEY then
         toggleNoClip()
     end
     
-    -- Фазирование (B + G)
     if input.KeyCode == Enum.KeyCode.G and noClipActive then
         phaseThroughWall()
     end
     
-    -- Полёт (V)
     if input.KeyCode == FLY_KEY then
         if not hrp or not humanoid then
             updateCharacterReferences()
@@ -1326,7 +1277,6 @@ UserInputService.InputBegan:Connect(function(input, gp)
             if settings.FLY_AUTO_UP then
                 flyVelocity = Vector3.new(0, settings.FLY_SPEED * 0.5, 0)
             end
-            print("✈️ Полёт Активирован")
         else
             humanoid.AutoRotate = true
             humanoid.PlatformStand = false
@@ -1336,11 +1286,9 @@ UserInputService.InputBegan:Connect(function(input, gp)
             flyVelocity = Vector3.zero
             gravityDir = Vector3.new(0, -1, 0)
             upDir = Vector3.new(0, 1, 0)
-            print("✈️ Полёт Деактивирован")
         end
     end
     
-    -- Ходьба по стенам (C)
     if input.KeyCode == CLIMB_KEY then
         if flying or noClipActive or turboActive then return end
         
@@ -1358,7 +1306,6 @@ UserInputService.InputBegan:Connect(function(input, gp)
             gravityDir = -upDir
             isOnCeiling = false
             ceilingTime = 0
-            print("🕷️ Ходьба Включена")
         else
             humanoid.AutoRotate = true
             humanoid.PlatformStand = false
@@ -1371,21 +1318,17 @@ UserInputService.InputBegan:Connect(function(input, gp)
             if hrp then
                 hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + facing)
             end
-            print("🕷️ Ходьба Выключена")
         end
     end
     
-    -- Спринт
     if input.KeyCode == SPRINT_KEY then
         isSprinting = true
     end
     
-    -- Меню
     if input.KeyCode == MENU_KEY then
         Window:ToggleVisibility()
     end
     
-    -- Рывок (двойное W)
     if input.KeyCode == DASH_KEY then
         if flying or noClipActive or turboActive then return end
         if not hrp then
@@ -1410,7 +1353,6 @@ UserInputService.InputBegan:Connect(function(input, gp)
             dashActive = true
             dashTimer = settings.DASH_DURATION
             dashCooldown = settings.DASH_COOLDOWN
-            print("⚡ Рывок!")
         end
     end
 end)
@@ -1424,7 +1366,7 @@ UserInputService.InputEnded:Connect(function(input, gp)
 end)
 
 -- ==========================================
--- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+-- HELPER FUNCTIONS
 -- ==========================================
 local function projectToPlane(v, n)
     return v - n * v:Dot(n)
@@ -1452,7 +1394,7 @@ local function slerp(a, b, t)
 end
 
 -- ==========================================
--- ОСНОВНОЙ ЦИКЛ
+-- MAIN LOOP
 -- ==========================================
 RunService.Heartbeat:Connect(function(dt)
     if not character or not character.Parent then
@@ -1464,7 +1406,6 @@ RunService.Heartbeat:Connect(function(dt)
         dashCooldown = dashCooldown - dt
     end
     
-    -- ===== РЕЖИМ НОУКЛИП =====
     if noClipActive and hrp and humanoid then
         pcall(function()
             local detector = character:FindFirstChild("NoclipDetector")
@@ -1515,12 +1456,10 @@ RunService.Heartbeat:Connect(function(dt)
             isGrounded = false
             isOnCeiling = false
             ceilingTime = 0
-            print("🔄 Сброс падения")
             return
         end
     end
     
-    -- ===== РЕЖИМ ПОЛЁТА =====
     if flying and hrp and humanoid then
         local camCFrame = Camera.CFrame
         
@@ -1574,7 +1513,6 @@ RunService.Heartbeat:Connect(function(dt)
             isGrounded = false
             isOnCeiling = false
             ceilingTime = 0
-            print("🌌 Время на потолке истекло")
             return
         end
     else
@@ -1686,26 +1624,9 @@ RunService.Heartbeat:Connect(function(dt)
 end)
 
 -- ==========================================
--- ЗАГРУЗКА
+-- INITIALIZATION
 -- ==========================================
-print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-print("🕷️  Surface Walk PRO - v9.0 VELOCITY!")
-print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-print("✅ Обход античита NoclipDetector")
-print("✅ Удаление всех детекторов")
-print("✅ Перехват модуля античита")
-print("✅ 💨 TURBO (супер-бег) на Z!")
-print("✅ Гибкие настройки: 5-100 с шагом 5")
-print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-print("🔑 C - Ходьба по стенам")
-print("✈️ V - Полёт")
-print("🌀 B - Ноуклип (обход античита!)")
-print("💨 Z - TURBO (супер-бег!)")
-print("🌀 B+G - Фазирование сквозь стены")
-print("💨 Shift - Спринт")
-print("⚡ W W - Рывок вперёд")
-print("📋 X - Открыть меню")
-print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+print("Surface Walk PRO v9.0 loaded successfully")
 
 task.wait(0.5)
 pcall(rebuildESP)
