@@ -65,7 +65,6 @@ local SaveFile = MyDataFolder .. "/Settings.json"
 
 local DefaultSettings = {
     CLIMB_KEY = "C",
-    MENU_KEY = "RightShift",
     SPRINT_KEY = "LeftShift",
     DASH_KEY = "W",
     FLY_KEY = "V",
@@ -150,15 +149,16 @@ local function getKeyCode(keyName)
     if success and result then
         return result
     end
-    return Enum.KeyCode[keyName] or Enum.KeyCode.C
+    return Enum.KeyCode.C
 end
 
-local CLIMB_KEY = getKeyCode(settings.CLIMB_KEY)
-local SPRINT_KEY = getKeyCode(settings.SPRINT_KEY)
-local DASH_KEY = getKeyCode(settings.DASH_KEY)
-local FLY_KEY = getKeyCode(settings.FLY_KEY)
-local NO_CLIP_KEY = getKeyCode(settings.NO_CLIP_KEY)
-local TURBO_KEY = getKeyCode(settings.TURBO_KEY)
+local function getKeyName(keyCode)
+    if type(keyCode) == "string" then
+        return keyCode
+    end
+    local name = tostring(keyCode)
+    return name:gsub("Enum.KeyCode.", "")
+end
 
 -- ===== STATES =====
 local climbing = false
@@ -180,8 +180,7 @@ local dashCooldown = 0
 local dashActive = false
 local dashTimer = 0
 local dashDir = Vector3.new(0, 0, 0)
-local wPressCount = 0
-local lastWPressed = 0
+local lastDashPressTime = 0
 
 local rayParams = RaycastParams.new()
 rayParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -1141,7 +1140,8 @@ ESPTab:CreateColorPicker({
 }, "GeneratorColor")
 
 -- ==========================================
--- DASH TAB-- ==========================================
+-- DASH TAB
+-- ==========================================
 local DashTab = Window:CreateTab({
     Name = "Dash",
     Icon = "flash_on",
@@ -1177,7 +1177,7 @@ DashTab:CreateSlider({
 }, "DashCooldown")
 
 -- ==========================================
--- CONTROLS TAB (KEYBINDS)
+-- CONTROLS TAB (KEYBINDS with Click-to-Select)
 -- ==========================================
 local ControlsTab = Window:CreateTab({
     Name = "Controls",
@@ -1188,18 +1188,16 @@ local ControlsTab = Window:CreateTab({
 
 ControlsTab:CreateParagraph({
     Title = "KEYBINDS",
-    Text = "Click on any key to change it\nAll keybinds are saved automatically"
+    Text = "Click on any key to change it\nPress any key on your keyboard to assign"
 })
 
 -- Climb Key
-ControlsTab:CreateBind({
+ControlsTab:CreateKeybind({
     Name = "Wall Walk Key",
     Description = "Press to toggle wall walking",
-    CurrentBind = settings.CLIMB_KEY or "C",
+    CurrentKeybind = settings.CLIMB_KEY or "C",
     HoldToInteract = false,
-    Callback = function(BindState)
-        -- Toggle climb
-        if not BindState then return end
+    Callback = function()
         if flying or noClipActive or turboActive then return end
         
         if not hrp or not humanoid then
@@ -1230,37 +1228,34 @@ ControlsTab:CreateBind({
             end
         end
     end,
-    OnChangedCallback = function(Bind)
-        settings.CLIMB_KEY = tostring(Bind):gsub("Enum.KeyCode.","")
+    ChangedCallback = function(NewKey)
+        settings.CLIMB_KEY = NewKey
         SaveSettings(settings)
-        CLIMB_KEY = Bind
     end,
 }, "ClimbBind")
 
 -- Sprint Key
-ControlsTab:CreateBind({
+ControlsTab:CreateKeybind({
     Name = "Sprint Key",
     Description = "Hold to sprint",
-    CurrentBind = settings.SPRINT_KEY or "LeftShift",
+    CurrentKeybind = settings.SPRINT_KEY or "LeftShift",
     HoldToInteract = true,
-    Callback = function(BindState)
-        isSprinting = BindState
+    Callback = function()
+        isSprinting = not isSprinting
     end,
-    OnChangedCallback = function(Bind)
-        settings.SPRINT_KEY = tostring(Bind):gsub("Enum.KeyCode.","")
+    ChangedCallback = function(NewKey)
+        settings.SPRINT_KEY = NewKey
         SaveSettings(settings)
-        SPRINT_KEY = Bind
     end,
 }, "SprintBind")
 
 -- Fly Key
-ControlsTab:CreateBind({
+ControlsTab:CreateKeybind({
     Name = "Fly Key",
     Description = "Press to toggle flight",
-    CurrentBind = settings.FLY_KEY or "V",
+    CurrentKeybind = settings.FLY_KEY or "V",
     HoldToInteract = false,
-    Callback = function(BindState)
-        if not BindState then return end
+    Callback = function()
         if not hrp or not humanoid then
             updateCharacterReferences()
             if not hrp or not humanoid then return end
@@ -1292,70 +1287,57 @@ ControlsTab:CreateBind({
             upDir = Vector3.new(0, 1, 0)
         end
     end,
-    OnChangedCallback = function(Bind)
-        settings.FLY_KEY = tostring(Bind):gsub("Enum.KeyCode.","")
+    ChangedCallback = function(NewKey)
+        settings.FLY_KEY = NewKey
         SaveSettings(settings)
-        FLY_KEY = Bind
     end,
 }, "FlyBind")
 
 -- No Clip Key
-ControlsTab:CreateBind({
+ControlsTab:CreateKeybind({
     Name = "No Clip Key",
     Description = "Press to toggle no clip",
-    CurrentBind = settings.NO_CLIP_KEY or "B",
+    CurrentKeybind = settings.NO_CLIP_KEY or "B",
     HoldToInteract = false,
-    Callback = function(BindState)
-        if not BindState then return end
+    Callback = function()
         toggleNoClip()
     end,
-    OnChangedCallback = function(Bind)
-        settings.NO_CLIP_KEY = tostring(Bind):gsub("Enum.KeyCode.","")
+    ChangedCallback = function(NewKey)
+        settings.NO_CLIP_KEY = NewKey
         SaveSettings(settings)
-        NO_CLIP_KEY = Bind
     end,
 }, "NoClipBind")
 
 -- Turbo Key
-ControlsTab:CreateBind({
+ControlsTab:CreateKeybind({
     Name = "Turbo Key",
     Description = "Press to toggle turbo mode",
-    CurrentBind = settings.TURBO_KEY or "Z",
+    CurrentKeybind = settings.TURBO_KEY or "Z",
     HoldToInteract = false,
-    Callback = function(BindState)
-        if not BindState then return end
+    Callback = function()
         toggleTurbo()
     end,
-    OnChangedCallback = function(Bind)
-        settings.TURBO_KEY = tostring(Bind):gsub("Enum.KeyCode.","")
+    ChangedCallback = function(NewKey)
+        settings.TURBO_KEY = NewKey
         SaveSettings(settings)
-        TURBO_KEY = Bind
     end,
 }, "TurboBind")
 
 -- Dash Key
-ControlsTab:CreateBind({
+ControlsTab:CreateKeybind({
     Name = "Dash Key",
-    Description = "Double tap to dash",
-    CurrentBind = settings.DASH_KEY or "W",
+    Description = "Press to dash (works in wall walk mode)",
+    CurrentKeybind = settings.DASH_KEY or "W",
     HoldToInteract = false,
-    Callback = function(BindState)
-        if not BindState then return end
+    Callback = function()
         if flying or noClipActive or turboActive then return end
         if not hrp then
             updateCharacterReferences()
             if not hrp then return end
         end
         
-        local currentTime = tick()
-        if currentTime - lastWPressed < 0.3 then
-            wPressCount = wPressCount + 1
-        else
-            wPressCount = 1
-        end
-        lastWPressed = currentTime
-        
-        if wPressCount >= 2 and dashCooldown <= 0 and climbing and hrp then
+        -- Single press dash (no double tap needed)
+        if dashCooldown <= 0 and climbing and hrp then
             local forward = hrp.CFrame.LookVector
             dashDir = projectToPlane(forward, gravityDir).Unit
             if dashDir.Magnitude < 0.1 then
@@ -1366,10 +1348,9 @@ ControlsTab:CreateBind({
             dashCooldown = settings.DASH_COOLDOWN
         end
     end,
-    OnChangedCallback = function(Bind)
-        settings.DASH_KEY = tostring(Bind):gsub("Enum.KeyCode.","")
+    ChangedCallback = function(NewKey)
+        settings.DASH_KEY = NewKey
         SaveSettings(settings)
-        DASH_KEY = Bind
     end,
 }, "DashBind")
 
@@ -1457,13 +1438,13 @@ SettingsTab:CreateButton({
 })
 
 -- ==========================================
--- INPUT HANDLING (FOR COMBO KEYS AND SPECIAL CASES)
+-- INPUT HANDLING (FOR COMBO KEYS)
 -- ==========================================
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
     pressed[input.KeyCode] = true
     
-    -- Phase through wall: B + G (handled here since it's a combo)
+    -- Phase through wall: B + G
     if input.KeyCode == Enum.KeyCode.G and noClipActive then
         phaseThroughWall()
     end
