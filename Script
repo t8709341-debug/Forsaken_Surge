@@ -2,22 +2,23 @@ local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-S
 
 
 --I used LUNA UI because I'm too lazy to make the interface myself. It's essentially an open source project, so you can improve it!
-
 --I used LUNA UI because I'm too lazy to make the interface myself. It's essentially an open source project, so you can improve it!
+--I used LUNA UI because I'm too lazy to make the interface myself. It's essentially an open source project, so you can improve it!
+
 
 -- ==========================================
 -- MAIN WINDOW
 -- ==========================================
 local Window = Luna:CreateWindow({
-    Name = "Surface Walk PRO",
+    Name = "Forsaken Surge",
     Subtitle = "v9.0 | VELOCITY + TURBO",
     LogoID = nil,
     LoadingEnabled = true,
-    LoadingTitle = "Surface Walk PRO",
+    LoadingTitle = "Forsaken Surge",
     LoadingSubtitle = "Loading modules...",
     ConfigSettings = {
         RootFolder = nil,
-        ConfigFolder = "SurfaceWalkPRO"
+        ConfigFolder = "ForsakenSurge"
     },
     KeySystem = false
 })
@@ -61,7 +62,7 @@ end
 updateCharacterReferences()
 
 -- ===== SAVE SYSTEM =====
-local MyDataFolder = "SurfaceWalkData"
+local MyDataFolder = "ForsakenSurgeData"
 if not isfolder(MyDataFolder) then
     makefolder(MyDataFolder)
 end
@@ -527,7 +528,7 @@ end)
 -- ESP
 -- ==========================================
 local espFolder = Instance.new("Folder")
-espFolder.Name = "SurfaceWalkESP"
+espFolder.Name = "ForsakenSurgeESP"
 espFolder.Parent = player:WaitForChild("PlayerGui")
 
 local espHighlights = {}
@@ -627,7 +628,7 @@ end)
 
 Window:CreateHomeTab({
     SupportedExecutors = {"Synapse X", "Krnl", "ScriptWare", "Fluxus", "Oxygen U"},
-    DiscordInvite = "surfacewalk",
+    DiscordInvite = "forsakensurge",
     Icon = 2,
 })
 
@@ -642,7 +643,7 @@ local WalkTab = Window:CreateTab({
 })
 
 WalkTab:CreateParagraph({
-    Title = "Surface Walk PRO",
+    Title = "Forsaken Surge",
     Text = "v9.0 with VELOCITY (TURBO)!"
 })
 
@@ -1631,7 +1632,7 @@ end)
 -- ==========================================
 -- INITIALIZATION
 -- ==========================================
-print("Surface Walk PRO v9.0 loaded successfully")
+print("Forsaken Surge v9.0 loaded successfully")
 
 task.wait(0.5)
 pcall(rebuildESP)
