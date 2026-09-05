@@ -100,6 +100,16 @@ local DefaultSettings = {
     TURBO_ACTIVE = false,
     TURBO_SPEED = 30,
     TURBO_MODE = "Velocity",
+    
+    -- НОВЫЕ НАСТРОЙКИ ДЛЯ БЕЗГРАНИЧНОСТИ
+    UNLIMITED_MODE = false,  -- Включает безграничный режим
+    WALK_SPEED_MAX = 50,     -- Максимальная скорость ходьбы (было 50)
+    SPRINT_MULTIPLIER_MAX = 3.0, -- Максимальный множитель спринта (было 3.0)
+    GRAVITY_MAX = 100,       -- Максимальная гравитация (было 60)
+    WALL_RANGE_MAX = 15,     -- Максимальная дальность захвата (было 10)
+    TURBO_SPEED_MAX = 400,   -- Максимальная скорость турбо (было 100)
+    FLY_SPEED_MAX = 400,     -- Максимальная скорость полёта (было 100)
+    FLY_MAX_SPEED_MAX = 800, -- Максимальная максимальная скорость полёта (было 300)
 }
 
 function LoadSettings()
@@ -124,7 +134,29 @@ end
 
 local settings = LoadSettings()
 
--- ===== STATES =====
+-- ==========================================
+-- ФУНКЦИЯ ДЛЯ ПОЛУЧЕНИЯ МАКСИМАЛЬНЫХ ЗНАЧЕНИЙ
+-- ==========================================
+local function getMaxValue(key, defaultMax)
+    if settings.UNLIMITED_MODE then
+        -- В безграничном режиме возвращаем большие значения (до 400)
+        local maxMap = {
+            WALK_SPEED = 400,
+            SPRINT_MULTIPLIER = 10.0,
+            GRAVITY = 400,
+            WALL_RANGE = 100,
+            TURBO_SPEED = 400,
+            FLY_SPEED = 400,
+            FLY_MAX_SPEED = 800,
+        }
+        return maxMap[key] or 400
+    end
+    return defaultMax
+end
+
+-- ==========================================
+-- STATES
+-- ==========================================
 local climbing = false
 local flying = false
 local noClipActive = false
@@ -145,7 +177,7 @@ rayParams.FilterType = Enum.RaycastFilterType.Exclude
 rayParams.RespectCanCollide = true
 
 -- ==========================================
--- ESP SYSTEM (ИЗ ПЕРВОГО ФАЙЛА)
+-- ESP SYSTEM
 -- ==========================================
 
 local ColorPresets = {
@@ -817,11 +849,24 @@ WallWalkTab:CreateParagraph({
     Text = "Нажми C для включения ходьбы по стенам"
 })
 
+-- НОВЫЙ ТОГГЛ ДЛЯ БЕЗГРАНИЧНОГО РЕЖИМА
+WallWalkTab:CreateToggle({
+    Name = "⚡ Безграничный режим (Unlimited)",
+    CurrentValue = settings.UNLIMITED_MODE,
+    Callback = function(Value)
+        settings.UNLIMITED_MODE = Value
+        SaveSettings(settings)
+        -- Обновляем все слайдеры с новыми максимальными значениями
+        -- GUI автоматически обновится при следующем открытии вкладки
+        showNotification("⚡ Безграничный режим", Value and "Включен! Все лимиты увеличены до 400" or "Выключен")
+    end
+})
+
 WallWalkTab:CreateLabel({ Text = "ДВИЖЕНИЕ", Style = 1 })
 
 WallWalkTab:CreateSlider({
     Name = "Скорость ходьбы",
-    Range = {5, 50},
+    Range = {1, getMaxValue("WALK_SPEED", 50)},
     Increment = 1,
     CurrentValue = settings.WALK_SPEED,
     Callback = function(Value)
@@ -832,7 +877,7 @@ WallWalkTab:CreateSlider({
 
 WallWalkTab:CreateSlider({
     Name = "Множитель спринта",
-    Range = {1.0, 3.0},
+    Range = {1.0, getMaxValue("SPRINT_MULTIPLIER", 3.0)},
     Increment = 0.1,
     CurrentValue = settings.SPRINT_MULTIPLIER,
     Callback = function(Value)
@@ -843,7 +888,7 @@ WallWalkTab:CreateSlider({
 
 WallWalkTab:CreateSlider({
     Name = "Гравитация",
-    Range = {10, 60},
+    Range = {1, getMaxValue("GRAVITY", 60)},
     Increment = 1,
     CurrentValue = settings.GRAVITY,
     Callback = function(Value)
@@ -856,7 +901,7 @@ WallWalkTab:CreateLabel({ Text = "ДАЛЬНОСТЬ", Style = 1 })
 
 WallWalkTab:CreateSlider({
     Name = "Дальность захвата",
-    Range = {1, 10},
+    Range = {1, getMaxValue("WALL_RANGE", 10)},
     Increment = 0.5,
     CurrentValue = settings.WALL_RANGE,
     Callback = function(Value)
@@ -952,7 +997,7 @@ TurboTab:CreateToggle({
 
 TurboTab:CreateSlider({
     Name = "Turbo Speed",
-    Range = {5, 100},
+    Range = {5, getMaxValue("TURBO_SPEED", 100)},
     Increment = 5,
     CurrentValue = settings.TURBO_SPEED,
     Callback = function(Value)
@@ -1049,7 +1094,7 @@ FlyTab:CreateToggle({
 
 FlyTab:CreateSlider({
     Name = "Flight Speed",
-    Range = {10, 100},
+    Range = {10, getMaxValue("FLY_SPEED", 100)},
     Increment = 1,
     CurrentValue = settings.FLY_SPEED,
     Callback = function(Value)
@@ -1060,7 +1105,7 @@ FlyTab:CreateSlider({
 
 FlyTab:CreateSlider({
     Name = "Max Speed",
-    Range = {50, 300},
+    Range = {50, getMaxValue("FLY_MAX_SPEED", 300)},
     Increment = 5,
     CurrentValue = settings.FLY_MAX_SPEED,
     Callback = function(Value)
@@ -1442,8 +1487,10 @@ print("✅ No Clip (ноуклип)")
 print("✅ Turbo (турбо)")
 print("✅ ESP (подсветка)")
 print("✅ Killer Walls Remover")
+print("✅ UNLIMITED MODE (безграничный режим)")
 print("═══════════════════════════════════════════════════════")
 print("🔑 C - Wall Walk | V - Fly | B - No Clip | Z - Turbo")
+print("⚡ Включи безграничный режим в настройках Wall Walk!")
 print("═══════════════════════════════════════════════════════")
 
 task.wait(0.5)
