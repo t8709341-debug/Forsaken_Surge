@@ -102,14 +102,14 @@ local DefaultSettings = {
     TURBO_MODE = "Velocity",
     
     -- НОВЫЕ НАСТРОЙКИ ДЛЯ БЕЗГРАНИЧНОСТИ
-    UNLIMITED_MODE = false,  -- Включает безграничный режим
-    WALK_SPEED_MAX = 50,     -- Максимальная скорость ходьбы (было 50)
-    SPRINT_MULTIPLIER_MAX = 3.0, -- Максимальный множитель спринта (было 3.0)
-    GRAVITY_MAX = 100,       -- Максимальная гравитация (было 60)
-    WALL_RANGE_MAX = 15,     -- Максимальная дальность захвата (было 10)
-    TURBO_SPEED_MAX = 400,   -- Максимальная скорость турбо (было 100)
-    FLY_SPEED_MAX = 400,     -- Максимальная скорость полёта (было 100)
-    FLY_MAX_SPEED_MAX = 800, -- Максимальная максимальная скорость полёта (было 300)
+    UNLIMITED_MODE = false,
+    WALK_SPEED_MAX = 50,
+    SPRINT_MULTIPLIER_MAX = 3.0,
+    GRAVITY_MAX = 100,
+    WALL_RANGE_MAX = 15,
+    TURBO_SPEED_MAX = 400,
+    FLY_SPEED_MAX = 400,
+    FLY_MAX_SPEED_MAX = 800,
 }
 
 function LoadSettings()
@@ -139,7 +139,6 @@ local settings = LoadSettings()
 -- ==========================================
 local function getMaxValue(key, defaultMax)
     if settings.UNLIMITED_MODE then
-        -- В безграничном режиме возвращаем большие значения (до 400)
         local maxMap = {
             WALK_SPEED = 400,
             SPRINT_MULTIPLIER = 10.0,
@@ -177,6 +176,49 @@ rayParams.FilterType = Enum.RaycastFilterType.Exclude
 rayParams.RespectCanCollide = true
 
 -- ==========================================
+-- EXCLUSIVE MODE (только одна функция активна)
+-- ==========================================
+local function disableAllModes(except)
+    if except ~= "climb" and climbing then
+        climbing = false
+        if humanoid then
+            humanoid.AutoRotate = true
+            humanoid.PlatformStand = false
+        end
+        gravityDir = Vector3.new(0, -1, 0)
+        upDir = Vector3.new(0, 1, 0)
+        fallSpeed = 0
+        isGrounded = false
+        isOnCeiling = false
+        ceilingTime = 0
+    end
+    
+    if except ~= "fly" and flying then
+        flying = false
+        if humanoid then
+            humanoid.AutoRotate = true
+            humanoid.PlatformStand = false
+        end
+        flyVelocity = Vector3.zero
+        if hrp then hrp.AssemblyLinearVelocity = Vector3.zero end
+    end
+    
+    if except ~= "noclip" and noClipActive then
+        noClipActive = false
+        for _, part in ipairs(character and character:GetDescendants() or {}) do
+            if part:IsA("BasePart") then
+                part.CanCollide = true
+            end
+        end
+    end
+    
+    if except ~= "turbo" and turboActive then
+        turboActive = false
+        if hrp then hrp.AssemblyLinearVelocity = Vector3.zero end
+    end
+end
+
+-- ==========================================
 -- ESP SYSTEM
 -- ==========================================
 
@@ -198,6 +240,7 @@ espFolder.Parent = player:WaitForChild("PlayerGui")
 
 local espHighlights = {}
 local espBillboards = {}
+local espTracked = {} -- [instance] = {highlight=..., billboard=...}
 
 local function clearAllESP()
     for _, hl in ipairs(espHighlights) do
@@ -208,223 +251,120 @@ local function clearAllESP()
         pcall(function() bg:Destroy() end)
     end
     espBillboards = {}
+    espTracked = {}
 end
 
--- Function to check distance for highlight
-local function CheckHighlightDistance(Highlight, TargetRoot, Settings)
-    local Camera = TargetRoot and workspace.CurrentCamera
-    if not Camera or (Highlight:GetAttribute("Frozen") and not Settings.Instant) then return end
-    
-    local Distance = (Camera.CFrame.Position - TargetRoot.Position).Magnitude
-    local MinDistance = Settings.MinDistance or 10
-    local ShouldHide = Distance < MinDistance or Distance > 1200
-    
-    if ShouldHide and Highlight.FillTransparency ~= 1 then
-        local Tween = TweenService:Create(Highlight, TweenInfo.new(Settings.Instant and 0 or 0.1), {
-            FillTransparency = 1,
-            OutlineTransparency = 1
-        })
-        Tween.Parent = Highlight
-        Tween:Play()
-        Debris:AddItem(Tween, 0.2)
-        return
-    end
-    
-    if not ShouldHide and Distance >= MinDistance and Distance < 1200 then
-        local TransparencyAmount = math.clamp(1 - math.clamp((Distance - MinDistance) / math.max(Settings.MaxDistance - MinDistance, 0.001), 0, 1), 0.45, 1)
-        if math.abs(Highlight.FillTransparency - TransparencyAmount) > 0 then
-            local Tween = TweenService:Create(Highlight, TweenInfo.new(Settings.Instant and 0 or 0.1), {
-                FillTransparency = math.clamp(TransparencyAmount + 0.05, 0, 1),
-                OutlineTransparency = TransparencyAmount <= 0.95 and TransparencyAmount - 0.05 or TransparencyAmount
-            })
-            Tween.Parent = Highlight
-            Tween:Play()
-            Debris:AddItem(Tween, 0.2)
-        end
-    end
-end
-
--- Function to check distance for text
-local function CheckTextDistance(Text, TargetRoot, Settings)
-    local Camera = TargetRoot and workspace.CurrentCamera
-    if not Camera or (Text:GetAttribute("Frozen") and not Settings.Instant) then return end
-    
-    local Distance = (Camera.CFrame.Position - TargetRoot.Position).Magnitude
-    local MinDistance = Settings.MinDistance or 25
-    
-    if Distance > MinDistance and Distance < 1200 and Text.TextTransparency ~= 0 then
-        local Tween = TweenService:Create(Text, TweenInfo.new(Settings.Instant and 0 or 0.1), {
-            TextTransparency = 0,
-            TextStrokeTransparency = 0
-        })
-        Tween.Parent = TargetRoot
-        Tween:Play()
-        Debris:AddItem(Tween, 0.2)
-    elseif Distance <= MinDistance or Distance >= 1200 and Text.TextTransparency ~= 1 then
-        local Tween = TweenService:Create(Text, TweenInfo.new(Settings.Instant and 0 or 0.1), {
-            TextTransparency = 1,
-            TextStrokeTransparency = 1
-        })
-        Tween.Parent = TargetRoot
-        Tween:Play()
-        Debris:AddItem(Tween, 0.2)
-    end
-end
-
--- Function to create dynamic highlight
-local function CreateDynamicHighlight(Enabled, ItemInstance, TargetRoot, Settings)
+-- Создание/обновление Highlight с постоянным обновлением
+local function UpdateHighlight(ItemInstance, TargetRoot, Settings)
     Settings = type(Settings) == "table" and Settings or {
         MaxDistance = 100,
         MinDistance = 10,
         Color = Color3.new(1,1,1)
     }
     
-    if not settings.ESP_ENABLED then
-        Enabled = false
+    local entry = espTracked[ItemInstance]
+    local Highlight = entry and entry.highlight
+    
+    if not Highlight or not Highlight.Parent then
+        Highlight = Instance.new("Highlight")
+        Highlight.Name = HttpService:GenerateGUID(false):sub(1,7)
+        Highlight.Archivable = false
+        Highlight:SetAttribute("Dynamic", true)
+        Highlight.Parent = ItemInstance
+        Highlight.Adornee = ItemInstance
+        Highlight.FillTransparency = 0
+        Highlight.OutlineTransparency = 0
+        table.insert(espHighlights, Highlight)
+        
+        if not espTracked[ItemInstance] then espTracked[ItemInstance] = {} end
+        espTracked[ItemInstance].highlight = Highlight
     end
     
-    local Highlight = nil
-    for _, child in ipairs(ItemInstance:GetChildren()) do
-        if child:IsA("Highlight") and child:GetAttribute("Dynamic") then
-            Highlight = child
-            break
-        end
-    end
+    -- Постоянное обновление цвета
+    local H, S, V = Settings.Color:ToHSV()
+    Highlight.FillColor = Color3.fromHSV(H, S, V * 0.8)
+    Highlight.OutlineColor = Color3.fromHSV(H, S, V * 1.1)
     
-    if Enabled then
-        if not Highlight then
-            Highlight = Instance.new("Highlight")
-            Highlight.Name = HttpService:GenerateGUID(false):sub(1,7)
-            Highlight.Archivable = false
-            
-            local H, S, V = Settings.Color:ToHSV()
-            Highlight.FillColor = Color3.fromHSV(H, S, V * 0.8)
-            Highlight.OutlineColor = Color3.fromHSV(H, S, V * 1.1)
-            Highlight:SetAttribute("Dynamic", true)
-            Highlight.Parent = ItemInstance
-            Highlight.Adornee = ItemInstance
-            Highlight.FillTransparency = 1
-            Highlight.OutlineTransparency = 1
-            table.insert(espHighlights, Highlight)
-            
-            CheckHighlightDistance(Highlight, TargetRoot, Settings)
-            
-            local Connection
-            Connection = workspace.CurrentCamera:GetPropertyChangedSignal("CameraSubject"):Connect(function()
-                if Highlight and Highlight.Parent then
-                    for i,v in Highlight:GetChildren() do 
-                        pcall(function() v:Cancel() end) 
-                    end
-                    Highlight.FillTransparency = 0.95
-                    Highlight.OutlineTransparency = 0.95
-                else
-                    Connection:Disconnect()
-                end
-            end)
-            
-            Highlight.Destroying:Once(function()
-                if Connection then
-                    Connection:Disconnect()
-                end
-            end)
-            
-            Highlight.Parent:GetPropertyChangedSignal("Parent"):Once(function()
-                Highlight:Destroy()
-            end)
-        else
-            local H, S, V = Settings.Color:ToHSV()
-            Highlight.FillColor = Color3.fromHSV(H, S, V * 0.8)
-            Highlight.OutlineColor = Color3.fromHSV(H, S, V * 1.1)
-            CheckHighlightDistance(Highlight, TargetRoot, Settings)
-        end
-    elseif Highlight then
-        Highlight:Destroy()
+    -- Постоянное обновление прозрачности по дистанции
+    if TargetRoot and TargetRoot.Parent then
+        local dist = (Camera.CFrame.Position - TargetRoot.Position).Magnitude
+        local minD = Settings.MinDistance or 10
+        local maxD = Settings.MaxDistance or 100
+        local alpha = math.clamp(1 - math.clamp((dist - minD) / math.max(maxD - minD, 0.001), 0, 1), 0.35, 1)
+        Highlight.FillTransparency = math.clamp(alpha + 0.05, 0, 1)
+        Highlight.OutlineTransparency = alpha <= 0.95 and alpha - 0.05 or alpha
     end
 end
 
--- Function to create text
-local function CreateText(Enabled, ItemInstance, TargetRoot, Settings)
+-- Создание/обновление текста с постоянным обновлением
+local function UpdateText(ItemInstance, TargetRoot, Settings)
     Settings = type(Settings) == "table" and Settings or {
         MinDistance = 25,
-        Color = Color3.new(1,1,1)
+        Color = Color3.new(1,1,1),
+        Text = "Unknown"
     }
     
-    if not settings.ESP_ENABLED or not settings.SHOW_TEXT then
-        Enabled = false
+    local entry = espTracked[ItemInstance]
+    local BillboardGui = entry and entry.billboard
+    
+    if not BillboardGui or not BillboardGui.Parent then
+        BillboardGui = Instance.new("BillboardGui")
+        local TextLabel = Instance.new("TextLabel")
+        
+        BillboardGui.Name = HttpService:GenerateGUID(false):sub(1,7)
+        BillboardGui.Archivable = false
+        BillboardGui.Size = ItemInstance:IsA("Tool") and UDim2.new(1.5, 30, 0.75, 30) or UDim2.new(1.5,60,0.75,25)
+        BillboardGui.StudsOffset = ItemInstance:IsA("Tool") and Vector3.new(0,3,0) or Vector3.new(0,4,0)
+        BillboardGui.AlwaysOnTop = true
+        BillboardGui.ResetOnSpawn = false
+        BillboardGui.Adornee = TargetRoot
+        BillboardGui:SetAttribute("Dynamic", true)
+        table.insert(espBillboards, BillboardGui)
+        
+        TextLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+        TextLabel.Position = UDim2.fromScale(0.5, 0.5)
+        TextLabel.Size = UDim2.fromScale(1, 1)
+        TextLabel.BackgroundTransparency = 1
+        TextLabel.TextScaled = true
+        TextLabel.Parent = BillboardGui
+        
+        BillboardGui.Parent = TargetRoot
+        
+        if not espTracked[ItemInstance] then espTracked[ItemInstance] = {} end
+        espTracked[ItemInstance].billboard = BillboardGui
     end
     
-    local BillboardGui = nil
-    for _, child in ipairs(TargetRoot:GetChildren()) do
-        if child:IsA("BillboardGui") and child:GetAttribute("Dynamic") then
-            BillboardGui = child
-            break
-        end
-    end
-    
-    if Enabled then
-        if not BillboardGui then
-            BillboardGui = Instance.new("BillboardGui")
-            local TextLabel = Instance.new("TextLabel")
-            
-            BillboardGui.Name = HttpService:GenerateGUID(false):sub(1,7)
-            BillboardGui.Archivable = false
-            BillboardGui.Size = ItemInstance:IsA("Tool") and UDim2.new(1.5, 30, 0.75, 30) or UDim2.new(1.5,60,0.75,25)
-            BillboardGui.StudsOffset = ItemInstance:IsA("Tool") and Vector3.new(0,3,0) or Vector3.new(0,4,0)
-            BillboardGui.AlwaysOnTop = true
-            BillboardGui.ResetOnSpawn = false
-            BillboardGui.Adornee = TargetRoot
-            BillboardGui:SetAttribute("Dynamic", true)
-            table.insert(espBillboards, BillboardGui)
-            
-            TextLabel.Text = Settings.Text or "Unknown"
-            local H, S, V = Settings.Color:ToHSV()
-            TextLabel.TextColor3 = Color3.fromHSV(H, S, V * 1.1)
-            TextLabel.AnchorPoint = Vector2.new(0.5, 0.5)
-            TextLabel.Position = UDim2.fromScale(0.5, 0.5)
-            TextLabel.Size = UDim2.fromScale(1, 1)
-            TextLabel.BackgroundTransparency = 1
-            TextLabel.TextScaled = true
-            TextLabel.Parent = BillboardGui
-            
-            BillboardGui.Parent = TargetRoot
-            CheckTextDistance(TextLabel, TargetRoot, Settings)
-            
-            local Connection
-            Connection = workspace.CurrentCamera:GetPropertyChangedSignal("CameraSubject"):Connect(function()
-                if BillboardGui and BillboardGui.Parent then
-                    for i,v in TextLabel:GetChildren() do 
-                        pcall(function() v:Cancel() end) 
-                    end
-                    TextLabel.TextTransparency = 0.95
-                    TextLabel.TextStrokeTransparency = 0.95
-                else
-                    Connection:Disconnect()
-                end
-            end)
-            
-            BillboardGui.Destroying:Once(function()
-                if Connection then
-                    Connection:Disconnect()
-                end
-            end)
-            
-            BillboardGui.Parent:GetPropertyChangedSignal("Parent"):Once(function()
-                BillboardGui:Destroy()
-            end)
-        else
-            local H, S, V = Settings.Color:ToHSV()
-            local TextLabel = BillboardGui.TextLabel
-            if TextLabel then
-                TextLabel.TextColor3 = Color3.fromHSV(H, S, V * 1.1)
-                CheckTextDistance(TextLabel, TargetRoot, Settings)
+    local TextLabel = BillboardGui:FindFirstChildOfClass("TextLabel")
+    if TextLabel then
+        TextLabel.Text = Settings.Text or "Unknown"
+        local H, S, V = Settings.Color:ToHSV()
+        TextLabel.TextColor3 = Color3.fromHSV(H, S, V * 1.1)
+        
+        if TargetRoot and TargetRoot.Parent then
+            local dist = (Camera.CFrame.Position - TargetRoot.Position).Magnitude
+            local minD = Settings.MinDistance or 25
+            if dist > minD and dist < 1200 then
+                TextLabel.TextTransparency = 0
+                TextLabel.TextStrokeTransparency = 0
+            else
+                TextLabel.TextTransparency = 1
+                TextLabel.TextStrokeTransparency = 1
             end
         end
-    elseif BillboardGui then
-        BillboardGui:Destroy()
     end
 end
 
--- ESP Update Loop
+-- Удаление ESP для объекта
+local function RemoveESP(ItemInstance)
+    local entry = espTracked[ItemInstance]
+    if entry then
+        if entry.highlight then pcall(function() entry.highlight:Destroy() end) end
+        if entry.billboard then pcall(function() entry.billboard:Destroy() end) end
+        espTracked[ItemInstance] = nil
+    end
+end
+
+-- ESP Update Loop (постоянное обновление)
 task.spawn(function()
     while true do
         task.wait(0.1)
@@ -434,15 +374,16 @@ task.spawn(function()
                 return
             end
             
+            -- Собираем все живые объекты для отслеживания
+            local alive = {}
+            
             -- Player ESP
             for _, plr in ipairs(Players:GetPlayers()) do
-                task.spawn(function()
-                    if plr == player then return end
-                    local char = plr.Character
-                    if char and char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0 then
-                        local TargetRoot = char:FindFirstChild("HumanoidRootPart")
-                        if not TargetRoot then return end
-                        
+                if plr == player then continue end
+                local char = plr.Character
+                if char and char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0 then
+                    local TargetRoot = char:FindFirstChild("HumanoidRootPart")
+                    if TargetRoot then
                         local isKiller = false
                         local team = plr.Team
                         if team then
@@ -454,34 +395,27 @@ task.spawn(function()
                         
                         if isKiller and settings.KILLERS_ESP then
                             local color = ColorPresets[settings.KILLERS_COLOR] or ColorPresets.Red
-                            CreateDynamicHighlight(true, char, TargetRoot, {
-                                MaxDistance = 100,
-                                MinDistance = 10,
-                                Color = color
-                            })
-                            CreateText(true, char, TargetRoot, {
-                                MinDistance = 25,
-                                Text = plr.Name,
-                                Color = color
-                            })
+                            UpdateHighlight(char, TargetRoot, {MaxDistance = 100, MinDistance = 10, Color = color})
+                            if settings.SHOW_TEXT then
+                                UpdateText(char, TargetRoot, {MinDistance = 25, Text = plr.Name, Color = color})
+                            else
+                                RemoveESP(char)
+                            end
+                            alive[char] = true
                         elseif not isKiller and settings.SURVIVORS_ESP then
                             local color = ColorPresets[settings.SURVIVORS_COLOR] or ColorPresets.Green
-                            CreateDynamicHighlight(true, char, TargetRoot, {
-                                MaxDistance = 100,
-                                MinDistance = 10,
-                                Color = color
-                            })
-                            CreateText(true, char, TargetRoot, {
-                                MinDistance = 25,
-                                Text = plr.Name,
-                                Color = color
-                            })
+                            UpdateHighlight(char, TargetRoot, {MaxDistance = 100, MinDistance = 10, Color = color})
+                            if settings.SHOW_TEXT then
+                                UpdateText(char, TargetRoot, {MinDistance = 25, Text = plr.Name, Color = color})
+                            else
+                                RemoveESP(char)
+                            end
+                            alive[char] = true
                         else
-                            CreateDynamicHighlight(false, char)
-                            CreateText(false, char)
+                            RemoveESP(char)
                         end
                     end
-                end)
+                end
             end
             
             -- Generators ESP
@@ -492,21 +426,15 @@ task.spawn(function()
                         if string.find(name, "generator") or string.find(name, "gen") or obj:GetAttribute("Generator") then
                             local progress = obj:FindFirstChild("Progress")
                             if progress and progress.Value >= 100 then
-                                CreateDynamicHighlight(false, obj)
-                                CreateText(false, obj)
+                                RemoveESP(obj)
                             else
                                 local TargetRoot = obj:FindFirstChild("Main") or obj:FindFirstChild("HumanoidRootPart") or obj
                                 local color = ColorPresets[settings.GENERATORS_COLOR] or ColorPresets.Cyan
-                                CreateDynamicHighlight(true, obj, TargetRoot, {
-                                    MaxDistance = 100,
-                                    MinDistance = 12,
-                                    Color = color
-                                })
-                                CreateText(true, obj, TargetRoot, {
-                                    MinDistance = 25,
-                                    Text = obj.Name,
-                                    Color = color
-                                })
+                                UpdateHighlight(obj, TargetRoot, {MaxDistance = 100, MinDistance = 12, Color = color})
+                                if settings.SHOW_TEXT then
+                                    UpdateText(obj, TargetRoot, {MinDistance = 25, Text = obj.Name, Color = color})
+                                end
+                                alive[obj] = true
                             end
                         end
                     end
@@ -519,26 +447,29 @@ task.spawn(function()
                     if obj:IsA("Tool") and obj.Parent then
                         local TargetRoot = obj:FindFirstChildWhichIsA("BasePart") or obj
                         local color = ColorPresets[settings.ITEMS_COLOR] or ColorPresets.Gold
-                        CreateDynamicHighlight(true, obj, TargetRoot, {
-                            MaxDistance = 100,
-                            MinDistance = 12,
-                            Color = color
-                        })
-                        CreateText(true, obj, TargetRoot, {
-                            MinDistance = 25,
-                            Text = obj.Name,
-                            Color = color
-                        })
+                        UpdateHighlight(obj, TargetRoot, {MaxDistance = 100, MinDistance = 12, Color = color})
+                        if settings.SHOW_TEXT then
+                            UpdateText(obj, TargetRoot, {MinDistance = 25, Text = obj.Name, Color = color})
+                        end
+                        alive[obj] = true
                     end
+                end
+            end
+            
+            -- Очистка мёртвых ESP
+            for inst, _ in pairs(espTracked) do
+                if not alive[inst] or not inst.Parent then
+                    RemoveESP(inst)
                 end
             end
         end)
     end
 end)
 
+-- НЕ очищаем ESP при респавне — оно само обновится
 player.CharacterAdded:Connect(function(char)
     task.wait(0.5)
-    clearAllESP()
+    updateCharacterReferences()
 end)
 
 -- ==========================================
@@ -580,7 +511,9 @@ end
 -- ==========================================
 
 local function toggleClimb()
-    if flying or noClipActive or turboActive then return end
+    if flying or noClipActive or turboActive then
+        disableAllModes("climb")
+    end
     if not hrp or not humanoid then
         updateCharacterReferences()
         if not hrp or not humanoid then return end
@@ -588,6 +521,7 @@ local function toggleClimb()
     
     climbing = not climbing
     if climbing then
+        disableAllModes("climb")
         humanoid.AutoRotate = false
         humanoid.PlatformStand = true
         facing = hrp.CFrame.LookVector
@@ -616,6 +550,9 @@ end
 -- FLY
 -- ==========================================
 local function toggleFly()
+    if climbing or noClipActive or turboActive then
+        disableAllModes("fly")
+    end
     if not hrp or not humanoid then
         updateCharacterReferences()
         if not hrp or not humanoid then return end
@@ -623,9 +560,7 @@ local function toggleFly()
     
     flying = not flying
     if flying then
-        climbing = false
-        noClipActive = false
-        turboActive = false
+        disableAllModes("fly")
         humanoid.AutoRotate = false
         humanoid.PlatformStand = true
         if hrp then hrp.AssemblyLinearVelocity = Vector3.zero end
@@ -646,6 +581,9 @@ end
 -- NO CLIP
 -- ==========================================
 local function toggleNoClip()
+    if climbing or flying or turboActive then
+        disableAllModes("noclip")
+    end
     if not hrp or not humanoid then
         updateCharacterReferences()
         if not hrp or not humanoid then return end
@@ -654,14 +592,10 @@ local function toggleNoClip()
     noClipActive = not noClipActive
     
     if noClipActive then
-        climbing = false
-        flying = false
-        turboActive = false
-        
+        disableAllModes("noclip")
         humanoid.AutoRotate = true
         humanoid.PlatformStand = false
         
-        -- Удаление детектора
         local detector = character:FindFirstChild("NoclipDetector")
         if detector then detector:Destroy() end
         
@@ -690,6 +624,9 @@ end
 -- TURBO
 -- ==========================================
 local function toggleTurbo()
+    if climbing or flying or noClipActive then
+        disableAllModes("turbo")
+    end
     if not hrp or not humanoid then
         updateCharacterReferences()
         if not hrp or not humanoid then return end
@@ -698,9 +635,7 @@ local function toggleTurbo()
     turboActive = not turboActive
     
     if turboActive then
-        climbing = false
-        flying = false
-        noClipActive = false
+        disableAllModes("turbo")
         humanoid.AutoRotate = true
         humanoid.PlatformStand = false
         humanoid.WalkSpeed = 16
@@ -849,15 +784,12 @@ WallWalkTab:CreateParagraph({
     Text = "Нажми C для включения ходьбы по стенам"
 })
 
--- НОВЫЙ ТОГГЛ ДЛЯ БЕЗГРАНИЧНОГО РЕЖИМА
 WallWalkTab:CreateToggle({
     Name = "⚡ Безграничный режим (Unlimited)",
     CurrentValue = settings.UNLIMITED_MODE,
     Callback = function(Value)
         settings.UNLIMITED_MODE = Value
         SaveSettings(settings)
-        -- Обновляем все слайдеры с новыми максимальными значениями
-        -- GUI автоматически обновится при следующем открытии вкладки
         showNotification("⚡ Безграничный режим", Value and "Включен! Все лимиты увеличены до 400" or "Выключен")
     end
 })
@@ -991,7 +923,11 @@ TurboTab:CreateToggle({
     Callback = function(Value)
         settings.TURBO_ACTIVE = Value
         SaveSettings(settings)
-        if Value then toggleTurbo() else if turboActive then toggleTurbo() end end
+        if Value then
+            if not turboActive then toggleTurbo() end
+        else
+            if turboActive then toggleTurbo() end
+        end
     end
 })
 
@@ -1047,7 +983,11 @@ NoClipTab:CreateToggle({
     Name = "Activate No Clip",
     CurrentValue = false,
     Callback = function(Value)
-        if Value then toggleNoClip() else if noClipActive then toggleNoClip() end end
+        if Value then
+            if not noClipActive then toggleNoClip() end
+        else
+            if noClipActive then toggleNoClip() end
+        end
     end
 })
 
@@ -1072,22 +1012,10 @@ FlyTab:CreateToggle({
             updateCharacterReferences()
             if not hrp or not humanoid then return end
         end
-        flying = Value
-        if flying then
-            climbing = false
-            noClipActive = false
-            turboActive = false
-            humanoid.AutoRotate = false
-            humanoid.PlatformStand = true
-            if hrp then hrp.AssemblyLinearVelocity = Vector3.zero end
-            flyVelocity = Vector3.zero
-        else
-            humanoid.AutoRotate = true
-            humanoid.PlatformStand = false
-            if hrp then hrp.AssemblyLinearVelocity = Vector3.zero end
-            flyVelocity = Vector3.zero
-            gravityDir = Vector3.new(0, -1, 0)
-            upDir = Vector3.new(0, 1, 0)
+        if Value and not flying then
+            toggleFly()
+        elseif not Value and flying then
+            toggleFly()
         end
     end
 })
@@ -1403,8 +1331,8 @@ RunService.Heartbeat:Connect(function(dt)
     if move.Magnitude > 0 then move = move.Unit end
     
     local wallHit = move.Magnitude > 0 and Workspace:Raycast(pos, move * settings.WALL_RANGE, rayParams) or nil
-    local supportNear = Workspace:Raycast(pos, gravityDir * settings.SNAP_DISTANCE, rayParams) ~= nil
-    local supportFar = Workspace:Raycast(pos, gravityDir * (settings.SNAP_DISTANCE + settings.GROUND_MARGIN), rayParams) ~= nil
+    local supportNear = Workspace:Raycast(pos, gravityDir * 2, rayParams) ~= nil
+    local supportFar = Workspace:Raycast(pos, gravityDir * 3.5, rayParams) ~= nil
     
     if isGrounded then
         if not supportFar then isGrounded = false end
@@ -1485,9 +1413,10 @@ print("✅ Wall Walk (ходьба по стенам)")
 print("✅ Fly (полёт)")
 print("✅ No Clip (ноуклип)")
 print("✅ Turbo (турбо)")
-print("✅ ESP (подсветка)")
+print("✅ ESP (подсветка) - ВСЕГДА ОБНОВЛЯЕТСЯ")
 print("✅ Killer Walls Remover")
 print("✅ UNLIMITED MODE (безграничный режим)")
+print("✅ EXCLUSIVE MODE (только одна функция активна)")
 print("═══════════════════════════════════════════════════════")
 print("🔑 C - Wall Walk | V - Fly | B - No Clip | Z - Turbo")
 print("⚡ Включи безграничный режим в настройках Wall Walk!")
