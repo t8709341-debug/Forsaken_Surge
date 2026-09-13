@@ -5,7 +5,7 @@ local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-S
 -- ==========================================
 local Window = Luna:CreateWindow({
     Name = "Forsaken Surge",
-    Subtitle = "v9.0 | VELOCITY + TURBO + WALL WALK + ESP",
+    Subtitle = "v10.0 | VELOCITY + TURBO + WALL WALK + ESP PRO",
     LogoID = nil,
     LoadingEnabled = true,
     LoadingTitle = "Forsaken Surge",
@@ -85,7 +85,7 @@ local DefaultSettings = {
     FLY_AUTO_UP = false,
     FLY_HOVER = false,
     
-    -- ESP SETTINGS
+    -- ===== ESP SETTINGS =====
     ESP_ENABLED = true,
     KILLERS_ESP = true,
     KILLERS_COLOR = "Red",
@@ -97,11 +97,51 @@ local DefaultSettings = {
     ITEMS_COLOR = "Gold",
     SHOW_TEXT = true,
     
+    -- ESP ADVANCED
+    ESP_UPDATE_INTERVAL = 0.1,
+    ESP_MAX_DISTANCE = 500,
+    ESP_MIN_DISTANCE = 10,
+    ESP_FILL_TRANSPARENCY = 0.5,
+    ESP_OUTLINE_TRANSPARENCY = 0.3,
+    ESP_TEXT_SIZE = 14,
+    ESP_TEXT_MIN_DISTANCE = 25,
+    ESP_TEXT_MAX_DISTANCE = 1200,
+    ESP_SHOW_DISTANCE_TEXT = false,
+    ESP_BOX_ENABLED = false,
+    ESP_BOX_COLOR = "White",
+    ESP_BOX_TRANSPARENCY = 0.7,
+    ESP_TEAM_CHECK = true,
+    ESP_HIGHLIGHT_DEPTH_MODE = "AlwaysOnTop",
+    ESP_RENDER_DISTANCE_FADE = true,
+    ESP_FADE_MIN_ALPHA = 0.35,
+    ESP_TRACER_ENABLED = false,
+    ESP_TRACER_COLOR = "White",
+    ESP_TRACER_TRANSPARENCY = 0.5,
+    ESP_HEALTH_ENABLED = false,
+    ESP_HEALTH_COLOR = "Green",
+    
+    -- ESP COLOR CUSTOMIZATION
+    KILLERS_COLOR_CUSTOM = false,
+    KILLERS_COLOR_R = 255,
+    KILLERS_COLOR_G = 0,
+    KILLERS_COLOR_B = 0,
+    SURVIVORS_COLOR_CUSTOM = false,
+    SURVIVORS_COLOR_R = 0,
+    SURVIVORS_COLOR_G = 255,
+    SURVIVORS_COLOR_B = 0,
+    GENERATORS_COLOR_CUSTOM = false,
+    GENERATORS_COLOR_R = 0,
+    GENERATORS_COLOR_G = 255,
+    GENERATORS_COLOR_B = 255,
+    ITEMS_COLOR_CUSTOM = false,
+    ITEMS_COLOR_R = 255,
+    ITEMS_COLOR_G = 215,
+    ITEMS_COLOR_B = 0,
+    
     TURBO_ACTIVE = false,
     TURBO_SPEED = 30,
     TURBO_MODE = "Velocity",
     
-    -- НОВЫЕ НАСТРОЙКИ ДЛЯ БЕЗГРАНИЧНОСТИ
     UNLIMITED_MODE = false,
     WALK_SPEED_MAX = 50,
     SPRINT_MULTIPLIER_MAX = 3.0,
@@ -176,7 +216,7 @@ rayParams.FilterType = Enum.RaycastFilterType.Exclude
 rayParams.RespectCanCollide = true
 
 -- ==========================================
--- EXCLUSIVE MODE (только одна функция активна)
+-- EXCLUSIVE MODE
 -- ==========================================
 local function disableAllModes(except)
     if except ~= "climb" and climbing then
@@ -219,7 +259,7 @@ local function disableAllModes(except)
 end
 
 -- ==========================================
--- ESP SYSTEM
+-- ESP SYSTEM (EXPANDED)
 -- ==========================================
 
 local ColorPresets = {
@@ -231,8 +271,45 @@ local ColorPresets = {
     ["Blue"] = Color3.fromRGB(0,0,255),
     ["Cyan"] = Color3.fromRGB(0,255,255),
     ["Gold"] = Color3.fromRGB(255,215,0),
-    ["Orange"] = Color3.fromRGB(255,165,0)
+    ["Orange"] = Color3.fromRGB(255,165,0),
+    ["Pink"] = Color3.fromRGB(255,105,180),
+    ["Lime"] = Color3.fromRGB(50,205,50),
+    ["Yellow"] = Color3.fromRGB(255,255,0),
+    ["Magenta"] = Color3.fromRGB(255,0,255),
+    ["Brown"] = Color3.fromRGB(165,42,42),
+    ["Gray"] = Color3.fromRGB(128,128,128),
 }
+
+local function getColorFromSettings(colorType)
+    if colorType == "Killers" then
+        if settings.KILLERS_COLOR_CUSTOM then
+            return Color3.fromRGB(settings.KILLERS_COLOR_R, settings.KILLERS_COLOR_G, settings.KILLERS_COLOR_B)
+        end
+        return ColorPresets[settings.KILLERS_COLOR] or ColorPresets.Red
+    elseif colorType == "Survivors" then
+        if settings.SURVIVORS_COLOR_CUSTOM then
+            return Color3.fromRGB(settings.SURVIVORS_COLOR_R, settings.SURVIVORS_COLOR_G, settings.SURVIVORS_COLOR_B)
+        end
+        return ColorPresets[settings.SURVIVORS_COLOR] or ColorPresets.Green
+    elseif colorType == "Generators" then
+        if settings.GENERATORS_COLOR_CUSTOM then
+            return Color3.fromRGB(settings.GENERATORS_COLOR_R, settings.GENERATORS_COLOR_G, settings.GENERATORS_COLOR_B)
+        end
+        return ColorPresets[settings.GENERATORS_COLOR] or ColorPresets.Cyan
+    elseif colorType == "Items" then
+        if settings.ITEMS_COLOR_CUSTOM then
+            return Color3.fromRGB(settings.ITEMS_COLOR_R, settings.ITEMS_COLOR_G, settings.ITEMS_COLOR_B)
+        end
+        return ColorPresets[settings.ITEMS_COLOR] or ColorPresets.Gold
+    elseif colorType == "Box" then
+        return ColorPresets[settings.ESP_BOX_COLOR] or ColorPresets.White
+    elseif colorType == "Tracer" then
+        return ColorPresets[settings.ESP_TRACER_COLOR] or ColorPresets.White
+    elseif colorType == "Health" then
+        return ColorPresets[settings.ESP_HEALTH_COLOR] or ColorPresets.Green
+    end
+    return Color3.new(1,1,1)
+end
 
 local espFolder = Instance.new("Folder")
 espFolder.Name = "ForsakenSurgeESP"
@@ -240,7 +317,9 @@ espFolder.Parent = player:WaitForChild("PlayerGui")
 
 local espHighlights = {}
 local espBillboards = {}
-local espTracked = {} -- [instance] = {highlight=..., billboard=...}
+local espBoxes = {}
+local espTracers = {}
+local espTracked = {}
 
 local function clearAllESP()
     for _, hl in ipairs(espHighlights) do
@@ -251,14 +330,22 @@ local function clearAllESP()
         pcall(function() bg:Destroy() end)
     end
     espBillboards = {}
+    for _, box in ipairs(espBoxes) do
+        pcall(function() box:Destroy() end)
+    end
+    espBoxes = {}
+    for _, tr in ipairs(espTracers) do
+        pcall(function() tr:Destroy() end)
+    end
+    espTracers = {}
     espTracked = {}
 end
 
--- Создание/обновление Highlight с постоянным обновлением
+-- Создание/обновление Highlight
 local function UpdateHighlight(ItemInstance, TargetRoot, Settings)
     Settings = type(Settings) == "table" and Settings or {
-        MaxDistance = 100,
-        MinDistance = 10,
+        MaxDistance = settings.ESP_MAX_DISTANCE,
+        MinDistance = settings.ESP_MIN_DISTANCE,
         Color = Color3.new(1,1,1)
     }
     
@@ -272,34 +359,37 @@ local function UpdateHighlight(ItemInstance, TargetRoot, Settings)
         Highlight:SetAttribute("Dynamic", true)
         Highlight.Parent = ItemInstance
         Highlight.Adornee = ItemInstance
-        Highlight.FillTransparency = 0
-        Highlight.OutlineTransparency = 0
+        Highlight.DepthMode = Enum.HighlightDepthMode[settings.ESP_HIGHLIGHT_DEPTH_MODE] or Enum.HighlightDepthMode.AlwaysOnTop
         table.insert(espHighlights, Highlight)
         
         if not espTracked[ItemInstance] then espTracked[ItemInstance] = {} end
         espTracked[ItemInstance].highlight = Highlight
     end
     
-    -- Постоянное обновление цвета
+    local baseFillTransparency = 1 - settings.ESP_FILL_TRANSPARENCY
+    local baseOutlineTransparency = 1 - settings.ESP_OUTLINE_TRANSPARENCY
+    
     local H, S, V = Settings.Color:ToHSV()
     Highlight.FillColor = Color3.fromHSV(H, S, V * 0.8)
     Highlight.OutlineColor = Color3.fromHSV(H, S, V * 1.1)
     
-    -- Постоянное обновление прозрачности по дистанции
-    if TargetRoot and TargetRoot.Parent then
+    if settings.ESP_RENDER_DISTANCE_FADE and TargetRoot and TargetRoot.Parent then
         local dist = (Camera.CFrame.Position - TargetRoot.Position).Magnitude
-        local minD = Settings.MinDistance or 10
-        local maxD = Settings.MaxDistance or 100
-        local alpha = math.clamp(1 - math.clamp((dist - minD) / math.max(maxD - minD, 0.001), 0, 1), 0.35, 1)
-        Highlight.FillTransparency = math.clamp(alpha + 0.05, 0, 1)
-        Highlight.OutlineTransparency = alpha <= 0.95 and alpha - 0.05 or alpha
+        local minD = Settings.MinDistance or settings.ESP_MIN_DISTANCE
+        local maxD = Settings.MaxDistance or settings.ESP_MAX_DISTANCE
+        local alpha = math.clamp(1 - math.clamp((dist - minD) / math.max(maxD - minD, 0.001), 0, 1), settings.ESP_FADE_MIN_ALPHA, 1)
+        Highlight.FillTransparency = math.clamp(alpha + (1 - settings.ESP_FILL_TRANSPARENCY), 0, 1)
+        Highlight.OutlineTransparency = math.clamp(alpha + (1 - settings.ESP_OUTLINE_TRANSPARENCY), 0, 1)
+    else
+        Highlight.FillTransparency = baseFillTransparency
+        Highlight.OutlineTransparency = baseOutlineTransparency
     end
 end
 
--- Создание/обновление текста с постоянным обновлением
+-- Создание/обновление текста
 local function UpdateText(ItemInstance, TargetRoot, Settings)
     Settings = type(Settings) == "table" and Settings or {
-        MinDistance = 25,
+        MinDistance = settings.ESP_TEXT_MIN_DISTANCE,
         Color = Color3.new(1,1,1),
         Text = "Unknown"
     }
@@ -326,6 +416,9 @@ local function UpdateText(ItemInstance, TargetRoot, Settings)
         TextLabel.Size = UDim2.fromScale(1, 1)
         TextLabel.BackgroundTransparency = 1
         TextLabel.TextScaled = true
+        TextLabel.Font = Enum.Font.GothamBold
+        TextLabel.TextStrokeTransparency = 0
+        TextLabel.TextStrokeColor3 = Color3.new(0,0,0)
         TextLabel.Parent = BillboardGui
         
         BillboardGui.Parent = TargetRoot
@@ -336,14 +429,21 @@ local function UpdateText(ItemInstance, TargetRoot, Settings)
     
     local TextLabel = BillboardGui:FindFirstChildOfClass("TextLabel")
     if TextLabel then
-        TextLabel.Text = Settings.Text or "Unknown"
+        local displayText = Settings.Text or "Unknown"
+        if settings.ESP_SHOW_DISTANCE_TEXT and TargetRoot and TargetRoot.Parent then
+            local dist = (Camera.CFrame.Position - TargetRoot.Position).Magnitude
+            displayText = displayText .. " [" .. math.floor(dist) .. "m]"
+        end
+        TextLabel.Text = displayText
+        TextLabel.TextSize = settings.ESP_TEXT_SIZE
         local H, S, V = Settings.Color:ToHSV()
         TextLabel.TextColor3 = Color3.fromHSV(H, S, V * 1.1)
         
         if TargetRoot and TargetRoot.Parent then
             local dist = (Camera.CFrame.Position - TargetRoot.Position).Magnitude
-            local minD = Settings.MinDistance or 25
-            if dist > minD and dist < 1200 then
+            local minD = Settings.MinDistance or settings.ESP_TEXT_MIN_DISTANCE
+            local maxD = settings.ESP_TEXT_MAX_DISTANCE
+            if dist > minD and dist < maxD then
                 TextLabel.TextTransparency = 0
                 TextLabel.TextStrokeTransparency = 0
             else
@@ -354,27 +454,94 @@ local function UpdateText(ItemInstance, TargetRoot, Settings)
     end
 end
 
+-- Создание/обновление Box ESP
+local function UpdateBox(ItemInstance, TargetRoot, Settings)
+    Settings = type(Settings) == "table" and Settings or {
+        Color = Color3.new(1,1,1)
+    }
+    
+    local entry = espTracked[ItemInstance]
+    local Box = entry and entry.box
+    
+    if not Box or not Box.Parent then
+        Box = Instance.new("BoxHandleAdornment")
+        Box.Name = HttpService:GenerateGUID(false):sub(1,7)
+        Box.Archivable = false
+        Box.Adornee = TargetRoot
+        Box.AlwaysOnTop = true
+        Box.ZIndex = 5
+        Box.Size = TargetRoot:IsA("BasePart") and TargetRoot.Size or Vector3.new(2,2,2)
+        Box.Transparency = settings.ESP_BOX_TRANSPARENCY
+        Box.Color3 = Settings.Color
+        Box.Parent = TargetRoot
+        table.insert(espBoxes, Box)
+        
+        if not espTracked[ItemInstance] then espTracked[ItemInstance] = {} end
+        espTracked[ItemInstance].box = Box
+    end
+    
+    if Box and TargetRoot then
+        Box.Size = TargetRoot:IsA("BasePart") and TargetRoot.Size or Vector3.new(2,2,2)
+        Box.Color3 = Settings.Color
+        Box.Transparency = settings.ESP_BOX_TRANSPARENCY
+    end
+end
+
+-- Создание/обновление Tracer (линия от низа экрана к цели)
+local function UpdateTracer(ItemInstance, TargetRoot, Settings)
+    Settings = type(Settings) == "table" and Settings or {
+        Color = Color3.new(1,1,1)
+    }
+    
+    local entry = espTracked[ItemInstance]
+    local Tracer = entry and entry.tracer
+    
+    if not Tracer or not Tracer.Parent then
+        Tracer = Instance.new("LineHandleAdornment")
+        Tracer.Name = HttpService:GenerateGUID(false):sub(1,7)
+        Tracer.Archivable = false
+        Tracer.Adornee = TargetRoot
+        Tracer.AlwaysOnTop = true
+        Tracer.ZIndex = 5
+        Tracer.Thickness = 2
+        Tracer.Transparency = settings.ESP_TRACER_TRANSPARENCY
+        Tracer.Color3 = Settings.Color
+        Tracer.Length = 0
+        Tracer.Parent = TargetRoot
+        table.insert(espTracers, Tracer)
+        
+        if not espTracked[ItemInstance] then espTracked[ItemInstance] = {} end
+        espTracked[ItemInstance].tracer = Tracer
+    end
+    
+    if Tracer and TargetRoot then
+        Tracer.Color3 = Settings.Color
+        Tracer.Transparency = settings.ESP_TRACER_TRANSPARENCY
+    end
+end
+
 -- Удаление ESP для объекта
 local function RemoveESP(ItemInstance)
     local entry = espTracked[ItemInstance]
     if entry then
         if entry.highlight then pcall(function() entry.highlight:Destroy() end) end
         if entry.billboard then pcall(function() entry.billboard:Destroy() end) end
+        if entry.box then pcall(function() entry.box:Destroy() end) end
+        if entry.tracer then pcall(function() entry.tracer:Destroy() end) end
         espTracked[ItemInstance] = nil
     end
 end
 
--- ESP Update Loop (постоянное обновление)
+-- ESP Update Loop (с настраиваемым интервалом)
 task.spawn(function()
     while true do
-        task.wait(0.1)
+        task.wait(settings.ESP_UPDATE_INTERVAL)
         pcall(function()
             if not settings.ESP_ENABLED then
                 clearAllESP()
                 return
             end
             
-            -- Собираем все живые объекты для отслеживания
             local alive = {}
             
             -- Player ESP
@@ -386,7 +553,7 @@ task.spawn(function()
                     if TargetRoot then
                         local isKiller = false
                         local team = plr.Team
-                        if team then
+                        if settings.ESP_TEAM_CHECK and team then
                             local teamName = team.Name:lower()
                             if teamName:find("killer") or teamName:find("monster") or teamName:find("enemy") then
                                 isKiller = true
@@ -394,21 +561,33 @@ task.spawn(function()
                         end
                         
                         if isKiller and settings.KILLERS_ESP then
-                            local color = ColorPresets[settings.KILLERS_COLOR] or ColorPresets.Red
-                            UpdateHighlight(char, TargetRoot, {MaxDistance = 100, MinDistance = 10, Color = color})
+                            local color = getColorFromSettings("Killers")
+                            UpdateHighlight(char, TargetRoot, {MaxDistance = settings.ESP_MAX_DISTANCE, MinDistance = settings.ESP_MIN_DISTANCE, Color = color})
                             if settings.SHOW_TEXT then
-                                UpdateText(char, TargetRoot, {MinDistance = 25, Text = plr.Name, Color = color})
+                                UpdateText(char, TargetRoot, {MinDistance = settings.ESP_TEXT_MIN_DISTANCE, Text = plr.Name, Color = color})
                             else
                                 RemoveESP(char)
                             end
+                            if settings.ESP_BOX_ENABLED then
+                                UpdateBox(char, TargetRoot, {Color = getColorFromSettings("Box")})
+                            end
+                            if settings.ESP_TRACER_ENABLED then
+                                UpdateTracer(char, TargetRoot, {Color = getColorFromSettings("Tracer")})
+                            end
                             alive[char] = true
                         elseif not isKiller and settings.SURVIVORS_ESP then
-                            local color = ColorPresets[settings.SURVIVORS_COLOR] or ColorPresets.Green
-                            UpdateHighlight(char, TargetRoot, {MaxDistance = 100, MinDistance = 10, Color = color})
+                            local color = getColorFromSettings("Survivors")
+                            UpdateHighlight(char, TargetRoot, {MaxDistance = settings.ESP_MAX_DISTANCE, MinDistance = settings.ESP_MIN_DISTANCE, Color = color})
                             if settings.SHOW_TEXT then
-                                UpdateText(char, TargetRoot, {MinDistance = 25, Text = plr.Name, Color = color})
+                                UpdateText(char, TargetRoot, {MinDistance = settings.ESP_TEXT_MIN_DISTANCE, Text = plr.Name, Color = color})
                             else
                                 RemoveESP(char)
+                            end
+                            if settings.ESP_BOX_ENABLED then
+                                UpdateBox(char, TargetRoot, {Color = getColorFromSettings("Box")})
+                            end
+                            if settings.ESP_TRACER_ENABLED then
+                                UpdateTracer(char, TargetRoot, {Color = getColorFromSettings("Tracer")})
                             end
                             alive[char] = true
                         else
@@ -429,10 +608,13 @@ task.spawn(function()
                                 RemoveESP(obj)
                             else
                                 local TargetRoot = obj:FindFirstChild("Main") or obj:FindFirstChild("HumanoidRootPart") or obj
-                                local color = ColorPresets[settings.GENERATORS_COLOR] or ColorPresets.Cyan
-                                UpdateHighlight(obj, TargetRoot, {MaxDistance = 100, MinDistance = 12, Color = color})
+                                local color = getColorFromSettings("Generators")
+                                UpdateHighlight(obj, TargetRoot, {MaxDistance = settings.ESP_MAX_DISTANCE, MinDistance = settings.ESP_MIN_DISTANCE, Color = color})
                                 if settings.SHOW_TEXT then
-                                    UpdateText(obj, TargetRoot, {MinDistance = 25, Text = obj.Name, Color = color})
+                                    UpdateText(obj, TargetRoot, {MinDistance = settings.ESP_TEXT_MIN_DISTANCE, Text = obj.Name, Color = color})
+                                end
+                                if settings.ESP_BOX_ENABLED then
+                                    UpdateBox(obj, TargetRoot, {Color = getColorFromSettings("Box")})
                                 end
                                 alive[obj] = true
                             end
@@ -446,10 +628,13 @@ task.spawn(function()
                 for _, obj in ipairs(Workspace:GetDescendants()) do
                     if obj:IsA("Tool") and obj.Parent then
                         local TargetRoot = obj:FindFirstChildWhichIsA("BasePart") or obj
-                        local color = ColorPresets[settings.ITEMS_COLOR] or ColorPresets.Gold
-                        UpdateHighlight(obj, TargetRoot, {MaxDistance = 100, MinDistance = 12, Color = color})
+                        local color = getColorFromSettings("Items")
+                        UpdateHighlight(obj, TargetRoot, {MaxDistance = settings.ESP_MAX_DISTANCE, MinDistance = settings.ESP_MIN_DISTANCE, Color = color})
                         if settings.SHOW_TEXT then
-                            UpdateText(obj, TargetRoot, {MinDistance = 25, Text = obj.Name, Color = color})
+                            UpdateText(obj, TargetRoot, {MinDistance = settings.ESP_TEXT_MIN_DISTANCE, Text = obj.Name, Color = color})
+                        end
+                        if settings.ESP_BOX_ENABLED then
+                            UpdateBox(obj, TargetRoot, {Color = getColorFromSettings("Box")})
                         end
                         alive[obj] = true
                     end
@@ -466,7 +651,6 @@ task.spawn(function()
     end
 end)
 
--- НЕ очищаем ESP при респавне — оно само обновится
 player.CharacterAdded:Connect(function(char)
     task.wait(0.5)
     updateCharacterReferences()
@@ -669,8 +853,7 @@ task.spawn(function()
             if moveDir.Magnitude > 0 then moveDir = moveDir.Unit end
             
             local speed = settings.TURBO_SPEED
-            local mode = settings.TURBO_MODE
-            
+            local mode = settings.TURBO_MODE            
             if mode == "Velocity" then
                 hrp.AssemblyLinearVelocity = moveDir * speed
                 hrp.AssemblyAngularVelocity = Vector3.zero
@@ -790,7 +973,7 @@ WallWalkTab:CreateToggle({
     Callback = function(Value)
         settings.UNLIMITED_MODE = Value
         SaveSettings(settings)
-        showNotification("⚡ Безграничный режим", Value and "Включен! Все лимиты увеличены до 400" or "Выключен")
+        showNotification("⚡ Безграничный режим", Value and "Включен! Все лимиты увеличены" or "Выключен")
     end
 })
 
@@ -900,6 +1083,505 @@ WallWalkTab:CreateToggle({
     CurrentValue = settings.AUTO_RESET_ON_FALL,
     Callback = function(Value)
         settings.AUTO_RESET_ON_FALL = Value
+        SaveSettings(settings)
+    end
+})
+
+-- ==========================================
+-- ESP TAB (EXPANDED)
+-- ==========================================
+local ESPTab = Window:CreateTab({
+    Name = "ESP",
+    Icon = "visibility",
+    ImageSource = "Material",
+    ShowTitle = true
+})
+
+ESPTab:CreateParagraph({
+    Title = "ADVANCED ESP PRO",
+    Text = "Полная настройка подсветки, интервалов и стилей"
+})
+
+ESPTab:CreateToggle({
+    Name = "Enable ESP",
+    CurrentValue = settings.ESP_ENABLED,
+    Callback = function(Value)
+        settings.ESP_ENABLED = Value
+        SaveSettings(settings)
+        if not Value then clearAllESP() end
+    end
+})
+
+ESPTab:CreateLabel({ Text = "⚙️ ОБНОВЛЕНИЕ И ДАЛЬНОСТЬ", Style = 1 })
+
+ESPTab:CreateSlider({
+    Name = "Интервал обновления ESP (сек)",
+    Range = {0.01, 1.0},
+    Increment = 0.01,
+    CurrentValue = settings.ESP_UPDATE_INTERVAL,
+    Callback = function(Value)
+        settings.ESP_UPDATE_INTERVAL = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateSlider({
+    Name = "Максимальная дистанция ESP",
+    Range = {50, 2000},
+    Increment = 10,
+    CurrentValue = settings.ESP_MAX_DISTANCE,
+    Callback = function(Value)
+        settings.ESP_MAX_DISTANCE = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateSlider({
+    Name = "Минимальная дистанция (полная яркость)",
+    Range = {1, 100},
+    Increment = 1,
+    CurrentValue = settings.ESP_MIN_DISTANCE,
+    Callback = function(Value)
+        settings.ESP_MIN_DISTANCE = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateToggle({
+    Name = "Затухание по дистанции",
+    CurrentValue = settings.ESP_RENDER_DISTANCE_FADE,
+    Callback = function(Value)
+        settings.ESP_RENDER_DISTANCE_FADE = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateSlider({
+    Name = "Минимальная яркость (альфа)",
+    Range = {0.0, 1.0},
+    Increment = 0.05,
+    CurrentValue = settings.ESP_FADE_MIN_ALPHA,
+    Callback = function(Value)
+        settings.ESP_FADE_MIN_ALPHA = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateLabel({ Text = "🎨 ПРОЗРАЧНОСТЬ", Style = 1 })
+
+ESPTab:CreateSlider({
+    Name = "Прозрачность заливки (Fill)",
+    Range = {0.0, 1.0},
+    Increment = 0.05,
+    CurrentValue = settings.ESP_FILL_TRANSPARENCY,
+    Callback = function(Value)
+        settings.ESP_FILL_TRANSPARENCY = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateSlider({
+    Name = "Прозрачность контура (Outline)",
+    Range = {0.0, 1.0},
+    Increment = 0.05,
+    CurrentValue = settings.ESP_OUTLINE_TRANSPARENCY,
+    Callback = function(Value)
+        settings.ESP_OUTLINE_TRANSPARENCY = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateLabel({ Text = "📝 ТЕКСТ", Style = 1 })
+
+ESPTab:CreateToggle({
+    Name = "Показывать имена",
+    CurrentValue = settings.SHOW_TEXT,
+    Callback = function(Value)
+        settings.SHOW_TEXT = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateSlider({
+    Name = "Размер текста",
+    Range = {8, 48},
+    Increment = 1,
+    CurrentValue = settings.ESP_TEXT_SIZE,
+    Callback = function(Value)
+        settings.ESP_TEXT_SIZE = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateSlider({
+    Name = "Мин. дистанция текста",
+    Range = {1, 100},
+    Increment = 1,
+    CurrentValue = settings.ESP_TEXT_MIN_DISTANCE,
+    Callback = function(Value)
+        settings.ESP_TEXT_MIN_DISTANCE = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateSlider({
+    Name = "Макс. дистанция текста",
+    Range = {100, 5000},
+    Increment = 50,
+    CurrentValue = settings.ESP_TEXT_MAX_DISTANCE,
+    Callback = function(Value)
+        settings.ESP_TEXT_MAX_DISTANCE = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateToggle({
+    Name = "Показывать дистанцию в тексте",
+    CurrentValue = settings.ESP_SHOW_DISTANCE_TEXT,
+    Callback = function(Value)
+        settings.ESP_SHOW_DISTANCE_TEXT = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateLabel({ Text = "📦 BOX ESP", Style = 1 })
+
+ESPTab:CreateToggle({
+    Name = "Включить Box ESP",
+    CurrentValue = settings.ESP_BOX_ENABLED,
+    Callback = function(Value)
+        settings.ESP_BOX_ENABLED = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateDropdown({
+    Name = "Цвет Box",
+    Options = {"White", "Red", "Green", "Blue", "Cyan", "Gold", "Purple", "Orange", "Pink", "Lime", "Magenta", "Yellow"},
+    CurrentOption = {settings.ESP_BOX_COLOR or "White"},
+    MultipleOptions = false,
+    Callback = function(Options)
+        settings.ESP_BOX_COLOR = Options
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateSlider({
+    Name = "Прозрачность Box",
+    Range = {0.0, 1.0},
+    Increment = 0.05,
+    CurrentValue = settings.ESP_BOX_TRANSPARENCY,
+    Callback = function(Value)
+        settings.ESP_BOX_TRANSPARENCY = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateLabel({ Text = "📏 TRACER", Style = 1 })
+
+ESPTab:CreateToggle({
+    Name = "Включить Tracer",
+    CurrentValue = settings.ESP_TRACER_ENABLED,
+    Callback = function(Value)
+        settings.ESP_TRACER_ENABLED = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateDropdown({
+    Name = "Цвет Tracer",
+    Options = {"White", "Red", "Green", "Blue", "Cyan", "Gold", "Purple", "Orange", "Pink", "Lime", "Magenta", "Yellow"},
+    CurrentOption = {settings.ESP_TRACER_COLOR or "White"},
+    MultipleOptions = false,
+    Callback = function(Options)
+        settings.ESP_TRACER_COLOR = Options
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateSlider({
+    Name = "Прозрачность Tracer",
+    Range = {0.0, 1.0},
+    Increment = 0.05,
+    CurrentValue = settings.ESP_TRACER_TRANSPARENCY,
+    Callback = function(Value)
+        settings.ESP_TRACER_TRANSPARENCY = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateLabel({ Text = "🎯 ФИЛЬТРЫ", Style = 1 })
+
+ESPTab:CreateToggle({
+    Name = "Проверять команду (Team Check)",
+    CurrentValue = settings.ESP_TEAM_CHECK,
+    Callback = function(Value)
+        settings.ESP_TEAM_CHECK = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateLabel({ Text = "👥 ИГРОКИ", Style = 1 })
+
+ESPTab:CreateToggle({
+    Name = "Killers ESP",
+    CurrentValue = settings.KILLERS_ESP,
+    Callback = function(Value)
+        settings.KILLERS_ESP = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateDropdown({
+    Name = "Killers Color",
+    Options = {"Red", "Orange", "Purple", "Gold", "White", "Pink", "Magenta", "Yellow"},
+    CurrentOption = {settings.KILLERS_COLOR or "Red"},
+    MultipleOptions = false,
+    Callback = function(Options)
+        settings.KILLERS_COLOR = Options
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateToggle({
+    Name = "Killers Custom Color",
+    CurrentValue = settings.KILLERS_COLOR_CUSTOM,
+    Callback = function(Value)
+        settings.KILLERS_COLOR_CUSTOM = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateSlider({
+    Name = "Killers R",
+    Range = {0, 255},
+    Increment = 1,
+    CurrentValue = settings.KILLERS_COLOR_R,
+    Callback = function(Value)
+        settings.KILLERS_COLOR_R = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateSlider({
+    Name = "Killers G",
+    Range = {0, 255},
+    Increment = 1,
+    CurrentValue = settings.KILLERS_COLOR_G,
+    Callback = function(Value)
+        settings.KILLERS_COLOR_G = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateSlider({
+    Name = "Killers B",
+    Range = {0, 255},
+    Increment = 1,
+    CurrentValue = settings.KILLERS_COLOR_B,
+    Callback = function(Value)
+        settings.KILLERS_COLOR_B = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateToggle({
+    Name = "Survivors ESP",
+    CurrentValue = settings.SURVIVORS_ESP,
+    Callback = function(Value)
+        settings.SURVIVORS_ESP = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateDropdown({
+    Name = "Survivors Color",
+    Options = {"Green", "Orange", "Purple", "Gold", "White", "Cyan", "Lime", "Teal"},
+    CurrentOption = {settings.SURVIVORS_COLOR or "Green"},
+    MultipleOptions = false,
+    Callback = function(Options)
+        settings.SURVIVORS_COLOR = Options
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateToggle({
+    Name = "Survivors Custom Color",
+    CurrentValue = settings.SURVIVORS_COLOR_CUSTOM,
+    Callback = function(Value)
+        settings.SURVIVORS_COLOR_CUSTOM = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateSlider({
+    Name = "Survivors R",
+    Range = {0, 255},
+    Increment = 1,
+    CurrentValue = settings.SURVIVORS_COLOR_R,
+    Callback = function(Value)
+        settings.SURVIVORS_COLOR_R = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateSlider({
+    Name = "Survivors G",
+    Range = {0, 255},
+    Increment = 1,
+    CurrentValue = settings.SURVIVORS_COLOR_G,
+    Callback = function(Value)
+        settings.SURVIVORS_COLOR_G = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateSlider({
+    Name = "Survivors B",
+    Range = {0, 255},
+    Increment = 1,
+    CurrentValue = settings.SURVIVORS_COLOR_B,
+    Callback = function(Value)
+        settings.SURVIVORS_COLOR_B = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateLabel({ Text = "🏭 ОБЪЕКТЫ", Style = 1 })
+
+ESPTab:CreateToggle({
+    Name = "Generators ESP",
+    CurrentValue = settings.GENERATORS_ESP,
+    Callback = function(Value)
+        settings.GENERATORS_ESP = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateDropdown({
+    Name = "Generators Color",
+    Options = {"Cyan", "Blue", "Green", "Orange", "Purple", "Gold", "Teal", "White"},
+    CurrentOption = {settings.GENERATORS_COLOR or "Cyan"},
+    MultipleOptions = false,
+    Callback = function(Options)
+        settings.GENERATORS_COLOR = Options
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateToggle({
+    Name = "Generators Custom Color",
+    CurrentValue = settings.GENERATORS_COLOR_CUSTOM,
+    Callback = function(Value)
+        settings.GENERATORS_COLOR_CUSTOM = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateSlider({
+    Name = "Generators R",
+    Range = {0, 255},
+    Increment = 1,
+    CurrentValue = settings.GENERATORS_COLOR_R,
+    Callback = function(Value)
+        settings.GENERATORS_COLOR_R = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateSlider({
+    Name = "Generators G",
+    Range = {0, 255},
+    Increment = 1,
+    CurrentValue = settings.GENERATORS_COLOR_G,
+    Callback = function(Value)
+        settings.GENERATORS_COLOR_G = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateSlider({
+    Name = "Generators B",
+    Range = {0, 255},
+    Increment = 1,
+    CurrentValue = settings.GENERATORS_COLOR_B,
+    Callback = function(Value)
+        settings.GENERATORS_COLOR_B = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateToggle({
+    Name = "Items ESP",
+    CurrentValue = settings.ITEMS_ESP,
+    Callback = function(Value)
+        settings.ITEMS_ESP = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateDropdown({
+    Name = "Items Color",
+    Options = {"Gold", "Cyan", "Purple", "White", "Teal", "Orange", "Pink", "Yellow"},
+    CurrentOption = {settings.ITEMS_COLOR or "Gold"},
+    MultipleOptions = false,
+    Callback = function(Options)
+        settings.ITEMS_COLOR = Options
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateToggle({
+    Name = "Items Custom Color",
+    CurrentValue = settings.ITEMS_COLOR_CUSTOM,
+    Callback = function(Value)
+        settings.ITEMS_COLOR_CUSTOM = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateSlider({
+    Name = "Items R",
+    Range = {0, 255},
+    Increment = 1,
+    CurrentValue = settings.ITEMS_COLOR_R,
+    Callback = function(Value)
+        settings.ITEMS_COLOR_R = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateSlider({
+    Name = "Items G",
+    Range = {0, 255},
+    Increment = 1,
+    CurrentValue = settings.ITEMS_COLOR_G,
+    Callback = function(Value)
+        settings.ITEMS_COLOR_G = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateSlider({
+    Name = "Items B",
+    Range = {0, 255},
+    Increment = 1,
+    CurrentValue = settings.ITEMS_COLOR_B,
+    Callback = function(Value)
+        settings.ITEMS_COLOR_B = Value
+        SaveSettings(settings)
+    end
+})
+
+ESPTab:CreateLabel({ Text = "🔧 ГЛУБИНА ОТРИСОВКИ", Style = 1 })
+
+ESPTab:CreateDropdown({
+    Name = "Режим глубины Highlight",
+    Options = {"AlwaysOnTop", "Occluded"},
+    CurrentOption = {settings.ESP_HIGHLIGHT_DEPTH_MODE or "AlwaysOnTop"},
+    MultipleOptions = false,
+    Callback = function(Options)
+        settings.ESP_HIGHLIGHT_DEPTH_MODE = Options
         SaveSettings(settings)
     end
 })
@@ -1051,122 +1733,6 @@ FlyTab:CreateToggle({
     end
 })
 
--- ESP TAB
-local ESPTab = Window:CreateTab({
-    Name = "ESP",
-    Icon = "visibility",
-    ImageSource = "Material",
-    ShowTitle = true
-})
-
-ESPTab:CreateParagraph({
-    Title = "ADVANCED ESP",
-    Text = "Full dynamic highlighting with distance fading"
-})
-
-ESPTab:CreateToggle({
-    Name = "Enable ESP",
-    CurrentValue = settings.ESP_ENABLED,
-    Callback = function(Value)
-        settings.ESP_ENABLED = Value
-        SaveSettings(settings)
-        if not Value then clearAllESP() end
-    end
-})
-
-ESPTab:CreateLabel({ Text = "PLAYERS", Style = 1 })
-
-ESPTab:CreateToggle({
-    Name = "Killers ESP",
-    CurrentValue = settings.KILLERS_ESP,
-    Callback = function(Value)
-        settings.KILLERS_ESP = Value
-        SaveSettings(settings)
-    end
-})
-
-ESPTab:CreateDropdown({
-    Name = "Killers Color",
-    Options = {"Red", "Orange", "Purple", "Gold", "White"},
-    CurrentOption = {settings.KILLERS_COLOR or "Red"},
-    MultipleOptions = false,
-    Callback = function(Options)
-        settings.KILLERS_COLOR = Options
-        SaveSettings(settings)
-    end
-})
-
-ESPTab:CreateToggle({
-    Name = "Survivors ESP",
-    CurrentValue = settings.SURVIVORS_ESP,
-    Callback = function(Value)
-        settings.SURVIVORS_ESP = Value
-        SaveSettings(settings)
-    end
-})
-
-ESPTab:CreateDropdown({
-    Name = "Survivors Color",
-    Options = {"Green", "Orange", "Purple", "Gold", "White"},
-    CurrentOption = {settings.SURVIVORS_COLOR or "Green"},
-    MultipleOptions = false,
-    Callback = function(Options)
-        settings.SURVIVORS_COLOR = Options
-        SaveSettings(settings)
-    end
-})
-
-ESPTab:CreateLabel({ Text = "OBJECTS", Style = 1 })
-
-ESPTab:CreateToggle({
-    Name = "Generators ESP",
-    CurrentValue = settings.GENERATORS_ESP,
-    Callback = function(Value)
-        settings.GENERATORS_ESP = Value
-        SaveSettings(settings)
-    end
-})
-
-ESPTab:CreateDropdown({
-    Name = "Generators Color",
-    Options = {"Cyan", "Blue", "Green", "Orange", "Purple", "Gold"},
-    CurrentOption = {settings.GENERATORS_COLOR or "Cyan"},
-    MultipleOptions = false,
-    Callback = function(Options)
-        settings.GENERATORS_COLOR = Options
-        SaveSettings(settings)
-    end
-})
-
-ESPTab:CreateToggle({
-    Name = "Items ESP",
-    CurrentValue = settings.ITEMS_ESP,
-    Callback = function(Value)
-        settings.ITEMS_ESP = Value
-        SaveSettings(settings)
-    end
-})
-
-ESPTab:CreateDropdown({
-    Name = "Items Color",
-    Options = {"Gold", "Cyan", "Purple", "White", "Teal"},
-    CurrentOption = {settings.ITEMS_COLOR or "Gold"},
-    MultipleOptions = false,
-    Callback = function(Options)
-        settings.ITEMS_COLOR = Options
-        SaveSettings(settings)
-    end
-})
-
-ESPTab:CreateToggle({
-    Name = "Show Names",
-    CurrentValue = settings.SHOW_TEXT,
-    Callback = function(Value)
-        settings.SHOW_TEXT = Value
-        SaveSettings(settings)
-    end
-})
-
 -- SETTINGS TAB
 local SettingsTab = Window:CreateTab({
     Name = "Settings",
@@ -1206,6 +1772,13 @@ SettingsTab:CreateButton({
             settings[key] = value
         end
         SaveSettings(settings)
+        clearAllESP()
+    end
+})
+
+SettingsTab:CreateButton({
+    Name = "Clear ESP Cache",
+    Callback = function()
         clearAllESP()
     end
 })
@@ -1407,16 +1980,24 @@ end)
 -- INITIALIZATION
 -- ==========================================
 print("═══════════════════════════════════════════════════════")
-print("🕷️ Forsaken Surge v9.0 - FULL VERSION")
+print("🕷️ Forsaken Surge v10.0 - ESP PRO EDITION")
 print("═══════════════════════════════════════════════════════")
 print("✅ Wall Walk (ходьба по стенам)")
 print("✅ Fly (полёт)")
 print("✅ No Clip (ноуклип)")
 print("✅ Turbo (турбо)")
-print("✅ ESP (подсветка) - ВСЕГДА ОБНОВЛЯЕТСЯ")
+print("✅ ESP PRO (расширенные настройки подсветки)")
+print("   ├─ Интервал обновления")
+print("   ├─ Макс/мин дистанция")
+print("   ├─ Прозрачность заливки/контура")
+print("   ├─ Box ESP")
+print("   ├─ Tracer")
+print("   ├─ Custom RGB цвета")
+print("   ├─ Размер текста")
+print("   └─ Затухание по дистанции")
 print("✅ Killer Walls Remover")
-print("✅ UNLIMITED MODE (безграничный режим)")
-print("✅ EXCLUSIVE MODE (только одна функция активна)")
+print("✅ UNLIMITED MODE")
+print("✅ EXCLUSIVE MODE")
 print("═══════════════════════════════════════════════════════")
 print("🔑 C - Wall Walk | V - Fly | B - No Clip | Z - Turbo")
 print("⚡ Включи безграничный режим в настройках Wall Walk!")
