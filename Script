@@ -5,7 +5,7 @@ local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-S
 -- ==========================================
 local Window = Luna:CreateWindow({
     Name = "Forsaken Surge",
-    Subtitle = "v13.0 | VELOCITY + TURBO + WALL WALK + PRO TP + ESP + FUN",
+    Subtitle = "v12.0 | VELOCITY + TURBO + WALL WALK + ESP + FUN",
     LogoID = nil,
     LoadingEnabled = true,
     LoadingTitle = "Forsaken Surge",
@@ -154,7 +154,7 @@ local DefaultSettings = {
     -- ===== FUN: SPIN =====
     SPIN_ACTIVE = false,
     SPIN_SPEED = 20,
-    SPIN_AXIS = "Y",
+    SPIN_AXIS = "Y", -- X, Y, Z
     SPIN_HOTKEY = "None",
     
     -- ===== FUN: C00LGUI =====
@@ -170,14 +170,6 @@ local DefaultSettings = {
     C00LGUI_SOUND_ACTIVATE = "rbxassetid://135116009498875",
     C00LGUI_SOUND_FAIL = "rbxassetid://137171473068941",
     C00LGUI_SOUND_SUCCESS = "rbxassetid://132747765000135",
-    
-    -- ===== TELEPORT =====
-    TP_IGNORE_WALLS = true,
-    TP_MAX_RADIUS = 200,
-    TP_USE_CAMERA_DIR = true,
-    TP_HEIGHT_LEVELS = 3,
-    TP_DIRECTIONS = 36,
-    TP_RETURN_POS = nil,
 }
 
 function LoadSettings()
@@ -249,41 +241,9 @@ local c00lguiHealthConn = nil
 local c00lguiAnchorConn = nil
 local c00lguiSlowConn = nil
 
--- TELEPORT STATE
-local lastSafePosition = nil
-local teleportHistory = {}
-
 local rayParams = RaycastParams.new()
 rayParams.FilterType = Enum.RaycastFilterType.Exclude
 rayParams.RespectCanCollide = true
-
--- ==========================================
--- NOTIFICATION SYSTEM (UI IMPROVED)
--- ==========================================
-local function showNotification(title, text, color)
-    if not settings.NOTIFICATIONS_ENABLED then return end
-    local prefix = color and "<font color='#" .. color:ToHex() .. "'>" or ""
-    local suffix = color and "</font>" or ""
-    print(string.format("[%s] %s", title, text))
-    -- Try to use Luna notification if available
-    pcall(function()
-        if Luna and Luna.Notify then
-            Luna:Notify({ Title = title, Text = text, Duration = 2 })
-        end
-    end)
-end
-
-local function notifyGood(text)
-    showNotification("✅ УСПЕХ", text, Color3.fromRGB(0, 255, 100))
-end
-
-local function notifyBad(text)
-    showNotification("❌ ОШИБКА", text, Color3.fromRGB(255, 80, 80))
-end
-
-local function notifyInfo(text)
-    showNotification("ℹ️ ИНФО", text, Color3.fromRGB(80, 180, 255))
-end
 
 -- ==========================================
 -- EXCLUSIVE MODE
@@ -737,186 +697,9 @@ local function slerp(a, b, t)
     return (au * math.sin((1 - t) * angle) + bu * math.sin(t * angle)) / sin
 end
 
--- ==========================================
--- PRO TELEPORT SYSTEM (IGNORES WALLS)
--- ==========================================
--- Checks if a position is free (no parts overlapping)
-local function isPositionFree(position, size)
-    size = size or Vector3.new(4, 6, 4)
-    local params = OverlapParams.new()
-    params.FilterType = Enum.RaycastFilterType.Exclude
-    params.FilterDescendantsInstances = {character}
-    params.MaxParts = 1
-    
-    local parts = Workspace:GetPartBoundsInBox(CFrame.new(position), size, params)
-    for _, part in ipairs(parts) do
-        if part.CanCollide and part.Transparency < 0.95 then
-            return false
-        end
-    end
-    return true
-end
-
--- Checks if there is ground below a position
-local function hasGroundBelow(position, maxDepth)
-    maxDepth = maxDepth or 15
-    local rp = RaycastParams.new()
-    rp.FilterType = Enum.RaycastFilterType.Exclude
-    rp.FilterDescendantsInstances = {character}
-    rp.RespectCanCollide = true
-    
-    local result = Workspace:Raycast(position, Vector3.new(0, -maxDepth, 0), rp)
-    return result ~= nil, result and result.Position or nil
-end
-
--- Find the farthest FREE point ignoring walls
-local function findFarthestFreePoint(origin, radius, useCameraDir)
-    if not origin then return nil end
-    
-    local directions = settings.TP_DIRECTIONS or 36
-    local heightLevels = settings.TP_HEIGHT_LEVELS or 3
-    
-    -- Height offsets to check: ground, mid, high
-    local heights = {0, 8, 20}
-    if heightLevels == 2 then heights = {0, 12} end
-    if heightLevels == 1 then heights = {0} end
-    if heightLevels >= 4 then heights = {0, 6, 14, 25} end
-    
-    local camLook = Camera.CFrame.LookVector
-    local baseAngle = 0
-    if useCameraDir and (camLook.X ~= 0 or camLook.Z ~= 0) then
-        baseAngle = math.atan2(camLook.Z, camLook.X)
-    end
-    
-    local bestPoint = nil
-    local bestScore = -1
-    
-    for _, h in ipairs(heights) do
-        for i = 0, directions - 1 do
-            local angle = baseAngle + (i / directions) * math.pi * 2
-            local dir = Vector3.new(math.cos(angle), 0, math.sin(angle))
-            
-            -- Sample multiple distances along this ray
-            for dist = radius, 10, -10 do
-                local testPos = origin + dir * dist + Vector3.new(0, h, 0)
-                
-                -- Skip if above reasonable ceiling
-                if testPos.Y > origin.Y + 60 then continue end
-                if testPos.Y < origin.Y - 60 then continue end
-                
-                -- Must be free of walls/parts
-                if isPositionFree(testPos, Vector3.new(4, 6, 4)) then
-                    -- Bonus if there's ground below
-                    local hasGround = hasGroundBelow(testPos, 20)
-                    local score = dist
-                    if hasGround then score = score + 50 end
-                    if h == 0 then score = score + 20 end
-                    
-                    if score > bestScore then
-                        bestScore = score
-                        bestPoint = testPos
-                    end
-                end
-            end
-        end
-    end
-    
-    return bestPoint
-end
-
--- Smart teleport that ignores walls
-local function smartTeleport(radius, useCameraDir)
-    if not hrp or not character then
-        updateCharacterReferences()
-        if not hrp then return false end
-    end
-    
-    radius = radius or settings.TP_MAX_RADIUS or 200
-    useCameraDir = useCameraDir ~= false
-    
-    -- Save current position for return
-    if settings.TP_RETURN_POS == nil or (hrp.Position - settings.TP_RETURN_POS).Magnitude > 30 then
-        settings.TP_RETURN_POS = hrp.Position
-    end
-    
-    local target = findFarthestFreePoint(hrp.Position, radius, useCameraDir)
-    
-    if target then
-        -- Teleport
-        hrp.CFrame = CFrame.new(target)
-        hrp.AssemblyLinearVelocity = Vector3.zero
-        hrp.AssemblyAngularVelocity = Vector3.zero
-        
-        -- Push up slightly if stuck
-        task.wait(0.1)
-        if not isPositionFree(hrp.Position, Vector3.new(4, 6, 4)) then
-            hrp.CFrame = CFrame.new(target + Vector3.new(0, 5, 0))
-        end
-        
-        notifyGood(string.format("Телепорт на %.0f studs (игнорируя стены)", (target - settings.TP_RETURN_POS).Magnitude))
-        return true
-    else
-        notifyBad("Не найдено свободной точки в радиусе " .. radius)
-        return false
-    end
-end
-
--- Quick directional teleport (ignores walls)
-local function directionalTeleport(direction, distance)
-    if not hrp then return false end
-    distance = distance or 50
-    
-    local dir = Vector3.new(0, 0, 0)
-    if direction == "Forward" then
-        dir = Camera.CFrame.LookVector * Vector3.new(1, 0, 1)
-    elseif direction == "Back" then
-        dir = -Camera.CFrame.LookVector * Vector3.new(1, 0, 1)
-    elseif direction == "Left" then
-        dir = -Camera.CFrame.RightVector
-    elseif direction == "Right" then
-        dir = Camera.CFrame.RightVector
-    elseif direction == "Up" then
-        dir = Vector3.new(0, 1, 0)
-    elseif direction == "Down" then
-        dir = Vector3.new(0, -1, 0)
-    end
-    
-    if dir.Magnitude > 0 then dir = dir.Unit end
-    if dir.Magnitude < 0.001 then return false end
-    
-    -- Find free point in this direction
-    local origin = hrp.Position
-    local best = nil
-    for step = distance, 5, -5 do
-        local testPos = origin + dir * step
-        if isPositionFree(testPos, Vector3.new(4, 6, 4)) then
-            best = testPos
-            break
-        end
-    end
-    
-    if best then
-        hrp.CFrame = CFrame.new(best)
-        hrp.AssemblyLinearVelocity = Vector3.zero
-        notifyInfo("Телепорт: " .. direction .. " на " .. math.floor((best - origin).Magnitude) .. " studs")
-        return true
-    else
-        notifyBad("Путь заблокирован в направлении " .. direction)
-        return false
-    end
-end
-
--- Return to saved position
-local function returnToSavedPosition()
-    if settings.TP_RETURN_POS and hrp then
-        hrp.CFrame = CFrame.new(settings.TP_RETURN_POS)
-        hrp.AssemblyLinearVelocity = Vector3.zero
-        notifyGood("Возврат на исходную позицию")
-        return true
-    else
-        notifyBad("Нет сохранённой позиции")
-        return false
-    end
+local function showNotification(title, text)
+    if not settings.NOTIFICATIONS_ENABLED then return end
+    print(string.format("[%s] %s", title, text))
 end
 
 -- ==========================================
@@ -941,7 +724,7 @@ local function toggleClimb()
         gravityDir = -upDir
         isOnCeiling = false
         ceilingTime = 0
-        notifyGood("Ходьба по стенам: ВКЛ")
+        showNotification("🕷️ Ходьба", "Включена")
     else
         humanoid.AutoRotate = true
         humanoid.PlatformStand = false
@@ -954,7 +737,7 @@ local function toggleClimb()
         if hrp then
             hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + facing)
         end
-        notifyInfo("Ходьба по стенам: ВЫКЛ")
+        showNotification("🕷️ Ходьба", "Выключена")
     end
 end
 
@@ -977,7 +760,7 @@ local function toggleFly()
         humanoid.PlatformStand = true
         if hrp then hrp.AssemblyLinearVelocity = Vector3.zero end
         flyVelocity = Vector3.zero
-        notifyGood("Полёт: АКТИВИРОВАН")
+        showNotification("✈️ Полёт", "Активирован")
     else
         humanoid.AutoRotate = true
         humanoid.PlatformStand = false
@@ -985,7 +768,7 @@ local function toggleFly()
         flyVelocity = Vector3.zero
         gravityDir = Vector3.new(0, -1, 0)
         upDir = Vector3.new(0, 1, 0)
-        notifyInfo("Полёт: ДЕАКТИВИРОВАН")
+        showNotification("✈️ Полёт", "Деактивирован")
     end
 end
 
@@ -1019,7 +802,7 @@ local function toggleNoClip()
         
         hrp.AssemblyLinearVelocity = Vector3.zero
         hrp.AssemblyAngularVelocity = Vector3.zero
-        notifyGood("Ноуклип: АКТИВИРОВАН")
+        showNotification("🌀 Ноуклип", "Активирован")
     else
         for _, part in ipairs(character:GetDescendants()) do
             if part:IsA("BasePart") and part.Name ~= "NoclipDetector" then
@@ -1028,7 +811,7 @@ local function toggleNoClip()
         end
         gravityDir = Vector3.new(0, -1, 0)
         upDir = Vector3.new(0, 1, 0)
-        notifyInfo("Ноуклип: ДЕАКТИВИРОВАН")
+        showNotification("🌀 Ноуклип", "Деактивирован")
     end
 end
 
@@ -1051,10 +834,10 @@ local function toggleTurbo()
         humanoid.AutoRotate = true
         humanoid.PlatformStand = false
         humanoid.WalkSpeed = 16
-        notifyGood("Турбо: АКТИВИРОВАНО")
+        showNotification("⚡ Турбо", "Активирован")
     else
         if hrp then hrp.AssemblyLinearVelocity = Vector3.zero end
-        notifyInfo("Турбо: ВЫКЛЮЧЕНО")
+        showNotification("⚡ Турбо", "Деактивирован")
     end
 end
 
@@ -1154,7 +937,7 @@ task.spawn(function()
 end)
 
 -- ==========================================
--- FUN: SPIN
+-- FUN: SPIN (постоянное вращение)
 -- ==========================================
 task.spawn(function()
     while true do
@@ -1175,7 +958,7 @@ task.spawn(function()
 end)
 
 -- ==========================================
--- FUN: C00LGUI
+-- FUN: C00LGUI (клиентский аналог Ability 2)
 -- ==========================================
 local function createC00lguiBillboard()
     if not hrp or not character then return nil end
@@ -1220,6 +1003,51 @@ local function playC00lguiSound(soundId, parent)
     return sound
 end
 
+local function findFarthestPoint(radius)
+    if not hrp then return nil end
+    
+    local origin = hrp.Position
+    local bestPoint = origin
+    local bestDist = 0
+    
+    -- Сканируем 360° вокруг игрока с шагом 15° (24 направления)
+    for i = 0, 360, 15 do
+        local angle = math.rad(i)
+        local dir = Vector3.new(math.cos(angle), 0, math.sin(angle))
+        
+        local result = Workspace:Raycast(
+            origin + Vector3.new(0, 2, 0),
+            dir * radius,
+            rayParams
+        )
+        
+        if result then
+            local dist = (result.Position - origin).Magnitude
+            if dist > bestDist then
+                bestDist = dist
+                bestPoint = result.Position - dir * 2
+            end
+        else
+            if radius > bestDist then
+                bestDist = radius
+                bestPoint = origin + dir * radius
+            end
+        end
+    end
+    
+    -- Проверка на землю под найденной точкой
+    local groundCheck = Workspace:Raycast(
+        bestPoint + Vector3.new(0, 5, 0),
+        Vector3.new(0, -20, 0),
+        rayParams
+    )
+    if groundCheck then
+        return groundCheck.Position + Vector3.new(0, 3, 0)
+    end
+    
+    return bestPoint + Vector3.new(0, 3, 0)
+end
+
 local function blockMovement()
     if humanoid then
         humanoid.WalkSpeed = 0
@@ -1244,6 +1072,7 @@ local function activateC00lgui()
         if not hrp or not humanoid then return end
     end
     
+    -- Отключаем конфликтующие режимы
     if climbing or flying or noClipActive or turboActive then
         disableAllModes(nil)
     end
@@ -1251,6 +1080,7 @@ local function activateC00lgui()
     c00lguiActive = true
     c00lguiFailReason = nil
     
+    -- Блокировка движения
     blockMovement()
     if humanoid then
         humanoid.AutoRotate = false
@@ -1260,16 +1090,20 @@ local function activateC00lgui()
         hrp.AssemblyAngularVelocity = Vector3.zero
     end
     
+    -- Создание таблички
     local gui, label = nil, nil
     if settings.C00LGUI_SHOW_GUI then
         gui, label = createC00lguiBillboard()
         c00lguiGui = gui
     end
     
+    -- Звук активации
     c00lguiSound = playC00lguiSound(settings.C00LGUI_SOUND_ACTIVATE, hrp)
     
+    -- Стартовое здоровье
     local startHealth = humanoid.Health
     
+    -- Проверка №1: урон
     if settings.C00LGUI_FAIL_ON_DAMAGE then
         c00lguiHealthConn = humanoid.HealthChanged:Connect(function(h)
             if h < startHealth then
@@ -1279,6 +1113,7 @@ local function activateC00lgui()
         end)
     end
     
+    -- Проверка №2: Anchored
     if settings.C00LGUI_FAIL_ON_ANCHOR and hrp then
         c00lguiAnchorConn = hrp:GetPropertyChangedSignal("Anchored"):Connect(function()
             if hrp.Anchored then
@@ -1287,6 +1122,7 @@ local function activateC00lgui()
         end)
     end
     
+    -- Проверка №3: SpeedMultiplier
     if settings.C00LGUI_FAIL_ON_SLOW then
         local speedMultipliers = character:FindFirstChild("SpeedMultipliers")
         if speedMultipliers then
@@ -1298,28 +1134,34 @@ local function activateC00lgui()
         end
     end
     
+    -- Смена текста через 2.3 сек
     task.delay(2.3, function()
         if label and label.Parent and not c00lguiFailReason then
             label.Text = "h4xxing in pr0gr3ss...!!1!"
         end
     end)
     
+    -- Ждём windup
     task.delay(settings.C00LGUI_WINDUP, function()
         if not c00lguiFailReason then
             c00lguiFailReason = "teleported"
         end
     end)
     
+    -- Основной поток завершения
     task.spawn(function()
+        -- Ждём результата
         repeat
             task.wait()
         until c00lguiFailReason
         
+        -- Восстанавливаем управление
         unblockMovement()
         if humanoid then
             humanoid.AutoRotate = true
         end
         
+        -- Обновляем текст
         if label and label.Parent then
             if c00lguiFailReason == "teleported" then
                 label.Text = "H4XX3D!!1!1"
@@ -1332,15 +1174,20 @@ local function activateC00lgui()
             end
         end
         
+        -- Телепорт при успехе
         if c00lguiFailReason == "teleported" and hrp and hrp.Parent then
-            -- Use PRO teleport (ignores walls)
-            smartTeleport(settings.C00LGUI_RADIUS, true)
+            local target = findFarthestPoint(settings.C00LGUI_RADIUS)
+            if target then
+                hrp.CFrame = CFrame.new(target)
+            end
         end
         
+        -- Отключаем все проверки
         if c00lguiHealthConn then c00lguiHealthConn:Disconnect(); c00lguiHealthConn = nil end
         if c00lguiAnchorConn then c00lguiAnchorConn:Disconnect(); c00lguiAnchorConn = nil end
         if c00lguiSlowConn then c00lguiSlowConn:Disconnect(); c00lguiSlowConn = nil end
         
+        -- Очистка через 2 сек
         task.wait(2)
         
         if c00lguiGui and c00lguiGui.Parent then
@@ -1354,7 +1201,7 @@ local function activateC00lgui()
 end
 
 -- ==========================================
--- KEYBIND HANDLER
+-- KEYBIND HANDLER (глобальный)
 -- ==========================================
 local keybindCallbacks = {}
 
@@ -1367,9 +1214,10 @@ local function registerKeybind(keyName, callback)
     end
 end
 
+-- Регистрируем бинды
 registerKeybind(settings.SPIN_HOTKEY, function()
     spinActive = not spinActive
-    notifyInfo("Вращение: " .. (spinActive and "ВКЛ" or "ВЫКЛ"))
+    showNotification("🌀 Вращение", spinActive and "Включено" or "Выключено")
 end)
 
 registerKeybind(settings.C00LGUI_HOTKEY, function()
@@ -1383,16 +1231,14 @@ UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
     pressed[input.KeyCode] = true
     
+    -- Стандартные клавиши
     if input.KeyCode == Enum.KeyCode.C then toggleClimb() end
     if input.KeyCode == Enum.KeyCode.V then toggleFly() end
     if input.KeyCode == Enum.KeyCode.B then toggleNoClip() end
     if input.KeyCode == Enum.KeyCode.Z then toggleTurbo() end
     if input.KeyCode == Enum.KeyCode.LeftShift then isSprinting = true end
     
-    -- Quick teleport hotkeys
-    if input.KeyCode == Enum.KeyCode.T then smartTeleport(settings.TP_MAX_RADIUS, true) end
-    if input.KeyCode == Enum.KeyCode.Y then returnToSavedPosition() end
-    
+    -- Кастомные бинды
     local cb = keybindCallbacks[input.KeyCode]
     if cb then cb() end
 end)
@@ -1412,129 +1258,7 @@ Window:CreateHomeTab({
     Icon = 2,
 })
 
--- ==========================================
--- PRO TELEPORT TAB (NEW!)
--- ==========================================
-local TPTab = Window:CreateTab({
-    Name = "Teleport",
-    Icon = "my_location",
-    ImageSource = "Material",
-    ShowTitle = true
-})
-
-TPTab:CreateParagraph({
-    Title = "🎯 PRO TELEPORT SYSTEM",
-    Text = "Телепорт ИГНОРИРУЯ стены — ищет самую дальнюю свободную точку в радиусе. Обходит препятствия, проверяет пол под ногами."
-})
-
-TPTab:CreateToggle({
-    Name = "🔓 Игнорировать стены (обход препятствий)",
-    CurrentValue = settings.TP_IGNORE_WALLS,
-    Callback = function(Value)
-        settings.TP_IGNORE_WALLS = Value
-        SaveSettings(settings)
-        notifyInfo("Игнорирование стен: " .. (Value and "ВКЛ" or "ВЫКЛ"))
-    end
-})
-
-TPTab:CreateSlider({
-    Name = "📏 Радиус поиска (studs)",
-    Range = {20, 1000},
-    Increment = 10,
-    CurrentValue = settings.TP_MAX_RADIUS,
-    Callback = function(Value)
-        settings.TP_MAX_RADIUS = Value
-        SaveSettings(settings)
-    end
-})
-
-TPTab:CreateSlider({
-    Name = "🎯 Количество направлений (больше = точнее)",
-    Range = {8, 72},
-    Increment = 4,
-    CurrentValue = settings.TP_DIRECTIONS,
-    Callback = function(Value)
-        settings.TP_DIRECTIONS = Value
-        SaveSettings(settings)
-    end
-})
-
-TPTab:CreateSlider({
-    Name = "📐 Уровней высоты (1-4)",
-    Range = {1, 4},
-    Increment = 1,
-    CurrentValue = settings.TP_HEIGHT_LEVELS,
-    Callback = function(Value)
-        settings.TP_HEIGHT_LEVELS = Value
-        SaveSettings(settings)
-    end
-})
-
-TPTab:CreateToggle({
-    Name = "🎥 Учитывать направление камеры",
-    CurrentValue = settings.TP_USE_CAMERA_DIR,
-    Callback = function(Value)
-        settings.TP_USE_CAMERA_DIR = Value
-        SaveSettings(settings)
-    end
-})
-
-TPTab:CreateLabel({ Text = "🚀 БЫСТРЫЙ ТЕЛЕПОРТ (игнорируя стены)", Style = 1 })
-
-TPTab:CreateButton({
-    Name = "🎯 Смарт-телепорт (в дальнюю свободную точку)",
-    Callback = function()
-        smartTeleport(settings.TP_MAX_RADIUS, settings.TP_USE_CAMERA_DIR)
-    end
-})
-
-TPTab:CreateButton({
-    Name = "⏪ Вернуться на исходную позицию (Y)",
-    Callback = function()
-        returnToSavedPosition()
-    end
-})
-
-TPTab:CreateLabel({ Text = "📍 ТЕЛЕПОРТ В НАПРАВЛЕНИИ (30 studs)", Style = 1 })
-
-TPTab:CreateButton({
-    Name = "⬆️ Вперёд",
-    Callback = function() directionalTeleport("Forward", 30) end
-})
-
-TPTab:CreateButton({
-    Name = "⬇️ Назад",
-    Callback = function() directionalTeleport("Back", 30) end
-})
-
-TPTab:CreateButton({
-    Name = "⬅️ Влево",
-    Callback = function() directionalTeleport("Left", 30) end
-})
-
-TPTab:CreateButton({
-    Name = "➡️ Вправо",
-    Callback = function() directionalTeleport("Right", 30) end
-})
-
-TPTab:CreateButton({
-    Name = "🔼 Вверх",
-    Callback = function() directionalTeleport("Up", 30) end
-})
-
-TPTab:CreateButton({
-    Name = "🔽 Вниз",
-    Callback = function() directionalTeleport("Down", 30) end
-})
-
-TPTab:CreateParagraph({
-    Title = "💡 СОВЕТЫ",
-    Text = "• Смарт-телепорт ищет самую дальнюю СВОБОДНУЮ точку в радиусе\n• Игнорирует стены — проходит сквозь них\n• Проверяет наличие пола под точкой для безопасного приземления\n• Кнопки направлений обходят препятствия пошагово"
-})
-
--- ==========================================
 -- WALL WALK TAB
--- ==========================================
 local WallWalkTab = Window:CreateTab({
     Name = "Wall Walk",
     Icon = "directions_walk",
@@ -1553,11 +1277,11 @@ WallWalkTab:CreateToggle({
     Callback = function(Value)
         settings.UNLIMITED_MODE = Value
         SaveSettings(settings)
-        notifyInfo("Безграничный режим: " .. (Value and "ВКЛ" or "ВЫКЛ"))
+        showNotification("⚡ Безграничный режим", Value and "Включен!" or "Выключен")
     end
 })
 
-WallWalkTab:CreateLabel({ Text = "🏃 ДВИЖЕНИЕ", Style = 1 })
+WallWalkTab:CreateLabel({ Text = "ДВИЖЕНИЕ", Style = 1 })
 
 WallWalkTab:CreateSlider({
     Name = "Скорость ходьбы",
@@ -1592,7 +1316,7 @@ WallWalkTab:CreateSlider({
     end
 })
 
-WallWalkTab:CreateLabel({ Text = "📏 ДАЛЬНОСТЬ", Style = 1 })
+WallWalkTab:CreateLabel({ Text = "ДАЛЬНОСТЬ", Style = 1 })
 
 WallWalkTab:CreateSlider({
     Name = "Дальность захвата",
@@ -1616,7 +1340,7 @@ WallWalkTab:CreateSlider({
     end
 })
 
-WallWalkTab:CreateLabel({ Text = "🏔️ ПОТОЛОК", Style = 1 })
+WallWalkTab:CreateLabel({ Text = "ПОТОЛОК", Style = 1 })
 
 WallWalkTab:CreateToggle({
     Name = "Фиксация на потолке",
@@ -1682,6 +1406,7 @@ FunTab:CreateParagraph({
     Text = "🌀 Spin Mode + 💻 c00lgui (Ability 2)"
 })
 
+-- ===== SPIN =====
 FunTab:CreateLabel({ Text = "🌀 ВРАЩЕНИЕ", Style = 1 })
 
 FunTab:CreateToggle({
@@ -1691,7 +1416,7 @@ FunTab:CreateToggle({
         settings.SPIN_ACTIVE = Value
         spinActive = Value
         SaveSettings(settings)
-        notifyInfo("Вращение: " .. (Value and "ВКЛ" or "ВЫКЛ"))
+        showNotification("🌀 Вращение", Value and "Включено" or "Выключено")
     end
 })
 
@@ -1723,12 +1448,13 @@ FunTab:CreateKeybind({
     Callback = function(Key)
         settings.SPIN_HOTKEY = Key
         SaveSettings(settings)
+        -- Обновляем бинд
         for k, _ in pairs(keybindCallbacks) do
             keybindCallbacks[k] = nil
         end
         registerKeybind(settings.SPIN_HOTKEY, function()
             spinActive = not spinActive
-            notifyInfo("Вращение: " .. (spinActive and "ВКЛ" or "ВЫКЛ"))
+            showNotification("🌀 Вращение", spinActive and "Включено" or "Выключено")
         end)
         registerKeybind(settings.C00LGUI_HOTKEY, function()
             activateC00lgui()
@@ -1736,11 +1462,12 @@ FunTab:CreateKeybind({
     end
 })
 
+-- ===== C00LGUI =====
 FunTab:CreateLabel({ Text = "💻 C00LGUI (Ability 2)", Style = 1 })
 
 FunTab:CreateParagraph({
     Title = "💻 c00lgui",
-    Text = "Клиентский аналог Ability 2: концентрация → ТЕЛЕПОРТ ИГНОРИРУЯ СТЕНЫ в дальнюю точку (радиус 67 studs) или fail"
+    Text = "Клиентский аналог Ability 2: концентрация → телепорт в дальнюю точку (радиус 67 studs) или fail"
 })
 
 FunTab:CreateToggle({
@@ -1749,7 +1476,7 @@ FunTab:CreateToggle({
     Callback = function(Value)
         settings.C00LGUI_ENABLED = Value
         SaveSettings(settings)
-        notifyInfo("c00lgui: " .. (Value and "ВКЛ" or "ВЫКЛ"))
+        showNotification("💻 c00lgui", Value and "Включено" or "Выключено")
     end
 })
 
@@ -1771,7 +1498,7 @@ FunTab:CreateKeybind({
         end
         registerKeybind(settings.SPIN_HOTKEY, function()
             spinActive = not spinActive
-            notifyInfo("Вращение: " .. (spinActive and "ВКЛ" or "ВЫКЛ"))
+            showNotification("🌀 Вращение", spinActive and "Включено" or "Выключено")
         end)
         registerKeybind(settings.C00LGUI_HOTKEY, function()
             activateC00lgui()
@@ -1792,7 +1519,7 @@ FunTab:CreateSlider({
 
 FunTab:CreateSlider({
     Name = "📏 Радиус телепорта (studs)",
-    Range = {10, 300},
+    Range = {10, 200},
     Increment = 1,
     CurrentValue = settings.C00LGUI_RADIUS,
     Callback = function(Value)
@@ -1859,7 +1586,7 @@ local ESPTab = Window:CreateTab({
 })
 
 ESPTab:CreateParagraph({
-    Title = "👁️ ADVANCED ESP PRO",
+    Title = "ADVANCED ESP PRO",
     Text = "Полная настройка подсветки, интервалов и стилей"
 })
 
@@ -2131,9 +1858,7 @@ ESPTab:CreateDropdown({
     end
 })
 
--- ==========================================
 -- TURBO TAB
--- ==========================================
 local TurboTab = Window:CreateTab({
     Name = "Turbo",
     Icon = "speed",
@@ -2142,7 +1867,7 @@ local TurboTab = Window:CreateTab({
 })
 
 TurboTab:CreateParagraph({
-    Title = "⚡ TURBO",
+    Title = "TURBO",
     Text = "Press Z to activate"
 })
 
@@ -2171,14 +1896,11 @@ TurboTab:CreateSlider({
     end
 })
 
-TurboTab:CreateLabel({ Text = "🎮 РЕЖИМ", Style = 1 })
-
 TurboTab:CreateButton({
     Name = "Mode: Velocity",
     Callback = function()
         settings.TURBO_MODE = "Velocity"
         SaveSettings(settings)
-        notifyInfo("Режим турбо: Velocity")
     end
 })
 
@@ -2187,7 +1909,6 @@ TurboTab:CreateButton({
     Callback = function()
         settings.TURBO_MODE = "Teleport"
         SaveSettings(settings)
-        notifyInfo("Режим турбо: Teleport")
     end
 })
 
@@ -2196,13 +1917,10 @@ TurboTab:CreateButton({
     Callback = function()
         settings.TURBO_MODE = "Combo"
         SaveSettings(settings)
-        notifyInfo("Режим турбо: Combo")
     end
 })
 
--- ==========================================
 -- NO CLIP TAB
--- ==========================================
 local NoClipTab = Window:CreateTab({
     Name = "No Clip",
     Icon = "open_with",
@@ -2211,7 +1929,7 @@ local NoClipTab = Window:CreateTab({
 })
 
 NoClipTab:CreateParagraph({
-    Title = "🌀 NO CLIP",
+    Title = "NO CLIP",
     Text = "Press B to activate"
 })
 
@@ -2227,9 +1945,7 @@ NoClipTab:CreateToggle({
     end
 })
 
--- ==========================================
 -- FLY TAB
--- ==========================================
 local FlyTab = Window:CreateTab({
     Name = "Fly",
     Icon = "flight",
@@ -2238,7 +1954,7 @@ local FlyTab = Window:CreateTab({
 })
 
 FlyTab:CreateParagraph({
-    Title = "✈️ FLIGHT MODE",
+    Title = "FLIGHT MODE",
     Text = "Press V to toggle"
 })
 
@@ -2289,9 +2005,7 @@ FlyTab:CreateToggle({
     end
 })
 
--- ==========================================
 -- SETTINGS TAB
--- ==========================================
 local SettingsTab = Window:CreateTab({
     Name = "Settings",
     Icon = "settings",
@@ -2319,8 +2033,8 @@ SettingsTab:CreateToggle({
 })
 
 SettingsTab:CreateParagraph({
-    Title = "⌨️ CONTROLS",
-    Text = "C - Wall Walk\nV - Fly\nB - No Clip\nZ - Turbo\nT - Smart Teleport (ignores walls)\nY - Return to saved position\nShift - Sprint\n+ Кастомные бинды в Fun"
+    Title = "CONTROLS",
+    Text = "C - Wall Walk\nV - Fly\nB - No Clip\nZ - Turbo\nShift - Sprint\n+ Кастомные бинды в Fun"
 })
 
 SettingsTab:CreateButton({
@@ -2331,7 +2045,6 @@ SettingsTab:CreateButton({
         end
         SaveSettings(settings)
         clearAllESP()
-        notifyInfo("Настройки сброшены")
     end
 })
 
@@ -2339,7 +2052,6 @@ SettingsTab:CreateButton({
     Name = "Clear ESP Cache",
     Callback = function()
         clearAllESP()
-        notifyInfo("Кэш ESP очищен")
     end
 })
 
@@ -2350,13 +2062,6 @@ RunService.Heartbeat:Connect(function(dt)
     if not character or not character.Parent then
         updateCharacterReferences()
         if not hrp or not humanoid then return end
-    end
-    
-    -- Save safe position periodically
-    if not climbing and not flying and not noClipActive and not turboActive then
-        if hrp and hrp.Position.Y > (settings.RESET_HEIGHT or -100) then
-            lastSafePosition = hrp.Position
-        end
     end
     
     -- NO CLIP MODE
@@ -2397,11 +2102,6 @@ RunService.Heartbeat:Connect(function(dt)
             isGrounded = false
             isOnCeiling = false
             ceilingTime = 0
-            -- Teleport to last safe position
-            if lastSafePosition then
-                hrp.CFrame = CFrame.new(lastSafePosition + Vector3.new(0, 5, 0))
-                notifyInfo("Авто-сброс: телепорт на безопасную позицию")
-            end
             return
         end
     end
@@ -2552,20 +2252,15 @@ end)
 -- INITIALIZATION
 -- ==========================================
 print("═══════════════════════════════════════════════════════")
-print("🕷️ Forsaken Surge v13.0 - PRO TELEPORT EDITION")
+print("🕷️ Forsaken Surge v12.0 - FUN EDITION")
 print("═══════════════════════════════════════════════════════")
 print("✅ Wall Walk | Fly | No Clip | Turbo")
 print("✅ ESP PRO (расширенные настройки)")
-print("✅ TELEPORT PRO (ИГНОРИРУЕТ СТЕНЫ!)")
-print("   ├─ 🎯 Смарт-телепорт (в дальнюю свободную точку)")
-print("   ├─ 📍 Телепорт по направлениям")
-print("   └─ ⏪ Возврат на позицию")
 print("✅ FUN TAB:")
 print("   ├─ 🌀 Spin Mode (вращение)")
 print("   └─ 💻 c00lgui (Ability 2 аналог)")
 print("═══════════════════════════════════════════════════════")
 print("🔑 C - Wall Walk | V - Fly | B - No Clip | Z - Turbo")
-print("🔑 T - Smart Teleport | Y - Return to saved position")
 print("🔑 Кастомные бинды: Fun Tab → Keybind")
 print("═══════════════════════════════════════════════════════")
 
