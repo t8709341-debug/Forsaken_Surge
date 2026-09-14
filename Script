@@ -5,7 +5,7 @@ local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-S
 -- ==========================================
 local Window = Luna:CreateWindow({
     Name = "Forsaken Surge",
-    Subtitle = "v12.0 | VELOCITY + TURBO + WALL WALK + ESP + FUN",
+    Subtitle = "v13.0 | VELOCITY + TURBO + WALL WALK + ESP + FUN",
     LogoID = nil,
     LoadingEnabled = true,
     LoadingTitle = "Forsaken Surge",
@@ -154,7 +154,7 @@ local DefaultSettings = {
     -- ===== FUN: SPIN =====
     SPIN_ACTIVE = false,
     SPIN_SPEED = 20,
-    SPIN_AXIS = "Y", -- X, Y, Z
+    SPIN_AXIS = "Y",
     SPIN_HOTKEY = "None",
     
     -- ===== FUN: C00LGUI =====
@@ -170,6 +170,19 @@ local DefaultSettings = {
     C00LGUI_SOUND_ACTIVATE = "rbxassetid://135116009498875",
     C00LGUI_SOUND_FAIL = "rbxassetid://137171473068941",
     C00LGUI_SOUND_SUCCESS = "rbxassetid://132747765000135",
+    
+    -- ===== C00LGUI VISUAL EFFECTS =====
+    C00LGUI_VISUAL_ENABLED = true,
+    C00LGUI_SCREEN_FADE = true,
+    C00LGUI_MOTION_BLUR = true,
+    C00LGUI_CHROMATIC = true,
+    C00LGUI_FOV_PUNCH = true,
+    C00LGUI_SCREEN_SHAKE = true,
+    C00LGUI_TIME_SLOWDOWN = true,
+    C00LGUI_SLOWDOWN_DURATION = 0.4,
+    C00LGUI_FOV_PUNCH_AMOUNT = 25,
+    C00LGUI_SHAKE_INTENSITY = 8,
+    C00LGUI_GLITCH_DURATION = 0.6,
 }
 
 function LoadSettings()
@@ -240,6 +253,15 @@ local c00lguiFailReason = nil
 local c00lguiHealthConn = nil
 local c00lguiAnchorConn = nil
 local c00lguiSlowConn = nil
+
+-- C00LGUI VISUAL EFFECTS
+local c00lguiScreenGui = nil
+local c00lguiBlurEffect = nil
+local c00lguiChromaticEffect = nil
+local c00lguiFovConnection = nil
+local c00lguiShakeConnection = nil
+local c00lguiOriginalFov = nil
+local c00lguiOriginalGravity = nil
 
 local rayParams = RaycastParams.new()
 rayParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -469,7 +491,7 @@ local function UpdateText(ItemInstance, TargetRoot, Settings)
         if TargetRoot and TargetRoot.Parent then
             local dist = (Camera.CFrame.Position - TargetRoot.Position).Magnitude
             local minD = Settings.MinDistance or settings.ESP_TEXT_MIN_DISTANCE
-            local maxD = settings.ESP_TEXT_MAX_DISTANCE
+            local maxD = Settings.ESP_TEXT_MAX_DISTANCE
             if dist > minD and dist < maxD then
                 TextLabel.TextTransparency = 0
                 TextLabel.TextStrokeTransparency = 0
@@ -958,7 +980,7 @@ task.spawn(function()
 end)
 
 -- ==========================================
--- FUN: C00LGUI (клиентский аналог Ability 2)
+-- FUN: C00LGUI - ВИЗУАЛЬНЫЕ ЭФФЕКТЫ
 -- ==========================================
 local function createC00lguiBillboard()
     if not hrp or not character then return nil end
@@ -1003,49 +1025,310 @@ local function playC00lguiSound(soundId, parent)
     return sound
 end
 
-local function findFarthestPoint(radius)
+local function isInsideWall(position)
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = {character}
+    params.RespectCanCollide = true
+    
+    local checkPoints = {
+        Vector3.new(0, 0, 0),
+        Vector3.new(1, 0, 0),
+        Vector3.new(-1, 0, 0),
+        Vector3.new(0, 1, 0),
+        Vector3.new(0, -1, 0),
+        Vector3.new(0, 0, 1),
+        Vector3.new(0, 0, -1),
+    }
+    
+    local hits = 0
+    for _, offset in ipairs(checkPoints) do
+        local result = Workspace:Raycast(position, offset * 2, params)
+        if result then hits = hits + 1 end
+    end
+    
+    return hits >= 3
+end
+
+local function findFarthestPointThroughWalls(radius)
     if not hrp then return nil end
     
     local origin = hrp.Position
-    local bestPoint = origin
+    local bestPoint = nil
     local bestDist = 0
     
-    -- Сканируем 360° вокруг игрока с шагом 15° (24 направления)
+    -- Сканируем 24 направления вокруг игрока (сквозь стены)
     for i = 0, 360, 15 do
         local angle = math.rad(i)
         local dir = Vector3.new(math.cos(angle), 0, math.sin(angle))
         
-        local result = Workspace:Raycast(
-            origin + Vector3.new(0, 2, 0),
-            dir * radius,
-            rayParams
-        )
-        
-        if result then
-            local dist = (result.Position - origin).Magnitude
-            if dist > bestDist then
-                bestDist = dist
-                bestPoint = result.Position - dir * 2
-            end
-        else
-            if radius > bestDist then
-                bestDist = radius
-                bestPoint = origin + dir * radius
+        -- Пробуем разные высоты
+        for _, heightOffset in ipairs({0, 5, 10, -3}) do
+            local target = origin + dir * radius + Vector3.new(0, heightOffset, 0)
+            
+            if not isInsideWall(target) then
+                local groundCheck = Workspace:Raycast(
+                    target + Vector3.new(0, 3, 0),
+                    Vector3.new(0, -30, 0),
+                    rayParams
+                )
+                
+                if groundCheck then
+                    local finalPos = groundCheck.Position + Vector3.new(0, 3.5, 0)
+                    local dist = (finalPos - origin).Magnitude
+                    
+                    if dist > bestDist then
+                        bestDist = dist
+                        bestPoint = finalPos
+                    end
+                end
             end
         end
     end
     
-    -- Проверка на землю под найденной точкой
-    local groundCheck = Workspace:Raycast(
-        bestPoint + Vector3.new(0, 5, 0),
-        Vector3.new(0, -20, 0),
-        rayParams
-    )
-    if groundCheck then
-        return groundCheck.Position + Vector3.new(0, 3, 0)
+    -- Fallback: телепорт вперёд на радиус
+    if not bestPoint then
+        local lookDir = hrp.CFrame.LookVector
+        lookDir = Vector3.new(lookDir.X, 0, lookDir.Z).Unit
+        bestPoint = origin + lookDir * radius + Vector3.new(0, 3, 0)
     end
     
-    return bestPoint + Vector3.new(0, 3, 0)
+    return bestPoint
+end
+
+-- ==========================================
+-- ВИЗУАЛЬНЫЕ ЭФФЕКТЫ ДЛЯ C00LGUI
+-- ==========================================
+local function createTeleportOverlay()
+    if not settings.C00LGUI_VISUAL_ENABLED then return nil end
+    
+    if c00lguiScreenGui and c00lguiScreenGui.Parent then
+        c00lguiScreenGui:Destroy()
+    end
+    
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "ForsakenSurgeTeleportFX"
+    screenGui.ResetOnSpawn = false
+    screenGui.IgnoreGuiInset = true
+    screenGui.DisplayOrder = 9999
+    screenGui.Parent = player:WaitForChild("PlayerGui")
+    
+    -- Градиентный фон
+    local bg = Instance.new("Frame")
+    bg.Name = "Background"
+    bg.Size = UDim2.fromScale(1, 1)
+    bg.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    bg.BackgroundTransparency = 1
+    bg.ZIndex = 1
+    bg.Parent = screenGui
+    
+    local grad = Instance.new("UIGradient")
+    grad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 255, 100)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 100, 255)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(150, 0, 255)),
+    })
+    grad.Rotation = 45
+    grad.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 1),
+        NumberSequenceKeypoint.new(0.5, 0.7),
+        NumberSequenceKeypoint.new(1, 1),
+    })
+    grad.Parent = bg
+    
+    -- Центральный текст
+    local centerText = Instance.new("TextLabel")
+    centerText.Name = "CenterText"
+    centerText.Size = UDim2.fromScale(1, 0.2)
+    centerText.Position = UDim2.fromScale(0, 0.4)
+    centerText.BackgroundTransparency = 1
+    centerText.Text = ""
+    centerText.TextColor3 = Color3.fromRGB(0, 255, 100)
+    centerText.TextScaled = true
+    centerText.Font = Enum.Font.Code
+    centerText.TextStrokeTransparency = 0
+    centerText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    centerText.ZIndex = 10
+    centerText.Parent = screenGui
+    
+    -- Прогресс-бар
+    local progressBg = Instance.new("Frame")
+    progressBg.Name = "ProgressBg"
+    progressBg.Size = UDim2.new(0.4, 0, 0, 8)
+    progressBg.Position = UDim2.fromScale(0.3, 0.62)
+    progressBg.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    progressBg.BorderSizePixel = 0
+    progressBg.ZIndex = 10
+    progressBg.Parent = screenGui
+    
+    local progressCorner = Instance.new("UICorner")
+    progressCorner.CornerRadius = UDim.new(0, 4)
+    progressCorner.Parent = progressBg
+    
+    local progressFill = Instance.new("Frame")
+    progressFill.Name = "ProgressFill"
+    progressFill.Size = UDim2.fromScale(0, 1)
+    progressFill.BackgroundColor3 = Color3.fromRGB(0, 255, 100)
+    progressFill.BorderSizePixel = 0
+    progressFill.ZIndex = 11
+    progressFill.Parent = progressBg
+    
+    local fillCorner = Instance.new("UICorner")
+    fillCorner.CornerRadius = UDim.new(0, 4)
+    fillCorner.Parent = progressFill
+    
+    -- Хром. аберрация (цветные полосы)
+    if settings.C00LGUI_CHROMATIC then
+        local chromaLeft = Instance.new("Frame")
+        chromaLeft.Name = "ChromaLeft"
+        chromaLeft.Size = UDim2.fromScale(0.02, 1)
+        chromaLeft.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        chromaLeft.BackgroundTransparency = 0.7
+        chromaLeft.ZIndex = 5
+        chromaLeft.Parent = screenGui
+        
+        local chromaRight = Instance.new("Frame")
+        chromaRight.Name = "ChromaRight"
+        chromaRight.Size = UDim2.fromScale(0.02, 1)
+        chromaRight.Position = UDim2.fromScale(0.98, 0)
+        chromaRight.BackgroundColor3 = Color3.fromRGB(0, 100, 255)
+        chromaRight.BackgroundTransparency = 0.7
+        chromaRight.ZIndex = 5
+        chromaRight.Parent = screenGui
+    end
+    
+    c00lguiScreenGui = screenGui
+    return screenGui, bg, centerText, progressFill
+end
+
+local function applyMotionBlur()
+    if not settings.C00LGUI_MOTION_BLUR then return end
+    
+    local existing = Lighting:FindFirstChild("ForsakenSurgeBlur")
+    if existing then existing:Destroy() end
+    
+    c00lguiBlurEffect = Instance.new("BlurEffect")
+    c00lguiBlurEffect.Name = "ForsakenSurgeBlur"
+    c00lguiBlurEffect.Size = 0
+    c00lguiBlurEffect.Parent = Lighting
+    
+    TweenService:Create(c00lguiBlurEffect, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = 24}):Play()
+end
+
+local function removeMotionBlur()
+    if c00lguiBlurEffect and c00lguiBlurEffect.Parent then
+        local blur = c00lguiBlurEffect
+        TweenService:Create(blur, TweenInfo.new(0.5, Enum.EasingStyle.Quad), {Size = 0}):Play()
+        Debris:AddItem(blur, 0.6)
+        c00lguiBlurEffect = nil
+    end
+end
+
+local function applyChromaticAberration()
+    if not settings.C00LGUI_CHROMATIC then return end
+    
+    local existing = Lighting:FindFirstChild("ForsakenSurgeChroma")
+    if existing then existing:Destroy() end
+    
+    c00lguiChromaticEffect = Instance.new("ChromaticAberrationEffect")
+    c00lguiChromaticEffect.Name = "ForsakenSurgeChroma"
+    c00lguiChromaticEffect.Offset = Vector2.new(0, 0)
+    c00lguiChromaticEffect.Parent = Lighting
+    
+    TweenService:Create(c00lguiChromaticEffect, TweenInfo.new(0.3), {Offset = Vector2.new(0.03, 0.03)}):Play()
+end
+
+local function removeChromaticAberration()
+    if c00lguiChromaticEffect and c00lguiChromaticEffect.Parent then
+        local chroma = c00lguiChromaticEffect
+        TweenService:Create(chroma, TweenInfo.new(0.5), {Offset = Vector2.new(0, 0)}):Play()
+        Debris:AddItem(chroma, 0.6)
+        c00lguiChromaticEffect = nil
+    end
+end
+
+local function applyFovPunch()
+    if not settings.C00LGUI_FOV_PUNCH then return end
+    
+    c00lguiOriginalFov = Camera.FieldOfView
+    local targetFov = c00lguiOriginalFov + settings.C00LGUI_FOV_PUNCH_AMOUNT
+    
+    TweenService:Create(Camera, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {FieldOfView = targetFov}):Play()
+    
+    task.delay(0.3, function()
+        if Camera then
+            TweenService:Create(Camera, TweenInfo.new(0.4, Enum.EasingStyle.Quad), {FieldOfView = c00lguiOriginalFov}):Play()
+        end
+    end)
+end
+
+local function applyScreenShake()
+    if not settings.C00LGUI_SCREEN_SHAKE then return end
+    
+    local shakeTime = 0
+    local shakeDuration = 0.5
+    local intensity = settings.C00LGUI_SHAKE_INTENSITY
+    
+    c00lguiShakeConnection = RunService.RenderStepped:Connect(function(dt)
+        shakeTime = shakeTime + dt
+        if shakeTime > shakeDuration then
+            if c00lguiShakeConnection then
+                c00lguiShakeConnection:Disconnect()
+                c00lguiShakeConnection = nil
+            end
+            return
+        end
+        
+        local progress = 1 - (shakeTime / shakeDuration)
+        local strength = intensity * progress
+        
+        local shakeX = (math.random() - 0.5) * strength * 0.01
+        local shakeY = (math.random() - 0.5) * strength * 0.01
+        local shakeZ = (math.random() - 0.5) * strength * 0.01
+        
+        Camera.CFrame = Camera.CFrame * CFrame.new(shakeX, shakeY, shakeZ)
+    end)
+end
+
+local function applyTimeSlowdown()
+    if not settings.C00LGUI_TIME_SLOWDOWN then return end
+    
+    c00lguiOriginalGravity = Workspace.Gravity
+    
+    local startTime = tick()
+    local duration = settings.C00LGUI_SLOWDOWN_DURATION
+    
+    local conn
+    conn = RunService.Heartbeat:Connect(function(dt)
+        local elapsed = tick() - startTime
+        if elapsed > duration then
+            Workspace.Gravity = c00lguiOriginalGravity
+            conn:Disconnect()
+            return
+        end
+        
+        local progress = elapsed / duration
+        local slowdownFactor = 1 - (math.sin(progress * math.pi) * 0.7)
+        Workspace.Gravity = c00lguiOriginalGravity * slowdownFactor
+    end)
+end
+
+local function playGlitchEffect()
+    if not settings.C00LGUI_VISUAL_ENABLED or not c00lguiScreenGui then return end
+    
+    local bg = c00lguiScreenGui:FindFirstChild("Background")
+    if not bg then return end
+    
+    for i = 1, 6 do
+        task.spawn(function()
+            task.wait(i * 0.03)
+            if bg and bg.Parent then
+                bg.BackgroundTransparency = 0.5 + math.random() * 0.3
+                task.wait(0.02)
+                bg.BackgroundTransparency = 1
+            end
+        end)
+    end
 end
 
 local function blockMovement()
@@ -1064,6 +1347,9 @@ local function unblockMovement()
     end
 end
 
+-- ==========================================
+-- FUN: C00LGUI - ГЛАВНАЯ ФУНКЦИЯ
+-- ==========================================
 local function activateC00lgui()
     if not settings.C00LGUI_ENABLED then return end
     if c00lguiActive then return end
@@ -1072,7 +1358,6 @@ local function activateC00lgui()
         if not hrp or not humanoid then return end
     end
     
-    -- Отключаем конфликтующие режимы
     if climbing or flying or noClipActive or turboActive then
         disableAllModes(nil)
     end
@@ -1080,17 +1365,34 @@ local function activateC00lgui()
     c00lguiActive = true
     c00lguiFailReason = nil
     
+    local originalWalkSpeed = humanoid.WalkSpeed
+    local originalJumpPower = humanoid.JumpPower
+    local originalAutoRotate = humanoid.AutoRotate
+    
+    -- ВИЗУАЛЬНЫЕ ЭФФЕКТЫ (начало)
+    local screenGui, bg, centerText, progressFill = createTeleportOverlay()
+    applyMotionBlur()
+    applyChromaticAberration()
+    applyFovPunch()
+    
+    if centerText then
+        centerText.Text = "INITIATING TELEPORT..."
+        centerText.TextColor3 = Color3.fromRGB(0, 255, 100)
+    end
+    
+    if bg then
+        TweenService:Create(bg, TweenInfo.new(0.4), {BackgroundTransparency = 0.85}):Play()
+    end
+    
     -- Блокировка движения
     blockMovement()
-    if humanoid then
-        humanoid.AutoRotate = false
-    end
+    humanoid.AutoRotate = false
     if hrp then
         hrp.AssemblyLinearVelocity = Vector3.zero
         hrp.AssemblyAngularVelocity = Vector3.zero
     end
     
-    -- Создание таблички
+    -- Табличка над головой
     local gui, label = nil, nil
     if settings.C00LGUI_SHOW_GUI then
         gui, label = createC00lguiBillboard()
@@ -1100,10 +1402,9 @@ local function activateC00lgui()
     -- Звук активации
     c00lguiSound = playC00lguiSound(settings.C00LGUI_SOUND_ACTIVATE, hrp)
     
-    -- Стартовое здоровье
     local startHealth = humanoid.Health
     
-    -- Проверка №1: урон
+    -- Проверки на fail
     if settings.C00LGUI_FAIL_ON_DAMAGE then
         c00lguiHealthConn = humanoid.HealthChanged:Connect(function(h)
             if h < startHealth then
@@ -1113,7 +1414,6 @@ local function activateC00lgui()
         end)
     end
     
-    -- Проверка №2: Anchored
     if settings.C00LGUI_FAIL_ON_ANCHOR and hrp then
         c00lguiAnchorConn = hrp:GetPropertyChangedSignal("Anchored"):Connect(function()
             if hrp.Anchored then
@@ -1122,7 +1422,6 @@ local function activateC00lgui()
         end)
     end
     
-    -- Проверка №3: SpeedMultiplier
     if settings.C00LGUI_FAIL_ON_SLOW then
         local speedMultipliers = character:FindFirstChild("SpeedMultipliers")
         if speedMultipliers then
@@ -1134,62 +1433,108 @@ local function activateC00lgui()
         end
     end
     
-    -- Смена текста через 2.3 сек
+    -- Прогресс-бар
+    if progressFill then
+        TweenService:Create(progressFill, TweenInfo.new(settings.C00LGUI_WINDUP, Enum.EasingStyle.Linear), {Size = UDim2.fromScale(1, 1)}):Play()
+    end
+    
+    -- Смена текста
     task.delay(2.3, function()
         if label and label.Parent and not c00lguiFailReason then
             label.Text = "h4xxing in pr0gr3ss...!!1!"
         end
+        if centerText and centerText.Parent and not c00lguiFailReason then
+            centerText.Text = "H4XXING IN PROGRESS...!!1!"
+            centerText.TextColor3 = Color3.fromRGB(255, 200, 0)
+        end
     end)
     
-    -- Ждём windup
+    -- Windup
     task.delay(settings.C00LGUI_WINDUP, function()
         if not c00lguiFailReason then
             c00lguiFailReason = "teleported"
         end
     end)
     
-    -- Основной поток завершения
+    -- Основной поток
     task.spawn(function()
-        -- Ждём результата
         repeat
             task.wait()
         until c00lguiFailReason
         
-        -- Восстанавливаем управление
         unblockMovement()
-        if humanoid then
-            humanoid.AutoRotate = true
-        end
+        humanoid.AutoRotate = originalAutoRotate
         
-        -- Обновляем текст
-        if label and label.Parent then
-            if c00lguiFailReason == "teleported" then
+        if c00lguiFailReason == "teleported" then
+            -- УСПЕХ
+            if label and label.Parent then
                 label.Text = "H4XX3D!!1!1"
                 label.TextColor3 = Color3.fromRGB(0, 255, 100)
-                playC00lguiSound(settings.C00LGUI_SOUND_SUCCESS, hrp)
-            else
+            end
+            if centerText and centerText.Parent then
+                centerText.Text = "H4XX3D!!1!1"
+                centerText.TextColor3 = Color3.fromRGB(0, 255, 100)
+            end
+            
+            playC00lguiSound(settings.C00LGUI_SOUND_SUCCESS, hrp)
+            playGlitchEffect()
+            
+            -- ТЕЛЕПОРТ СКВОЗЬ СТЕНЫ
+            if hrp and hrp.Parent then
+                local originalCFrame = hrp.CFrame
+                local target = findFarthestPointThroughWalls(settings.C00LGUI_RADIUS)
+                
+                if target then
+                    applyTimeSlowdown()
+                    applyScreenShake()
+                    
+                    hrp.CFrame = CFrame.new(target)
+                    
+                    task.wait(0.1)
+                    if hrp and hrp.Parent and isInsideWall(hrp.Position) then
+                        hrp.CFrame = originalCFrame
+                        if centerText and centerText.Parent then
+                            centerText.Text = "STUCK - REVERTING"
+                            centerText.TextColor3 = Color3.fromRGB(255, 100, 0)
+                        end
+                    end
+                end
+            end
+        else
+            -- FAIL
+            if label and label.Parent then
                 label.Text = "o noes D:"
                 label.TextColor3 = Color3.fromRGB(255, 50, 50)
-                playC00lguiSound(settings.C00LGUI_SOUND_FAIL, hrp)
             end
+            if centerText and centerText.Parent then
+                centerText.Text = "o noes D:"
+                centerText.TextColor3 = Color3.fromRGB(255, 50, 50)
+            end
+            playC00lguiSound(settings.C00LGUI_SOUND_FAIL, hrp)
         end
         
-        -- Телепорт при успехе
-        if c00lguiFailReason == "teleported" and hrp and hrp.Parent then
-            local target = findFarthestPoint(settings.C00LGUI_RADIUS)
-            if target then
-                hrp.CFrame = CFrame.new(target)
-            end
-        end
-        
-        -- Отключаем все проверки
+        -- Отключение проверок
         if c00lguiHealthConn then c00lguiHealthConn:Disconnect(); c00lguiHealthConn = nil end
         if c00lguiAnchorConn then c00lguiAnchorConn:Disconnect(); c00lguiAnchorConn = nil end
         if c00lguiSlowConn then c00lguiSlowConn:Disconnect(); c00lguiSlowConn = nil end
         
-        -- Очистка через 2 сек
+        -- Затухание
+        if bg then
+            TweenService:Create(bg, TweenInfo.new(0.5), {BackgroundTransparency = 1}):Play()
+        end
+        if centerText then
+            TweenService:Create(centerText, TweenInfo.new(0.5), {TextTransparency = 1}):Play()
+        end
+        
+        removeMotionBlur()
+        removeChromaticAberration()
+        
         task.wait(2)
         
+        if c00lguiScreenGui and c00lguiScreenGui.Parent then
+            c00lguiScreenGui:Destroy()
+            c00lguiScreenGui = nil
+        end
         if c00lguiGui and c00lguiGui.Parent then
             c00lguiGui:Destroy()
             c00lguiGui = nil
@@ -1201,7 +1546,7 @@ local function activateC00lgui()
 end
 
 -- ==========================================
--- KEYBIND HANDLER (глобальный)
+-- KEYBIND HANDLER
 -- ==========================================
 local keybindCallbacks = {}
 
@@ -1214,15 +1559,18 @@ local function registerKeybind(keyName, callback)
     end
 end
 
--- Регистрируем бинды
-registerKeybind(settings.SPIN_HOTKEY, function()
-    spinActive = not spinActive
-    showNotification("🌀 Вращение", spinActive and "Включено" or "Выключено")
-end)
+local function refreshKeybinds()
+    keybindCallbacks = {}
+    registerKeybind(settings.SPIN_HOTKEY, function()
+        spinActive = not spinActive
+        showNotification("🌀 Вращение", spinActive and "Включено" or "Выключено")
+    end)
+    registerKeybind(settings.C00LGUI_HOTKEY, function()
+        activateC00lgui()
+    end)
+end
 
-registerKeybind(settings.C00LGUI_HOTKEY, function()
-    activateC00lgui()
-end)
+refreshKeybinds()
 
 -- ==========================================
 -- INPUT HANDLING
@@ -1231,14 +1579,12 @@ UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
     pressed[input.KeyCode] = true
     
-    -- Стандартные клавиши
     if input.KeyCode == Enum.KeyCode.C then toggleClimb() end
     if input.KeyCode == Enum.KeyCode.V then toggleFly() end
     if input.KeyCode == Enum.KeyCode.B then toggleNoClip() end
     if input.KeyCode == Enum.KeyCode.Z then toggleTurbo() end
     if input.KeyCode == Enum.KeyCode.LeftShift then isSprinting = true end
     
-    -- Кастомные бинды
     local cb = keybindCallbacks[input.KeyCode]
     if cb then cb() end
 end)
@@ -1403,7 +1749,7 @@ local FunTab = Window:CreateTab({
 
 FunTab:CreateParagraph({
     Title = "🎉 FUN TAB",
-    Text = "🌀 Spin Mode + 💻 c00lgui (Ability 2)"
+    Text = "🌀 Spin Mode + 💻 c00lgui (Ability 2 с эффектами)"
 })
 
 -- ===== SPIN =====
@@ -1448,17 +1794,7 @@ FunTab:CreateKeybind({
     Callback = function(Key)
         settings.SPIN_HOTKEY = Key
         SaveSettings(settings)
-        -- Обновляем бинд
-        for k, _ in pairs(keybindCallbacks) do
-            keybindCallbacks[k] = nil
-        end
-        registerKeybind(settings.SPIN_HOTKEY, function()
-            spinActive = not spinActive
-            showNotification("🌀 Вращение", spinActive and "Включено" or "Выключено")
-        end)
-        registerKeybind(settings.C00LGUI_HOTKEY, function()
-            activateC00lgui()
-        end)
+        refreshKeybinds()
     end
 })
 
@@ -1467,7 +1803,7 @@ FunTab:CreateLabel({ Text = "💻 C00LGUI (Ability 2)", Style = 1 })
 
 FunTab:CreateParagraph({
     Title = "💻 c00lgui",
-    Text = "Клиентский аналог Ability 2: концентрация → телепорт в дальнюю точку (радиус 67 studs) или fail"
+    Text = "Клиентский аналог Ability 2: концентрация → телепорт СКВОЗЬ стены в дальнюю точку (радиус 67 studs) или fail"
 })
 
 FunTab:CreateToggle({
@@ -1493,16 +1829,7 @@ FunTab:CreateKeybind({
     Callback = function(Key)
         settings.C00LGUI_HOTKEY = Key
         SaveSettings(settings)
-        for k, _ in pairs(keybindCallbacks) do
-            keybindCallbacks[k] = nil
-        end
-        registerKeybind(settings.SPIN_HOTKEY, function()
-            spinActive = not spinActive
-            showNotification("🌀 Вращение", spinActive and "Включено" or "Выключено")
-        end)
-        registerKeybind(settings.C00LGUI_HOTKEY, function()
-            activateC00lgui()
-        end)
+        refreshKeybinds()
     end
 })
 
@@ -1571,6 +1898,105 @@ FunTab:CreateToggle({
     CurrentValue = settings.C00LGUI_FAIL_ON_SLOW,
     Callback = function(Value)
         settings.C00LGUI_FAIL_ON_SLOW = Value
+        SaveSettings(settings)
+    end
+})
+
+-- ===== C00LGUI VISUAL EFFECTS =====
+FunTab:CreateLabel({ Text = "🎬 ВИЗУАЛЬНЫЕ ЭФФЕКТЫ", Style = 1 })
+
+FunTab:CreateToggle({
+    Name = "🎬 Включить визуальные эффекты",
+    CurrentValue = settings.C00LGUI_VISUAL_ENABLED,
+    Callback = function(Value)
+        settings.C00LGUI_VISUAL_ENABLED = Value
+        SaveSettings(settings)
+    end
+})
+
+FunTab:CreateToggle({
+    Name = "🌫️ Motion Blur (размытие)",
+    CurrentValue = settings.C00LGUI_MOTION_BLUR,
+    Callback = function(Value)
+        settings.C00LGUI_MOTION_BLUR = Value
+        SaveSettings(settings)
+    end
+})
+
+FunTab:CreateToggle({
+    Name = "🌈 Chromatic Aberration (цветные полосы)",
+    CurrentValue = settings.C00LGUI_CHROMATIC,
+    Callback = function(Value)
+        settings.C00LGUI_CHROMATIC = Value
+        SaveSettings(settings)
+    end
+})
+
+FunTab:CreateToggle({
+    Name = "📸 FOV Punch (расширение камеры)",
+    CurrentValue = settings.C00LGUI_FOV_PUNCH,
+    Callback = function(Value)
+        settings.C00LGUI_FOV_PUNCH = Value
+        SaveSettings(settings)
+    end
+})
+
+FunTab:CreateSlider({
+    Name = "📸 Сила FOV Punch",
+    Range = {5, 60},
+    Increment = 1,
+    CurrentValue = settings.C00LGUI_FOV_PUNCH_AMOUNT,
+    Callback = function(Value)
+        settings.C00LGUI_FOV_PUNCH_AMOUNT = Value
+        SaveSettings(settings)
+    end
+})
+
+FunTab:CreateToggle({
+    Name = "📳 Screen Shake (тряска)",
+    CurrentValue = settings.C00LGUI_SCREEN_SHAKE,
+    Callback = function(Value)
+        settings.C00LGUI_SCREEN_SHAKE = Value
+        SaveSettings(settings)
+    end
+})
+
+FunTab:CreateSlider({
+    Name = "📳 Сила тряски",
+    Range = {1, 30},
+    Increment = 1,
+    CurrentValue = settings.C00LGUI_SHAKE_INTENSITY,
+    Callback = function(Value)
+        settings.C00LGUI_SHAKE_INTENSITY = Value
+        SaveSettings(settings)
+    end
+})
+
+FunTab:CreateToggle({
+    Name = "⏱️ Time Slowdown (замедление)",
+    CurrentValue = settings.C00LGUI_TIME_SLOWDOWN,
+    Callback = function(Value)
+        settings.C00LGUI_TIME_SLOWDOWN = Value
+        SaveSettings(settings)
+    end
+})
+
+FunTab:CreateSlider({
+    Name = "⏱️ Длительность замедления (сек)",
+    Range = {0.1, 2.0},
+    Increment = 0.05,
+    CurrentValue = settings.C00LGUI_SLOWDOWN_DURATION,
+    Callback = function(Value)
+        settings.C00LGUI_SLOWDOWN_DURATION = Value
+        SaveSettings(settings)
+    end
+})
+
+FunTab:CreateToggle({
+    Name = "🎨 Screen Fade (затемнение)",
+    CurrentValue = settings.C00LGUI_SCREEN_FADE,
+    Callback = function(Value)
+        settings.C00LGUI_SCREEN_FADE = Value
         SaveSettings(settings)
     end
 })
@@ -2252,13 +2678,19 @@ end)
 -- INITIALIZATION
 -- ==========================================
 print("═══════════════════════════════════════════════════════")
-print("🕷️ Forsaken Surge v12.0 - FUN EDITION")
+print("🕷️ Forsaken Surge v13.0 - FUN EDITION")
 print("═══════════════════════════════════════════════════════")
 print("✅ Wall Walk | Fly | No Clip | Turbo")
 print("✅ ESP PRO (расширенные настройки)")
 print("✅ FUN TAB:")
 print("   ├─ 🌀 Spin Mode (вращение)")
-print("   └─ 💻 c00lgui (Ability 2 аналог)")
+print("   └─ 💻 c00lgui (Ability 2 + ВИЗУАЛЬНЫЕ ЭФФЕКТЫ)")
+print("      ├─ 🌫️ Motion Blur")
+print("      ├─ 🌈 Chromatic Aberration")
+print("      ├─ 📸 FOV Punch")
+print("      ├─ 📳 Screen Shake")
+print("      ├─ ⏱️ Time Slowdown")
+print("      └─ 🎬 Glitch Effect")
 print("═══════════════════════════════════════════════════════")
 print("🔑 C - Wall Walk | V - Fly | B - No Clip | Z - Turbo")
 print("🔑 Кастомные бинды: Fun Tab → Keybind")
