@@ -1,30 +1,27 @@
 --[[
-    ═══════════════════════════════════════════════════════════
-    🌌 NEBULA FRAME — Minimalist UI Framework
-    Inspired by Luna (Nebula Softworks), rewritten from scratch
+    ═══════════════════════════════════════════════════════════════
+    🌌 NEBULA FRAME v1.1 — Minimalist UI Framework
     
-    Features:
-      • Minimal design, thin lines, soft corners
-      • Full Luna-compatible API
+    Полностью рабочий фреймворк. Просто вставь в экзекьютор и запусти.
+    Откроется демо-окно, чтобы убедиться что всё работает.
+    
+    Возможности:
+      • Минималистичный дизайн, тонкие линии
       • Command Palette (Ctrl+K)
-      • Live animated gradient theme
-      • Resource monitor (FPS / Ping / Memory)
-      • Fuzzy search in dropdowns
-      • 6 preset themes + custom color picker
-      • Auto-save to file
-      • Lazy-render tab
-    ═══════════════════════════════════════════════════════════
+      • Живой градиент темы
+      • Resource Monitor (FPS / Ping / Memory)
+      • 6 готовых тем
+      • Скрытие интерфейса (RightShift)
+      • Сворачивание окна
+      • Работает без внешних зависимостей
+    ═══════════════════════════════════════════════════════════════
 ]]
 
-local Nebula = {}
-Nebula.__index = Nebula
-Nebula.Version = "1.0.0"
-Nebula.Options = {}
-Nebula.Flags = {}
+print("[Nebula] Загрузка...")
 
--- ═══════════════════════════════════════════════════════════
+-- ═══════════════════════════════════════════════════════════════
 -- SERVICES
--- ═══════════════════════════════════════════════════════════
+-- ═══════════════════════════════════════════════════════════════
 local Players           = game:GetService("Players")
 local RunService        = game:GetService("RunService")
 local UserInputService  = game:GetService("UserInputService")
@@ -33,105 +30,110 @@ local HttpService       = game:GetService("HttpService")
 local CoreGui           = game:GetService("CoreGui")
 local Stats             = game:GetService("Stats")
 
-local Player            = Players.LocalPlayer
-local Camera            = workspace.CurrentCamera
+local Player = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
 
--- ═══════════════════════════════════════════════════════════
--- THEME SYSTEM
--- ═══════════════════════════════════════════════════════════
+-- ═══════════════════════════════════════════════════════════════
+-- FRAMEWORK OBJECT
+-- ═══════════════════════════════════════════════════════════════
+local Nebula = {
+    Version = "1.1.0",
+    Options = {},
+    ThemeName = "Nebula",
+    Window = nil,
+}
+
+-- ═══════════════════════════════════════════════════════════════
+-- THEMES
+-- ═══════════════════════════════════════════════════════════════
 local Themes = {
     Nebula = {
-        Accent    = Color3.fromRGB(150, 170, 255),
-        Accent2   = Color3.fromRGB(180, 140, 220),
-        Background= Color3.fromRGB(22, 22, 28),
-        Surface   = Color3.fromRGB(30, 30, 38),
-        Surface2  = Color3.fromRGB(38, 38, 48),
-        Text      = Color3.fromRGB(238, 238, 242),
-        TextDim   = Color3.fromRGB(150, 150, 165),
-        Line      = Color3.fromRGB(52, 52, 64),
-        Danger    = Color3.fromRGB(255, 90, 90),
-        Success   = Color3.fromRGB(120, 220, 140),
-        Warning   = Color3.fromRGB(255, 200, 90),
+        Accent = Color3.fromRGB(150, 170, 255),
+        Accent2 = Color3.fromRGB(180, 140, 220),
+        Background = Color3.fromRGB(22, 22, 28),
+        Surface = Color3.fromRGB(30, 30, 38),
+        Surface2 = Color3.fromRGB(38, 38, 48),
+        Text = Color3.fromRGB(238, 238, 242),
+        TextDim = Color3.fromRGB(150, 150, 165),
+        Line = Color3.fromRGB(52, 52, 64),
+        Danger = Color3.fromRGB(255, 90, 90),
+        Success = Color3.fromRGB(120, 220, 140),
+        Warning = Color3.fromRGB(255, 200, 90),
     },
     Midnight = {
-        Accent    = Color3.fromRGB(120, 200, 255),
-        Accent2   = Color3.fromRGB(80, 150, 220),
-        Background= Color3.fromRGB(14, 16, 22),
-        Surface   = Color3.fromRGB(20, 24, 32),
-        Surface2  = Color3.fromRGB(28, 34, 44),
-        Text      = Color3.fromRGB(235, 240, 250),
-        TextDim   = Color3.fromRGB(140, 150, 170),
-        Line      = Color3.fromRGB(40, 48, 60),
-        Danger    = Color3.fromRGB(255, 100, 100),
-        Success   = Color3.fromRGB(100, 220, 160),
-        Warning   = Color3.fromRGB(255, 200, 100),
+        Accent = Color3.fromRGB(120, 200, 255),
+        Accent2 = Color3.fromRGB(80, 150, 220),
+        Background = Color3.fromRGB(14, 16, 22),
+        Surface = Color3.fromRGB(20, 24, 32),
+        Surface2 = Color3.fromRGB(28, 34, 44),
+        Text = Color3.fromRGB(235, 240, 250),
+        TextDim = Color3.fromRGB(140, 150, 170),
+        Line = Color3.fromRGB(40, 48, 60),
+        Danger = Color3.fromRGB(255, 100, 100),
+        Success = Color3.fromRGB(100, 220, 160),
+        Warning = Color3.fromRGB(255, 200, 100),
     },
     Sunset = {
-        Accent    = Color3.fromRGB(255, 160, 120),
-        Accent2   = Color3.fromRGB(240, 110, 140),
-        Background= Color3.fromRGB(28, 20, 24),
-        Surface   = Color3.fromRGB(38, 28, 34),
-        Surface2  = Color3.fromRGB(48, 36, 42),
-        Text      = Color3.fromRGB(250, 240, 235),
-        TextDim   = Color3.fromRGB(180, 155, 150),
-        Line      = Color3.fromRGB(64, 48, 54),
-        Danger    = Color3.fromRGB(255, 90, 90),
-        Success   = Color3.fromRGB(140, 220, 140),
-        Warning   = Color3.fromRGB(255, 210, 120),
+        Accent = Color3.fromRGB(255, 160, 120),
+        Accent2 = Color3.fromRGB(240, 110, 140),
+        Background = Color3.fromRGB(28, 20, 24),
+        Surface = Color3.fromRGB(38, 28, 34),
+        Surface2 = Color3.fromRGB(48, 36, 42),
+        Text = Color3.fromRGB(250, 240, 235),
+        TextDim = Color3.fromRGB(180, 155, 150),
+        Line = Color3.fromRGB(64, 48, 54),
+        Danger = Color3.fromRGB(255, 90, 90),
+        Success = Color3.fromRGB(140, 220, 140),
+        Warning = Color3.fromRGB(255, 210, 120),
     },
     Forest = {
-        Accent    = Color3.fromRGB(130, 210, 150),
-        Accent2   = Color3.fromRGB(80, 180, 130),
-        Background= Color3.fromRGB(18, 24, 20),
-        Surface   = Color3.fromRGB(24, 32, 28),
-        Surface2  = Color3.fromRGB(34, 44, 38),
-        Text      = Color3.fromRGB(230, 245, 235),
-        TextDim   = Color3.fromRGB(140, 165, 150),
-        Line      = Color3.fromRGB(44, 58, 50),
-        Danger    = Color3.fromRGB(255, 110, 110),
-        Success   = Color3.fromRGB(160, 240, 170),
-        Warning   = Color3.fromRGB(255, 210, 120),
+        Accent = Color3.fromRGB(130, 210, 150),
+        Accent2 = Color3.fromRGB(80, 180, 130),
+        Background = Color3.fromRGB(18, 24, 20),
+        Surface = Color3.fromRGB(24, 32, 28),
+        Surface2 = Color3.fromRGB(34, 44, 38),
+        Text = Color3.fromRGB(230, 245, 235),
+        TextDim = Color3.fromRGB(140, 165, 150),
+        Line = Color3.fromRGB(44, 58, 50),
+        Danger = Color3.fromRGB(255, 110, 110),
+        Success = Color3.fromRGB(160, 240, 170),
+        Warning = Color3.fromRGB(255, 210, 120),
     },
     Rose = {
-        Accent    = Color3.fromRGB(255, 150, 190),
-        Accent2   = Color3.fromRGB(220, 120, 200),
-        Background= Color3.fromRGB(26, 20, 26),
-        Surface   = Color3.fromRGB(34, 26, 34),
-        Surface2  = Color3.fromRGB(46, 36, 46),
-        Text      = Color3.fromRGB(248, 238, 248),
-        TextDim   = Color3.fromRGB(175, 155, 175),
-        Line      = Color3.fromRGB(60, 46, 60),
-        Danger    = Color3.fromRGB(255, 100, 120),
-        Success   = Color3.fromRGB(140, 230, 170),
-        Warning   = Color3.fromRGB(255, 210, 130),
+        Accent = Color3.fromRGB(255, 150, 190),
+        Accent2 = Color3.fromRGB(220, 120, 200),
+        Background = Color3.fromRGB(26, 20, 26),
+        Surface = Color3.fromRGB(34, 26, 34),
+        Surface2 = Color3.fromRGB(46, 36, 46),
+        Text = Color3.fromRGB(248, 238, 248),
+        TextDim = Color3.fromRGB(175, 155, 175),
+        Line = Color3.fromRGB(60, 46, 60),
+        Danger = Color3.fromRGB(255, 100, 120),
+        Success = Color3.fromRGB(140, 230, 170),
+        Warning = Color3.fromRGB(255, 210, 130),
     },
     Mono = {
-        Accent    = Color3.fromRGB(200, 200, 210),
-        Accent2   = Color3.fromRGB(160, 160, 170),
-        Background= Color3.fromRGB(18, 18, 20),
-        Surface   = Color3.fromRGB(26, 26, 30),
-        Surface2  = Color3.fromRGB(36, 36, 42),
-        Text      = Color3.fromRGB(240, 240, 245),
-        TextDim   = Color3.fromRGB(150, 150, 160),
-        Line      = Color3.fromRGB(50, 50, 56),
-        Danger    = Color3.fromRGB(255, 100, 100),
-        Success   = Color3.fromRGB(150, 220, 150),
-        Warning   = Color3.fromRGB(230, 210, 120),
+        Accent = Color3.fromRGB(200, 200, 210),
+        Accent2 = Color3.fromRGB(160, 160, 170),
+        Background = Color3.fromRGB(18, 18, 20),
+        Surface = Color3.fromRGB(26, 26, 30),
+        Surface2 = Color3.fromRGB(36, 36, 42),
+        Text = Color3.fromRGB(240, 240, 245),
+        TextDim = Color3.fromRGB(150, 150, 160),
+        Line = Color3.fromRGB(50, 50, 56),
+        Danger = Color3.fromRGB(255, 100, 100),
+        Success = Color3.fromRGB(150, 220, 150),
+        Warning = Color3.fromRGB(230, 210, 120),
     },
 }
 
 Nebula.Theme = Themes.Nebula
-Nebula.ThemeName = "Nebula"
 
--- ═══════════════════════════════════════════════════════════
+-- ═══════════════════════════════════════════════════════════════
 -- UTILS
--- ═══════════════════════════════════════════════════════════
+-- ═══════════════════════════════════════════════════════════════
 local function tw(obj, time, props, style, dir)
-    local info = TweenInfo.new(
-        time or 0.25,
-        style or Enum.EasingStyle.Quart,
-        dir or Enum.EasingDirection.Out
-    )
+    local info = TweenInfo.new(time or 0.2, style or Enum.EasingStyle.Quart, dir or Enum.EasingDirection.Out)
     local t = TweenService:Create(obj, info, props)
     t:Play()
     return t
@@ -146,7 +148,7 @@ end
 
 local function stroke(parent, color, thickness, transparency)
     local s = Instance.new("UIStroke")
-    s.Color = color or Color3.new(1,1,1)
+    s.Color = color or Color3.new(1, 1, 1)
     s.Thickness = thickness or 1
     s.Transparency = transparency or 0
     s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
@@ -156,26 +158,24 @@ end
 
 local function padding(parent, t, r, b, l)
     local p = Instance.new("UIPadding")
-    p.PaddingTop    = UDim.new(0, t or 0)
-    p.PaddingRight  = UDim.new(0, r or 0)
+    p.PaddingTop = UDim.new(0, t or 0)
+    p.PaddingRight = UDim.new(0, r or 0)
     p.PaddingBottom = UDim.new(0, b or 0)
-    p.PaddingLeft   = UDim.new(0, l or 0)
+    p.PaddingLeft = UDim.new(0, l or 0)
     p.Parent = parent
     return p
 end
 
-local function listLayout(parent, dir, spacing, halign, valign, order)
+local function listLayout(parent, dir, spacing)
     local l = Instance.new("UIListLayout")
     l.FillDirection = dir or Enum.FillDirection.Vertical
     l.Padding = UDim.new(0, spacing or 6)
-    l.HorizontalAlignment = halign or Enum.HorizontalAlignment.Left
-    l.VerticalAlignment = valign or Enum.VerticalAlignment.Top
-    l.SortOrder = order or Enum.SortOrder.LayoutOrder
+    l.SortOrder = Enum.SortOrder.LayoutOrder
     l.Parent = parent
     return l
 end
 
-local function generateUID()
+local function uid()
     return HttpService:GenerateGUID(false):gsub("-", ""):sub(1, 12)
 end
 
@@ -187,285 +187,345 @@ local function kwargify(defaults, passed)
     return passed
 end
 
-local function hexToColor3(hex)
-    hex = hex:gsub("#", "")
-    return Color3.fromRGB(
-        tonumber(hex:sub(1,2), 16) or 255,
-        tonumber(hex:sub(3,4), 16) or 255,
-        tonumber(hex:sub(5,6), 16) or 255
-    )
+-- ═══════════════════════════════════════════════════════════════
+-- ROOT GUI
+-- ═══════════════════════════════════════════════════════════════
+local function createRootGui(name)
+    local gui = Instance.new("ScreenGui")
+    gui.Name = name or ("Nebula_" .. uid())
+    gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = true
+    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    gui.DisplayOrder = 999999
+    
+    local parented = false
+    if gethui then
+        pcall(function()
+            gui.Parent = gethui()
+            parented = true
+        end)
+    end
+    if not parented and syn and syn.protect_gui then
+        pcall(function()
+            syn.protect_gui(gui)
+            gui.Parent = CoreGui
+            parented = true
+        end)
+    end
+    if not parented then
+        local ok = pcall(function() gui.Parent = CoreGui end)
+        if not ok then
+            gui.Parent = Player:WaitForChild("PlayerGui")
+        end
+    end
+    return gui
 end
 
-local function color3ToHex(c)
-    return string.format("#%02X%02X%02X",
-        math.floor(c.R * 255), math.floor(c.G * 255), math.floor(c.B * 255))
+-- ═══════════════════════════════════════════════════════════════
+-- NOTIFICATIONS
+-- ═══════════════════════════════════════════════════════════════
+local notifGui
+local function ensureNotifGui()
+    if notifGui and notifGui.Parent then return notifGui end
+    notifGui = createRootGui("NebulaNotifs")
+    return notifGui
 end
 
-local function formatNumber(n)
-    if n >= 1e9 then return string.format("%.2fB", n/1e9) end
-    if n >= 1e6 then return string.format("%.2fM", n/1e6) end
-    if n >= 1e3 then return string.format("%.2fK", n/1e3) end
-    return tostring(math.floor(n))
+function Nebula:Notify(cfg)
+    cfg = kwargify({
+        Title = "Nebula",
+        Content = "",
+        Type = "info",
+        Duration = 3,
+    }, cfg)
+    
+    local t = self.Theme
+    local gui = ensureNotifGui()
+    
+    local typeColors = {
+        info = t.Accent,
+        success = t.Success,
+        error = t.Danger,
+        warning = t.Warning,
+    }
+    local color = typeColors[cfg.Type] or t.Accent
+    
+    local container = gui:FindFirstChild("Container")
+    if not container then
+        container = Instance.new("Frame")
+        container.Name = "Container"
+        container.Size = UDim2.new(0, 320, 1, -40)
+        container.Position = UDim2.new(1, -340, 0, 20)
+        container.BackgroundTransparency = 1
+        container.Parent = gui
+        listLayout(container, Enum.FillDirection.Vertical, 8)
+    end
+    
+    local card = Instance.new("Frame")
+    card.Size = UDim2.new(1, 0, 0, 0)
+    card.BackgroundColor3 = t.Surface
+    card.BorderSizePixel = 0
+    card.ClipsDescendants = true
+    card.Parent = container
+    corner(card, 8)
+    stroke(card, t.Line, 1, 0.4)
+    
+    local bar = Instance.new("Frame")
+    bar.Size = UDim2.new(0, 3, 1, 0)
+    bar.BackgroundColor3 = color
+    bar.BorderSizePixel = 0
+    bar.Parent = card
+    
+    local titleLbl = Instance.new("TextLabel")
+    titleLbl.Size = UDim2.new(1, -24, 0, 20)
+    titleLbl.Position = UDim2.new(0, 14, 0, 8)
+    titleLbl.BackgroundTransparency = 1
+    titleLbl.Text = cfg.Title
+    titleLbl.TextColor3 = t.Text
+    titleLbl.Font = Enum.Font.GothamBold
+    titleLbl.TextSize = 12
+    titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+    titleLbl.Parent = card
+    
+    local textLbl = Instance.new("TextLabel")
+    textLbl.Size = UDim2.new(1, -24, 0, 0)
+    textLbl.Position = UDim2.new(0, 14, 0, 28)
+    textLbl.BackgroundTransparency = 1
+    textLbl.Text = cfg.Content
+    textLbl.TextColor3 = t.TextDim
+    textLbl.Font = Enum.Font.Gotham
+    textLbl.TextSize = 11
+    textLbl.TextWrapped = true
+    textLbl.TextXAlignment = Enum.TextXAlignment.Left
+    textLbl.TextYAlignment = Enum.TextYAlignment.Top
+    textLbl.Parent = card
+    
+    task.defer(function()
+        textLbl.Size = UDim2.new(1, -24, 0, textLbl.TextBounds.Y + 4)
+        local targetH = 34 + textLbl.TextBounds.Y + 6
+        tw(card, 0.3, { Size = UDim2.new(1, 0, 0, targetH) })
+    end)
+    
+    task.delay(cfg.Duration, function()
+        tw(card, 0.3, { Size = UDim2.new(1, 0, 0, 0) })
+        task.delay(0.35, function() 
+            if card then card:Destroy() end 
+        end)
+    end)
 end
 
--- ═══════════════════════════════════════════════════════════
--- THEME ANIMATION (live gradient)
--- ═══════════════════════════════════════════════════════════
+-- ═══════════════════════════════════════════════════════════════
+-- GRADIENT ANIMATION
+-- ═══════════════════════════════════════════════════════════════
 local gradientObjects = {}
-local themeAnimConn
+local gradientConn
 local gradientPhase = 0
 
-local function registerGradient(gradient)
-    table.insert(gradientObjects, gradient)
+local function registerGradient(g)
+    table.insert(gradientObjects, g)
 end
 
 local function startGradientAnim()
-    if themeAnimConn then return end
-    themeAnimConn = RunService.RenderStepped:Connect(function(dt)
-        gradientPhase = gradientPhase + dt * 0.15
-        local phase = gradientPhase % 1
+    if gradientConn then return end
+    gradientConn = RunService.RenderStepped:Connect(function(dt)
+        gradientPhase = (gradientPhase + dt * 0.15) % 1
         local t = Nebula.Theme
-        local c1 = t.Accent:Lerp(t.Accent2, phase)
-        local c2 = t.Accent2:Lerp(t.Accent, phase)
-        for _, g in ipairs(gradientObjects) do
-            if g.Parent then
+        local c1 = t.Accent:Lerp(t.Accent2, gradientPhase)
+        local c2 = t.Accent2:Lerp(t.Accent, gradientPhase)
+        for i = #gradientObjects, 1, -1 do
+            local g = gradientObjects[i]
+            if g and g.Parent then
                 g.Color = ColorSequence.new(c1, c2)
+            else
+                table.remove(gradientObjects, i)
             end
         end
     end)
 end
 
--- ═══════════════════════════════════════════════════════════
--- ROOT GUI
--- ═══════════════════════════════════════════════════════════
-local function getParentGui()
-    if gethui then return gethui() end
-    if syn and syn.protect_gui then
-        local gui = Instance.new("ScreenGui")
-        syn.protect_gui(gui)
-        return gui, true
-    end
-    return CoreGui, false
-end
-
-local function createRootGui(name)
-    local parent, needParent = getParentGui()
-    local gui = Instance.new("ScreenGui")
-    gui.Name = name or ("Nebula_" .. generateUID())
-    gui.ResetOnSpawn = false
-    gui.IgnoreGuiInset = true
-    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    gui.DisplayOrder = 999999
-    if needParent then
-        return gui
-    end
-    gui.Parent = parent
-    return gui
-end
-
--- ═══════════════════════════════════════════════════════════
--- COMMAND PALETTE (Ctrl+K)
--- ═══════════════════════════════════════════════════════════
-local commandRegistry = {}  -- { name, type, target, action }
+-- ═══════════════════════════════════════════════════════════════
+-- COMMAND PALETTE
+-- ═══════════════════════════════════════════════════════════════
+local commandRegistry = {}
 local paletteGui
 local paletteOpen = false
+local palettePanel, paletteDim, paletteSearch, paletteResults
 
 local function registerCommand(name, type, action)
     table.insert(commandRegistry, { name = name, type = type, action = action })
 end
 
-local function buildCommandPalette()
+local function closePalette()
+    if not paletteOpen then return end
+    paletteOpen = false
+    tw(paletteDim, 0.2, { BackgroundTransparency = 1 })
+    tw(palettePanel, 0.2, { BackgroundTransparency = 1 })
+    task.delay(0.2, function()
+        if paletteDim then paletteDim.Visible = false end
+        if palettePanel then palettePanel.Visible = false end
+    end)
+end
+
+local function refreshPalette(query)
+    if not paletteResults then return end
+    for _, c in ipairs(paletteResults:GetChildren()) do
+        if c:IsA("TextButton") then c:Destroy() end
+    end
+    local t = Nebula.Theme
+    query = query:lower()
+    local count = 0
+    for _, cmd in ipairs(commandRegistry) do
+        if query == "" or cmd.name:lower():find(query, 1, true) then
+            count = count + 1
+            if count > 30 then break end
+            
+            local btn = Instance.new("TextButton")
+            btn.Size = UDim2.new(1, 0, 0, 34)
+            btn.BackgroundColor3 = t.Surface
+            btn.BorderSizePixel = 0
+            btn.Text = ""
+            btn.AutoButtonColor = false
+            btn.Parent = paletteResults
+            corner(btn, 5)
+            
+            local nameLbl = Instance.new("TextLabel")
+            nameLbl.Size = UDim2.new(1, -80, 1, 0)
+            nameLbl.Position = UDim2.new(0, 12, 0, 0)
+            nameLbl.BackgroundTransparency = 1
+            nameLbl.Text = cmd.name
+            nameLbl.TextColor3 = t.Text
+            nameLbl.Font = Enum.Font.Gotham
+            nameLbl.TextSize = 13
+            nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+            nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
+            nameLbl.Parent = btn
+            
+            local typeLbl = Instance.new("TextLabel")
+            typeLbl.Size = UDim2.new(0, 70, 1, 0)
+            typeLbl.Position = UDim2.new(1, -80, 0, 0)
+            typeLbl.BackgroundTransparency = 1
+            typeLbl.Text = cmd.type
+            typeLbl.TextColor3 = t.TextDim
+            typeLbl.Font = Enum.Font.Gotham
+            typeLbl.TextSize = 11
+            typeLbl.TextXAlignment = Enum.TextXAlignment.Right
+            typeLbl.Parent = btn
+            
+            btn.MouseEnter:Connect(function()
+                tw(btn, 0.12, { BackgroundColor3 = t.Surface2 })
+            end)
+            btn.MouseLeave:Connect(function()
+                tw(btn, 0.12, { BackgroundColor3 = t.Surface })
+            end)
+            btn.MouseButton1Click:Connect(function()
+                closePalette()
+                pcall(cmd.action)
+            end)
+        end
+    end
+    paletteResults.CanvasSize = UDim2.new(0, 0, 0, paletteResults.UIListLayout.AbsoluteContentSize.Y + 8)
+end
+
+local function openPalette()
+    paletteOpen = true
+    paletteDim.Visible = true
+    palettePanel.Visible = true
+    tw(paletteDim, 0.2, { BackgroundTransparency = 0.6 })
+    tw(palettePanel, 0.2, { BackgroundTransparency = 0 })
+    paletteSearch.Text = ""
+    refreshPalette("")
+    paletteSearch:CaptureFocus()
+end
+
+local function buildPalette()
     if paletteGui then return end
     
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "NebulaPalette"
-    gui.ResetOnSpawn = false
-    gui.IgnoreGuiInset = true
-    gui.DisplayOrder = 1000000
-    if gethui then gui.Parent = gethui() else gui.Parent = CoreGui end
-    paletteGui = gui
-    
+    paletteGui = createRootGui("NebulaPalette")
+    paletteGui.DisplayOrder = 1000000
     local t = Nebula.Theme
     
-    -- dim background
-    local dim = Instance.new("Frame")
-    dim.Size = UDim2.fromScale(1, 1)
-    dim.BackgroundColor3 = Color3.new(0, 0, 0)
-    dim.BackgroundTransparency = 1
-    dim.BorderSizePixel = 0
-    dim.Visible = false
-    dim.Parent = gui
+    paletteDim = Instance.new("Frame")
+    paletteDim.Size = UDim2.fromScale(1, 1)
+    paletteDim.BackgroundColor3 = Color3.new(0, 0, 0)
+    paletteDim.BackgroundTransparency = 1
+    paletteDim.BorderSizePixel = 0
+    paletteDim.Visible = false
+    paletteDim.Parent = paletteGui
     
-    local panel = Instance.new("Frame")
-    panel.Size = UDim2.new(0, 520, 0, 380)
-    panel.Position = UDim2.fromScale(0.5, 0.35)
-    panel.AnchorPoint = Vector2.new(0.5, 0.5)
-    panel.BackgroundColor3 = t.Background
-    panel.BorderSizePixel = 0
-    panel.Visible = false
-    panel.Parent = gui
-    corner(panel, 10)
-    stroke(panel, t.Line, 1, 0.4)
+    palettePanel = Instance.new("Frame")
+    palettePanel.Size = UDim2.new(0, 520, 0, 380)
+    palettePanel.Position = UDim2.fromScale(0.5, 0.35)
+    palettePanel.AnchorPoint = Vector2.new(0.5, 0.5)
+    palettePanel.BackgroundColor3 = t.Background
+    palettePanel.BorderSizePixel = 0
+    palettePanel.Visible = false
+    palettePanel.Parent = paletteGui
+    corner(palettePanel, 10)
+    stroke(palettePanel, t.Line, 1, 0.4)
     
-    -- search bar
-    local searchBox = Instance.new("TextBox")
-    searchBox.Size = UDim2.new(1, -24, 0, 44)
-    searchBox.Position = UDim2.new(0, 12, 0, 12)
-    searchBox.BackgroundColor3 = t.Surface
-    searchBox.BorderSizePixel = 0
-    searchBox.Text = ""
-    searchBox.PlaceholderText = "Search commands... (Esc to close)"
-    searchBox.PlaceholderColor3 = t.TextDim
-    searchBox.TextColor3 = t.Text
-    searchBox.Font = Enum.Font.Gotham
-    searchBox.TextSize = 14
-    searchBox.TextXAlignment = Enum.TextXAlignment.Left
-    searchBox.ClearTextOnFocus = false
-    searchBox.Parent = panel
-    corner(searchBox, 6)
-    padding(searchBox, 0, 12, 0, 12)
-    stroke(searchBox, t.Line, 1, 0.5)
+    paletteSearch = Instance.new("TextBox")
+    paletteSearch.Size = UDim2.new(1, -24, 0, 44)
+    paletteSearch.Position = UDim2.new(0, 12, 0, 12)
+    paletteSearch.BackgroundColor3 = t.Surface
+    paletteSearch.BorderSizePixel = 0
+    paletteSearch.Text = ""
+    paletteSearch.PlaceholderText = "Поиск команд... (Esc — закрыть)"
+    paletteSearch.PlaceholderColor3 = t.TextDim
+    paletteSearch.TextColor3 = t.Text
+    paletteSearch.Font = Enum.Font.Gotham
+    paletteSearch.TextSize = 14
+    paletteSearch.TextXAlignment = Enum.TextXAlignment.Left
+    paletteSearch.ClearTextOnFocus = false
+    paletteSearch.Parent = palettePanel
+    corner(paletteSearch, 6)
+    padding(paletteSearch, 0, 12, 0, 12)
+    stroke(paletteSearch, t.Line, 1, 0.5)
     
-    local results = Instance.new("ScrollingFrame")
-    results.Size = UDim2.new(1, -24, 1, -74)
-    results.Position = UDim2.new(0, 12, 0, 64)
-    results.BackgroundTransparency = 1
-    results.BorderSizePixel = 0
-    results.ScrollBarThickness = 3
-    results.ScrollBarImageColor3 = t.Accent
-    results.CanvasSize = UDim2.new(0, 0, 0, 0)
-    results.Parent = panel
-    listLayout(results, Enum.FillDirection.Vertical, 4)
-    padding(results, 4, 4, 4, 4)
+    paletteResults = Instance.new("ScrollingFrame")
+    paletteResults.Size = UDim2.new(1, -24, 1, -74)
+    paletteResults.Position = UDim2.new(0, 12, 0, 64)
+    paletteResults.BackgroundTransparency = 1
+    paletteResults.BorderSizePixel = 0
+    paletteResults.ScrollBarThickness = 3
+    paletteResults.ScrollBarImageColor3 = t.Accent
+    paletteResults.CanvasSize = UDim2.new(0, 0, 0, 0)
+    paletteResults.Parent = palettePanel
+    listLayout(paletteResults, Enum.FillDirection.Vertical, 4)
+    padding(paletteResults, 4, 4, 4, 4)
     
-    local function refresh(query)
-        for _, c in ipairs(results:GetChildren()) do
-            if c:IsA("TextButton") then c:Destroy() end
-        end
-        query = query:lower()
-        local count = 0
-        for _, cmd in ipairs(commandRegistry) do
-            if query == "" or cmd.name:lower():find(query, 1, true) then
-                count = count + 1
-                if count > 30 then break end
-                local btn = Instance.new("TextButton")
-                btn.Size = UDim2.new(1, 0, 0, 34)
-                btn.BackgroundColor3 = t.Surface
-                btn.BorderSizePixel = 0
-                btn.Text = ""
-                btn.AutoButtonColor = false
-                btn.Parent = results
-                corner(btn, 5)
-                
-                local nameLbl = Instance.new("TextLabel")
-                nameLbl.Size = UDim2.new(1, -80, 1, 0)
-                nameLbl.Position = UDim2.new(0, 12, 0, 0)
-                nameLbl.BackgroundTransparency = 1
-                nameLbl.Text = cmd.name
-                nameLbl.TextColor3 = t.Text
-                nameLbl.Font = Enum.Font.Gotham
-                nameLbl.TextSize = 13
-                nameLbl.TextXAlignment = Enum.TextXAlignment.Left
-                nameLbl.Parent = btn
-                
-                local typeLbl = Instance.new("TextLabel")
-                typeLbl.Size = UDim2.new(0, 70, 1, 0)
-                typeLbl.Position = UDim2.new(1, -80, 0, 0)
-                typeLbl.BackgroundTransparency = 1
-                typeLbl.Text = cmd.type
-                typeLbl.TextColor3 = t.TextDim
-                typeLbl.Font = Enum.Font.Gotham
-                typeLbl.TextSize = 11
-                typeLbl.TextXAlignment = Enum.TextXAlignment.Right
-                typeLbl.Parent = btn
-                
-                btn.MouseEnter:Connect(function()
-                    tw(btn, 0.15, { BackgroundColor3 = t.Surface2 })
-                end)
-                btn.MouseLeave:Connect(function()
-                    tw(btn, 0.15, { BackgroundColor3 = t.Surface })
-                end)
-                btn.MouseButton1Click:Connect(function()
-                    closePalette()
-                    cmd.action()
-                end)
-            end
-        end
-        results.CanvasSize = UDim2.new(0, 0, 0, results.UIListLayout.AbsoluteContentSize.Y + 8)
-    end
-    
-    searchBox:GetPropertyChangedSignal("Text"):Connect(function()
-        refresh(searchBox.Text)
+    paletteSearch:GetPropertyChangedSignal("Text"):Connect(function()
+        refreshPalette(paletteSearch.Text)
     end)
     
-    searchBox.Focused:Connect(function()
-        refresh(searchBox.Text)
-    end)
-    
-    function closePalette()
-        paletteOpen = false
-        tw(dim, 0.2, { BackgroundTransparency = 1 })
-        tw(panel, 0.2, { BackgroundTransparency = 1, Size = UDim2.new(0, 500, 0, 360) })
-        task.delay(0.2, function()
-            dim.Visible = false
-            panel.Visible = false
-        end)
-    end
-    
-    function openPalette()
-        paletteOpen = true
-        dim.Visible = true
-        panel.Visible = true
-        dim.BackgroundTransparency = 0.6
-        panel.BackgroundTransparency = 0
-        panel.Size = UDim2.new(0, 520, 0, 380)
-        searchBox.Text = ""
-        refresh("")
-        searchBox:CaptureFocus()
-    end
-    
-    dim.InputBegan:Connect(function(input)
+    paletteDim.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            closePalette()
-        end
-    end)
-    
-    UserInputService.InputBegan:Connect(function(input, gp)
-        if gp then return end
-        if input.KeyCode == Enum.KeyCode.K and UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
-            if paletteOpen then closePalette() else openPalette() end
-        elseif input.KeyCode == Enum.KeyCode.Escape and paletteOpen then
             closePalette()
         end
     end)
 end
 
--- ═══════════════════════════════════════════════════════════
--- WINDOW
--- ═══════════════════════════════════════════════════════════
+-- ═══════════════════════════════════════════════════════════════
+-- WINDOW BUILDER
+-- ═══════════════════════════════════════════════════════════════
 local function buildWindow(config)
     config = kwargify({
         Name = "Nebula Frame",
         Subtitle = "v" .. Nebula.Version,
-        Logo = nil,
-        Loading = true,
-        LoadingTitle = "Nebula Frame",
-        LoadingSubtitle = "Loading...",
         ConfigFolder = "NebulaFrame",
-        KeySystem = false,
         Size = UDim2.new(0, 720, 0, 460),
-        MinSize = UDim2.new(0, 500, 0, 42),
     }, config)
     
     local t = Nebula.Theme
-    local rootGui = createRootGui("NebulaWindow")
+    local rootGui = createRootGui("NebulaWindow_" .. uid())
     local window = {}
     window.Tabs = {}
     window.CurrentTab = nil
     window.Minimized = false
     window.ScreenGui = rootGui
+    window.Root = rootGui
+    window.Hidden = false
     
-    -- ═══ SHADOW ═══
+    -- SHADOW
     local shadow = Instance.new("ImageLabel")
     shadow.Name = "Shadow"
     shadow.BackgroundTransparency = 1
@@ -480,7 +540,7 @@ local function buildWindow(config)
     shadow.ZIndex = 0
     shadow.Parent = rootGui
     
-    -- ═══ MAIN FRAME ═══
+    -- MAIN
     local main = Instance.new("Frame")
     main.Name = "Main"
     main.Size = config.Size
@@ -492,9 +552,10 @@ local function buildWindow(config)
     main.ZIndex = 1
     main.Parent = rootGui
     corner(main, 10)
-    local mainStroke = stroke(main, t.Line, 1, 0.3)
+    stroke(main, t.Line, 1, 0.3)
+    window.Frame = main
     
-    -- ═══ HEADER ═══
+    -- HEADER
     local header = Instance.new("Frame")
     header.Name = "Header"
     header.Size = UDim2.new(1, 0, 0, 44)
@@ -503,7 +564,6 @@ local function buildWindow(config)
     header.ZIndex = 2
     header.Parent = main
     
-    -- top accent line (animated)
     local accentLine = Instance.new("Frame")
     accentLine.Size = UDim2.new(1, 0, 0, 2)
     accentLine.BackgroundColor3 = t.Accent
@@ -515,7 +575,6 @@ local function buildWindow(config)
     accentGrad.Parent = accentLine
     registerGradient(accentGrad)
     
-    -- logo dot
     local logoDot = Instance.new("Frame")
     logoDot.Size = UDim2.new(0, 8, 0, 8)
     logoDot.Position = UDim2.new(0, 16, 0.5, 0)
@@ -528,10 +587,9 @@ local function buildWindow(config)
     logoCorner.CornerRadius = UDim.new(1, 0)
     logoCorner.Parent = logoDot
     
-    -- title
     local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(0, 200, 1, 0)
-    title.Position = UDim2.new(0, 34, 0, -2)
+    title.Size = UDim2.new(0, 250, 1, 0)
+    title.Position = UDim2.new(0, 34, 0, -3)
     title.BackgroundTransparency = 1
     title.Text = config.Name
     title.TextColor3 = t.Text
@@ -542,7 +600,7 @@ local function buildWindow(config)
     title.Parent = header
     
     local subtitle = Instance.new("TextLabel")
-    subtitle.Size = UDim2.new(0, 200, 1, 0)
+    subtitle.Size = UDim2.new(0, 250, 1, 0)
     subtitle.Position = UDim2.new(0, 34, 0, 12)
     subtitle.BackgroundTransparency = 1
     subtitle.Text = config.Subtitle
@@ -553,10 +611,10 @@ local function buildWindow(config)
     subtitle.ZIndex = 3
     subtitle.Parent = header
     
-    -- resource monitor (FPS | Ping | Mem)
+    -- RESOURCE MONITOR
     local monitor = Instance.new("TextLabel")
     monitor.Size = UDim2.new(0, 260, 1, 0)
-    monitor.Position = UDim2.new(1, -280, 0, 0)
+    monitor.Position = UDim2.new(1, -350, 0, 0)
     monitor.BackgroundTransparency = 1
     monitor.Text = "FPS 60 · Ping 0ms · Mem 0MB"
     monitor.TextColor3 = t.TextDim
@@ -566,7 +624,7 @@ local function buildWindow(config)
     monitor.ZIndex = 3
     monitor.Parent = header
     
-    -- control buttons (minimize / close)
+    -- CONTROLS
     local controls = Instance.new("Frame")
     controls.Size = UDim2.new(0, 76, 1, 0)
     controls.Position = UDim2.new(1, -80, 0, 0)
@@ -589,7 +647,6 @@ local function buildWindow(config)
         btn.ZIndex = 3
         btn.Parent = controls
         corner(btn, 6)
-        
         btn.MouseEnter:Connect(function()
             tw(btn, 0.15, { BackgroundColor3 = color, TextColor3 = t.Background })
         end)
@@ -603,11 +660,11 @@ local function buildWindow(config)
     local minBtn = makeCtrlBtn(0, "−", t.TextDim, function()
         window:ToggleMinimize()
     end)
-    local closeBtn = makeCtrlBtn(38, "×", t.Danger, function()
+    makeCtrlBtn(38, "×", t.Danger, function()
         window:Destroy()
     end)
     
-    -- ═══ CONTENT AREA ═══
+    -- CONTENT
     local content = Instance.new("Frame")
     content.Name = "Content"
     content.Size = UDim2.new(1, 0, 1, -44)
@@ -616,7 +673,7 @@ local function buildWindow(config)
     content.ZIndex = 2
     content.Parent = main
     
-    -- sidebar
+    -- SIDEBAR
     local sidebar = Instance.new("Frame")
     sidebar.Name = "Sidebar"
     sidebar.Size = UDim2.new(0, 180, 1, 0)
@@ -638,7 +695,7 @@ local function buildWindow(config)
     listLayout(sidebarList, Enum.FillDirection.Vertical, 3)
     padding(sidebarList, 4, 2, 4, 2)
     
-    -- pages container
+    -- PAGES
     local pages = Instance.new("Frame")
     pages.Name = "Pages"
     pages.Size = UDim2.new(1, -180, 1, 0)
@@ -647,7 +704,7 @@ local function buildWindow(config)
     pages.ZIndex = 2
     pages.Parent = content
     
-    -- ═══ DRAG ═══
+    -- DRAG
     local dragging, dragStart, startPos
     header.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1
@@ -674,7 +731,7 @@ local function buildWindow(config)
         end
     end)
     
-    -- ═══ RESOURCE MONITOR LOOP ═══
+    -- RESOURCE MONITOR LOOP
     task.spawn(function()
         local frames = 0
         local lastTime = tick()
@@ -698,69 +755,44 @@ local function buildWindow(config)
         end
     end)
     
-    -- ═══ KEYBIND: Hide / Show ═══
-    local hidden = false
-    local toggleKey = Enum.KeyCode.RightShift
+    -- HIDE / SHOW (RightShift)
     UserInputService.InputBegan:Connect(function(input, gp)
         if gp then return end
-        if input.KeyCode == toggleKey then
-            hidden = not hidden
-            tw(main, 0.2, { BackgroundTransparency = hidden and 1 or 0 })
-            tw(shadow, 0.2, { ImageTransparency = hidden and 1 or 0.5 })
-            for _, d in ipairs(main:GetDescendants()) do
-                if d:IsA("GuiObject") and d ~= main then
-                    if d.BackgroundTransparency < 1 then
-                        if hidden then
-                            d:SetAttribute("_nb_bt", d.BackgroundTransparency)
-                            d.BackgroundTransparency = 1
-                        else
-                            local b = d:GetAttribute("_nb_bt")
-                            if b then d.BackgroundTransparency = b end
-                        end
-                    end
-                    if d:IsA("TextLabel") or d:IsA("TextButton") or d:IsA("TextBox") then
-                        if hidden then
-                            d:SetAttribute("_nb_tt", d.TextTransparency)
-                            d.TextTransparency = 1
-                        else
-                            local tt = d:GetAttribute("_nb_tt")
-                            if tt then d.TextTransparency = tt end
-                        end
-                    end
-                    if d:IsA("ImageLabel") then
-                        if hidden then
-                            d:SetAttribute("_nb_it", d.ImageTransparency)
-                            d.ImageTransparency = 1
-                        else
-                            local it = d:GetAttribute("_nb_it")
-                            if it then d.ImageTransparency = it end
-                        end
-                    end
-                    if d:IsA("UIStroke") then
-                        if hidden then
-                            d:SetAttribute("_nb_st", d.Transparency)
-                            d.Transparency = 1
-                        else
-                            local st = d:GetAttribute("_nb_st")
-                            if st then d.Transparency = st end
-                        end
+        if input.KeyCode == Enum.KeyCode.RightShift then
+            window.Hidden = not window.Hidden
+            if window.Hidden then
+                for _, d in ipairs(main:GetDescendants()) do
+                    if d:IsA("GuiObject") then
+                        d:SetAttribute("_nb_vis", d.Visible)
+                        d.Visible = false
                     end
                 end
+                main.Visible = true
+                main.BackgroundTransparency = 1
+                shadow.Visible = false
+                Nebula:Notify({ Title = "UI скрыт", Content = "Нажми RightShift чтобы вернуть", Type = "info", Duration = 2 })
+            else
+                for _, d in ipairs(main:GetDescendants()) do
+                    local v = d:GetAttribute("_nb_vis")
+                    if v ~= nil then d.Visible = v end
+                end
+                main.BackgroundTransparency = 0
+                shadow.Visible = true
             end
         end
     end)
     
-    -- ═══ WINDOW METHODS ═══
+    -- WINDOW METHODS
     function window:ToggleMinimize()
         window.Minimized = not window.Minimized
         if window.Minimized then
             main.ClipsDescendants = false
-            tw(main, 0.3, { Size = UDim2.new(0, main.AbsoluteSize.X, 0, 44) }, Enum.EasingStyle.Quart)
+            tw(main, 0.3, { Size = UDim2.new(0, main.AbsoluteSize.X, 0, 44) })
             tw(shadow, 0.3, { Size = UDim2.new(0, main.AbsoluteSize.X, 0, 44) })
             content.Visible = false
             minBtn.Text = "+"
         else
-            tw(main, 0.3, { Size = config.Size }, Enum.EasingStyle.Quart)
+            tw(main, 0.3, { Size = config.Size })
             tw(shadow, 0.3, { Size = config.Size })
             task.delay(0.15, function()
                 content.Visible = true
@@ -771,49 +803,27 @@ local function buildWindow(config)
     end
     
     function window:Destroy()
-        if themeAnimConn then
-            themeAnimConn:Disconnect()
-            themeAnimConn = nil
+        if gradientConn then
+            gradientConn:Disconnect()
+            gradientConn = nil
         end
         rootGui:Destroy()
         if paletteGui then paletteGui:Destroy() end
         Nebula.Window = nil
     end
     
-    function window:SetTheme(themeName)
-        if not Themes[themeName] then return end
-        Nebula.Theme = Themes[themeName]
-        Nebula.ThemeName = themeName
-        t = Nebula.Theme
-        -- update all colors
-        for _, d in ipairs(rootGui:GetDescendants()) do
-            if d:IsA("Frame") or d:IsA("TextButton") or d:IsA("TextBox") then
-                local name = d.Name
-                if name == "Main" then d.BackgroundColor3 = t.Background
-                elseif name == "Header" or name == "Sidebar" then d.BackgroundColor3 = t.Surface
-                end
-            end
-        end
-        -- simpler: notify and let user reload
-        Nebula:Notify({ Title = "Theme", Content = "Set to " .. themeName .. " (reload to fully apply)", Type = "info" })
-    end
-    
-    -- ═══ TAB CREATION ═══
+    -- TAB CREATION
     function window:CreateTab(tabCfg)
         tabCfg = kwargify({
             Name = "Tab",
-            Icon = nil,
             Pinned = false,
         }, tabCfg)
         
         local tab = {}
         tab.Name = tabCfg.Name
-        tab.Elements = {}
-        tab.Pinned = tabCfg.Pinned
         
-        -- tab button
+        -- Tab button
         local btn = Instance.new("TextButton")
-        btn.Name = "Tab_" .. tabCfg.Name
         btn.Size = UDim2.new(1, 0, 0, 34)
         btn.BackgroundColor3 = t.Surface
         btn.BorderSizePixel = 0
@@ -821,6 +831,7 @@ local function buildWindow(config)
         btn.AutoButtonColor = false
         btn.ZIndex = 3
         btn.Parent = sidebarList
+        corner(btn, 6)
         
         local btnLabel = Instance.new("TextLabel")
         btnLabel.Size = UDim2.new(1, -20, 1, 0)
@@ -844,11 +855,8 @@ local function buildWindow(config)
         btnIndicator.ZIndex = 4
         btnIndicator.Parent = btn
         
-        corner(btn, 6)
-        
-        -- page
+        -- Page
         local page = Instance.new("ScrollingFrame")
-        page.Name = "Page_" .. tabCfg.Name
         page.Size = UDim2.new(1, 0, 1, 0)
         page.BackgroundTransparency = 1
         page.BorderSizePixel = 0
@@ -864,13 +872,18 @@ local function buildWindow(config)
         tab.Button = btn
         tab.Page = page
         
+        local function recalc()
+            page.CanvasSize = UDim2.new(0, 0, 0, page.UIListLayout.AbsoluteContentSize.Y + 20)
+        end
+        tab.Recalc = recalc
+        
         function tab:Activate()
             for _, otherTab in pairs(window.Tabs) do
                 otherTab.Page.Visible = false
                 tw(otherTab.Button, 0.15, { BackgroundColor3 = t.Surface })
-                tw(otherTab.Button.TextLabel, 0.15, { TextColor3 = t.TextDim })
-                otherTab.Button:FindFirstChildOfClass("Frame").BackgroundTransparency = 1
-                otherTab.Button.TextLabel.TextColor3 = t.TextDim
+                tw(otherTab.Button:FindFirstChildOfClass("TextLabel"), 0.15, { TextColor3 = t.TextDim })
+                local ind = otherTab.Button:FindFirstChild("Frame")
+                if ind then ind.BackgroundTransparency = 1 end
             end
             page.Visible = true
             tw(btn, 0.15, { BackgroundColor3 = t.Surface2 })
@@ -899,18 +912,9 @@ local function buildWindow(config)
             task.defer(function() tab:Activate() end)
         end
         
-        -- ═══ TAB METHODS (element constructors) ═══
+        -- ═══ ELEMENT CONSTRUCTORS ═══
         
-        local function addElement(el)
-            el.Parent = page
-            return el
-        end
-        
-        local function recalcCanvas()
-            page.CanvasSize = UDim2.new(0, 0, 0, page.UIListLayout.AbsoluteContentSize.Y + 20)
-        end
-        
-        -- ═══ SECTION ═══
+        -- SECTION
         function tab:CreateSection(name)
             local sec = Instance.new("Frame")
             sec.Size = UDim2.new(1, 0, 0, 28)
@@ -934,29 +938,25 @@ local function buildWindow(config)
             line.BorderSizePixel = 0
             line.Parent = sec
             
-            recalcCanvas()
+            recalc()
             return sec
         end
         
-        -- ═══ DIVIDER ═══
+        -- DIVIDER
         function tab:CreateDivider()
             local d = Instance.new("Frame")
             d.Size = UDim2.new(1, 0, 0, 1)
             d.BackgroundColor3 = t.Line
             d.BorderSizePixel = 0
             d.Parent = page
-            recalcCanvas()
+            recalc()
             return d
         end
         
-        -- ═══ LABEL ═══
+        -- LABEL
         function tab:CreateLabel(cfg)
             cfg = kwargify({ Text = "Label", Style = 1 }, cfg)
-            local colors = {
-                [1] = t.Text,
-                [2] = t.Accent,
-                [3] = t.Warning,
-            }
+            local colors = { [1] = t.Text, [2] = t.Accent, [3] = t.Warning }
             local lbl = Instance.new("TextLabel")
             lbl.Size = UDim2.new(1, 0, 0, 22)
             lbl.BackgroundTransparency = 1
@@ -966,15 +966,15 @@ local function buildWindow(config)
             lbl.TextSize = 12
             lbl.TextXAlignment = Enum.TextXAlignment.Left
             lbl.Parent = page
-            recalcCanvas()
+            recalc()
             
             local v = {}
             function v:Set(newText) lbl.Text = newText end
-            function v:Destroy() lbl:Destroy(); recalcCanvas() end
+            function v:Destroy() lbl:Destroy(); recalc() end
             return v
         end
         
-        -- ═══ PARAGRAPH ═══
+        -- PARAGRAPH
         function tab:CreateParagraph(cfg)
             cfg = kwargify({ Title = "Paragraph", Text = "" }, cfg)
             local f = Instance.new("Frame")
@@ -1012,7 +1012,7 @@ local function buildWindow(config)
             task.defer(function()
                 textLbl.Size = UDim2.new(1, -20, 0, textLbl.TextBounds.Y + 4)
                 f.Size = UDim2.new(1, 0, 0, 28 + textLbl.TextBounds.Y + 12)
-                recalcCanvas()
+                recalc()
             end)
             
             local v = {}
@@ -1023,14 +1023,14 @@ local function buildWindow(config)
                 task.wait()
                 textLbl.Size = UDim2.new(1, -20, 0, textLbl.TextBounds.Y + 4)
                 f.Size = UDim2.new(1, 0, 0, 28 + textLbl.TextBounds.Y + 12)
-                recalcCanvas()
+                recalc()
             end
-            function v:Destroy() f:Destroy(); recalcCanvas() end
-            recalcCanvas()
+            function v:Destroy() f:Destroy(); recalc() end
+            recalc()
             return v
         end
         
-        -- ═══ BUTTON ═══
+        -- BUTTON
         function tab:CreateButton(cfg)
             cfg = kwargify({
                 Name = "Button",
@@ -1084,23 +1084,27 @@ local function buildWindow(config)
             btn.MouseButton1Click:Connect(function()
                 local ok, err = pcall(cfg.Callback)
                 if not ok then
-                    Nebula:Notify({ Title = "Error", Content = tostring(err), Type = "error" })
+                    Nebula:Notify({ Title = "Ошибка", Content = tostring(err), Type = "error" })
                 end
             end)
             
-            recalcCanvas()
+            recalc()
             local v = {}
-            function v:Set(c) 
+            function v:Set(c)
                 c = kwargify(cfg, c)
                 lbl.Text = c.Name
                 cfg = c
             end
-            function v:Destroy() btn:Destroy(); recalcCanvas() end
-            registerCommand(tab.Name .. " → " .. cfg.Name, "Button", function() btn:GetPropertyChangedSignal("Size"); cfg.Callback() end)
+            function v:Destroy() btn:Destroy(); recalc() end
+            
+            registerCommand(tab.Name .. " → " .. cfg.Name, "Button", function() 
+                local ok, err = pcall(cfg.Callback)
+                if not ok then Nebula:Notify({ Title = "Ошибка", Content = tostring(err), Type = "error" }) end
+            end)
             return v
         end
         
-        -- ═══ TOGGLE ═══
+        -- TOGGLE
         function tab:CreateToggle(cfg, flag)
             cfg = kwargify({
                 Name = "Toggle",
@@ -1144,7 +1148,6 @@ local function buildWindow(config)
                 desc.Parent = row
             end
             
-            -- pill toggle
             local track = Instance.new("Frame")
             track.Size = UDim2.new(0, 34, 0, 18)
             track.Position = UDim2.new(1, -46, 0.5, 0)
@@ -1152,9 +1155,9 @@ local function buildWindow(config)
             track.BackgroundColor3 = t.Surface2
             track.BorderSizePixel = 0
             track.Parent = row
-            local trackCorner = Instance.new("UICorner")
-            trackCorner.CornerRadius = UDim.new(1, 0)
-            trackCorner.Parent = track
+            local tc = Instance.new("UICorner")
+            tc.CornerRadius = UDim.new(1, 0)
+            tc.Parent = track
             
             local knob = Instance.new("Frame")
             knob.Size = UDim2.new(0, 14, 0, 14)
@@ -1163,9 +1166,9 @@ local function buildWindow(config)
             knob.BackgroundColor3 = t.TextDim
             knob.BorderSizePixel = 0
             knob.Parent = track
-            local knobCorner = Instance.new("UICorner")
-            knobCorner.CornerRadius = UDim.new(1, 0)
-            knobCorner.Parent = knob
+            local kc = Instance.new("UICorner")
+            kc.CornerRadius = UDim.new(1, 0)
+            kc.Parent = knob
             
             local state = cfg.CurrentValue
             
@@ -1180,7 +1183,7 @@ local function buildWindow(config)
                 end
                 if not silent then
                     local ok, err = pcall(cfg.Callback, val)
-                    if not ok then Nebula:Notify({ Title = "Error", Content = tostring(err), Type = "error" }) end
+                    if not ok then Nebula:Notify({ Title = "Ошибка", Content = tostring(err), Type = "error" }) end
                 end
             end
             
@@ -1201,18 +1204,18 @@ local function buildWindow(config)
             end
             registerCommand(tab.Name .. " → " .. cfg.Name, "Toggle", function() setState(not state) end)
             
-            recalcCanvas()
+            recalc()
             local v = {}
             function v:Set(c)
                 c = kwargify({ Name = cfg.Name, CurrentValue = state, Callback = cfg.Callback }, c)
                 if c.Name then lbl.Text = c.Name end
                 if c.CurrentValue ~= nil then setState(c.CurrentValue) end
             end
-            function v:Destroy() row:Destroy(); recalcCanvas() end
+            function v:Destroy() row:Destroy(); recalc() end
             return v
         end
         
-        -- ═══ SLIDER ═══
+        -- SLIDER
         function tab:CreateSlider(cfg, flag)
             cfg = kwargify({
                 Name = "Slider",
@@ -1261,21 +1264,19 @@ local function buildWindow(config)
             corner(bar, 3)
             
             local fill = Instance.new("Frame")
-            fill.Size = UDim2.new(
-                (cfg.CurrentValue - cfg.Range[1]) / math.max(cfg.Range[2] - cfg.Range[1], 0.001),
-                0, 1, 0
-            )
+            fill.Size = UDim2.new((cfg.CurrentValue - cfg.Range[1]) / math.max(cfg.Range[2] - cfg.Range[1], 0.001), 0, 1, 0)
             fill.BackgroundColor3 = t.Accent
             fill.BorderSizePixel = 0
             fill.Parent = bar
             corner(fill, 3)
             
-            local fillGrad = Instance.new("UIGradient")
-            fillGrad.Color = ColorSequence.new(t.Accent, t.Accent2)
-            fillGrad.Parent = fill
-            registerGradient(fillGrad)
+            local fg = Instance.new("UIGradient")
+            fg.Color = ColorSequence.new(t.Accent, t.Accent2)
+            fg.Parent = fill
+            registerGradient(fg)
             
             local dragging = false
+            
             local function updateFromX(x)
                 local rel = math.clamp((x - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
                 local val = cfg.Range[1] + rel * (cfg.Range[2] - cfg.Range[1])
@@ -1285,7 +1286,7 @@ local function buildWindow(config)
                 valLbl.Text = tostring(val)
                 cfg.CurrentValue = val
                 local ok, err = pcall(cfg.Callback, val)
-                if not ok then Nebula:Notify({ Title = "Error", Content = tostring(err), Type = "error" }) end
+                if not ok then Nebula:Notify({ Title = "Ошибка", Content = tostring(err), Type = "error" }) end
             end
             
             bar.InputBegan:Connect(function(input)
@@ -1309,23 +1310,27 @@ local function buildWindow(config)
             end)
             
             if flag then
-                Nebula.Options[flag] = { Set = function(val) updateFromX(bar.AbsolutePosition.X + (val - cfg.Range[1]) / (cfg.Range[2] - cfg.Range[1]) * bar.AbsoluteSize.X) end }
+                Nebula.Options[flag] = { Set = function(val)
+                    updateFromX(bar.AbsolutePosition.X + (val - cfg.Range[1]) / (cfg.Range[2] - cfg.Range[1]) * bar.AbsoluteSize.X)
+                end }
             end
             
-            recalcCanvas()
+            recalc()
             local v = {}
             function v:Set(c)
-                if c.CurrentValue then updateFromX(bar.AbsolutePosition.X + (c.CurrentValue - cfg.Range[1]) / (cfg.Range[2] - cfg.Range[1]) * bar.AbsoluteSize.X) end
+                if c.CurrentValue then 
+                    updateFromX(bar.AbsolutePosition.X + (c.CurrentValue - cfg.Range[1]) / (cfg.Range[2] - cfg.Range[1]) * bar.AbsoluteSize.X) 
+                end
                 if c.Name then lbl.Text = c.Name end
             end
             function v:UpdateValue(val)
                 updateFromX(bar.AbsolutePosition.X + (val - cfg.Range[1]) / (cfg.Range[2] - cfg.Range[1]) * bar.AbsoluteSize.X)
             end
-            function v:Destroy() row:Destroy(); recalcCanvas() end
+            function v:Destroy() row:Destroy(); recalc() end
             return v
         end
         
-        -- ═══ DROPDOWN (with fuzzy search) ═══
+        -- DROPDOWN
         function tab:CreateDropdown(cfg, flag)
             cfg = kwargify({
                 Name = "Dropdown",
@@ -1358,7 +1363,7 @@ local function buildWindow(config)
             headerBtn.Parent = row
             
             local lbl = Instance.new("TextLabel")
-            lbl.Size = UDim2.new(1, -80, 0, 34)
+            lbl.Size = UDim2.new(1, -150, 0, 34)
             lbl.Position = UDim2.new(0, 12, 0, 0)
             lbl.BackgroundTransparency = 1
             lbl.Text = cfg.Name
@@ -1441,7 +1446,7 @@ local function buildWindow(config)
                         refreshOptions()
                         local val = cfg.MultipleOptions and current or current[1]
                         local ok, err = pcall(cfg.Callback, val)
-                        if not ok then Nebula:Notify({ Title = "Error", Content = tostring(err), Type = "error" }) end
+                        if not ok then Nebula:Notify({ Title = "Ошибка", Content = tostring(err), Type = "error" }) end
                         if not cfg.MultipleOptions then
                             expanded = false
                             tw(row, 0.2, { Size = UDim2.new(1, 0, 0, 34) })
@@ -1458,17 +1463,18 @@ local function buildWindow(config)
                 expanded = not expanded
                 optionsFrame.Visible = expanded
                 if expanded then
-                    tw(row, 0.2, { Size = UDim2.new(1, 0, 0, 34 + math.min(140, optionsFrame.UIListLayout.AbsoluteContentSize.Y + 8)) })
+                    local h = math.min(140, optionsFrame.UIListLayout.AbsoluteContentSize.Y + 8)
+                    tw(row, 0.2, { Size = UDim2.new(1, 0, 0, 34 + h) })
                     arrow.Text = "▴"
                 else
                     tw(row, 0.2, { Size = UDim2.new(1, 0, 0, 34) })
                     arrow.Text = "▾"
                 end
-                recalcCanvas()
+                recalc()
             end)
             
             if flag then Nebula.Options[flag] = { CurrentOption = current } end
-            recalcCanvas()
+            recalc()
             local v = {}
             function v:Set(c)
                 if c.Options then cfg.Options = c.Options; refreshOptions() end
@@ -1478,11 +1484,11 @@ local function buildWindow(config)
                     refreshOptions()
                 end
             end
-            function v:Destroy() row:Destroy(); recalcCanvas() end
+            function v:Destroy() row:Destroy(); recalc() end
             return v
         end
         
-        -- ═══ INPUT ═══
+        -- INPUT
         function tab:CreateInput(cfg, flag)
             cfg = kwargify({
                 Name = "Input",
@@ -1531,45 +1537,40 @@ local function buildWindow(config)
             corner(box, 6)
             padding(box, 0, 8, 0, 8)
             
-            local function process(text)
-                if cfg.MaxCharacters and #text > cfg.MaxCharacters then
-                    text = text:sub(1, cfg.MaxCharacters)
-                    box.Text = text
+            box:GetPropertyChangedSignal("Text"):Connect(function()
+                if cfg.MaxCharacters and #box.Text > cfg.MaxCharacters then
+                    box.Text = box.Text:sub(1, cfg.MaxCharacters)
                 end
                 if cfg.Numeric then
-                    local filtered = text:gsub("[^%d%.%-]", "")
-                    if filtered ~= text then box.Text = filtered end
+                    local filtered = box.Text:gsub("[^%d%.%-]", "")
+                    if filtered ~= box.Text then box.Text = filtered end
                 end
-            end
-            
-            box:GetPropertyChangedSignal("Text"):Connect(function()
-                process(box.Text)
                 if not cfg.Enter then
                     local ok, err = pcall(cfg.Callback, box.Text)
-                    if not ok then Nebula:Notify({ Title = "Error", Content = tostring(err), Type = "error" }) end
+                    if not ok then Nebula:Notify({ Title = "Ошибка", Content = tostring(err), Type = "error" }) end
                 end
             end)
             
             box.FocusLost:Connect(function(enterPressed)
                 if cfg.Enter and enterPressed then
                     local ok, err = pcall(cfg.Callback, box.Text)
-                    if not ok then Nebula:Notify({ Title = "Error", Content = tostring(err), Type = "error" }) end
+                    if not ok then Nebula:Notify({ Title = "Ошибка", Content = tostring(err), Type = "error" }) end
                 end
                 if cfg.RemoveTextAfterFocusLost then box.Text = "" end
             end)
             
             if flag then Nebula.Options[flag] = { CurrentValue = cfg.CurrentValue } end
-            recalcCanvas()
+            recalc()
             local v = {}
             function v:Set(c)
                 if c.CurrentValue ~= nil then box.Text = tostring(c.CurrentValue) end
                 if c.Name then lbl.Text = c.Name end
             end
-            function v:Destroy() row:Destroy(); recalcCanvas() end
+            function v:Destroy() row:Destroy(); recalc() end
             return v
         end
         
-        -- ═══ KEYBIND ═══
+        -- KEYBIND
         function tab:CreateKeybind(cfg)
             cfg = kwargify({
                 Name = "Keybind",
@@ -1650,23 +1651,34 @@ local function buildWindow(config)
                 end
             end)
             
-            recalcCanvas()
+            recalc()
             local v = {}
             function v:Set(c)
                 if c.CurrentKeybind then cfg.CurrentKeybind = c.CurrentKeybind; keyBtn.Text = c.CurrentKeybind end
                 if c.Name then lbl.Text = c.Name end
             end
-            function v:Destroy() row:Destroy(); recalcCanvas() end
+            function v:Destroy() row:Destroy(); recalc() end
             return v
         end
         
-        -- ═══ COLOR PICKER ═══
+        -- COLOR PICKER (упрощённый)
         function tab:CreateColorPicker(cfg, flag)
             cfg = kwargify({
                 Name = "Color",
                 Color = Color3.fromRGB(255, 255, 255),
                 Callback = function() end,
             }, cfg)
+            
+            local presets = {
+                Color3.fromRGB(255, 100, 100),
+                Color3.fromRGB(255, 180, 100),
+                Color3.fromRGB(255, 240, 120),
+                Color3.fromRGB(140, 230, 140),
+                Color3.fromRGB(120, 200, 255),
+                Color3.fromRGB(180, 140, 240),
+                Color3.fromRGB(255, 140, 200),
+                Color3.fromRGB(255, 255, 255),
+            }
             
             local row = Instance.new("Frame")
             row.Size = UDim2.new(1, 0, 0, 34)
@@ -1687,193 +1699,77 @@ local function buildWindow(config)
             lbl.TextXAlignment = Enum.TextXAlignment.Left
             lbl.Parent = row
             
-            local preview = Instance.new("Frame")
+            local preview = Instance.new("TextButton")
             preview.Size = UDim2.new(0, 60, 0, 22)
             preview.Position = UDim2.new(1, -72, 0.5, 0)
             preview.AnchorPoint = Vector2.new(0, 0.5)
             preview.BackgroundColor3 = cfg.Color
             preview.BorderSizePixel = 0
+            preview.Text = ""
+            preview.AutoButtonColor = false
             preview.Parent = row
             corner(preview, 5)
             stroke(preview, t.Line, 1, 0.5)
             
-            -- Simple RGB input approach (minimal)
-            local hexBox = Instance.new("TextBox")
-            hexBox.Size = UDim2.new(0, 0, 0, 0)  -- hidden
-            hexBox.Parent = row
-            
-            preview.InputBegan:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                    local newHex = tostring(color3ToHex(cfg.Color))
-                    -- fallback: prompt via notification
-                    Nebula:Notify({
-                        Title = "Color",
-                        Content = "Current: " .. newHex .. " — click preview to cycle preset",
-                        Type = "info",
-                    })
-                    -- cycle through a preset palette for simplicity
-                    local presets = {
-                        Color3.fromRGB(255, 100, 100),
-                        Color3.fromRGB(255, 180, 100),
-                        Color3.fromRGB(255, 240, 120),
-                        Color3.fromRGB(140, 230, 140),
-                        Color3.fromRGB(120, 200, 255),
-                        Color3.fromRGB(180, 140, 240),
-                        Color3.fromRGB(255, 140, 200),
-                        Color3.fromRGB(255, 255, 255),
-                    }
-                    local idx = 1
-                    for i, c in ipairs(presets) do
-                        if c == cfg.Color then idx = i + 1 break end
-                    end
-                    if idx > #presets then idx = 1 end
-                    cfg.Color = presets[idx]
-                    preview.BackgroundColor3 = cfg.Color
-                    pcall(cfg.Callback, cfg.Color)
+            preview.MouseButton1Click:Connect(function()
+                local idx = 1
+                for i, c in ipairs(presets) do
+                    if c == cfg.Color then idx = i + 1 break end
                 end
+                if idx > #presets then idx = 1 end
+                cfg.Color = presets[idx]
+                preview.BackgroundColor3 = cfg.Color
+                pcall(cfg.Callback, cfg.Color)
             end)
             
             if flag then Nebula.Options[flag] = { Color = cfg.Color } end
-            recalcCanvas()
+            recalc()
             local v = {}
             function v:Set(c)
                 if c.Color then cfg.Color = c.Color; preview.BackgroundColor3 = c.Color end
                 if c.Name then lbl.Text = c.Name end
                 if c.Callback then cfg.Callback = c.Callback end
             end
-            function v:Destroy() row:Destroy(); recalcCanvas() end
+            function v:Destroy() row:Destroy(); recalc() end
             return v
         end
         
         return tab
     end
     
-    -- ═══ THEME TAB ═══
+    -- THEME TAB
     function window:CreateThemeTab()
-        local tab = window:CreateTab({ Name = "Theme", Pinned = false })
-        tab:CreateSection("Preset Themes")
+        local tab = window:CreateTab({ Name = "Тема" })
+        tab:CreateSection("Пресеты")
         for name, _ in pairs(Themes) do
             tab:CreateButton({
                 Name = name,
                 Callback = function()
                     Nebula.ThemeName = name
                     Nebula.Theme = Themes[name]
-                    Nebula:Notify({ Title = "Theme", Content = name .. " selected (reload script to fully apply)", Type = "success" })
+                    Nebula:Notify({ 
+                        Title = "Тема выбрана", 
+                        Content = name .. " — перезапусти скрипт для полного применения", 
+                        Type = "info",
+                        Duration = 4,
+                    })
                 end,
             })
         end
-        tab:CreateSection("Info")
+        tab:CreateSection("О фреймворке")
         tab:CreateParagraph({
             Title = "Nebula Frame v" .. Nebula.Version,
-            Text = "Minimalist UI framework inspired by Luna. Press Ctrl+K for command palette. RightShift to hide/show interface.",
+            Text = "Минималистичный UI фреймворк. Ctrl+K — палитра команд. RightShift — скрыть/показать интерфейс.",
         })
         return tab
     end
     
-    startGradientAnim()
-    buildCommandPalette()
     return window
 end
 
--- ═══════════════════════════════════════════════════════════
--- NOTIFICATIONS
--- ═══════════════════════════════════════════════════════════
-local notifGui
-local function ensureNotifGui()
-    if notifGui and notifGui.Parent then return notifGui end
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "NebulaNotifs"
-    gui.ResetOnSpawn = false
-    gui.IgnoreGuiInset = true
-    gui.DisplayOrder = 999999
-    if gethui then gui.Parent = gethui() else gui.Parent = CoreGui end
-    notifGui = gui
-    return gui
-end
-
-function Nebula:Notify(cfg)
-    cfg = kwargify({
-        Title = "Nebula",
-        Content = "",
-        Type = "info",  -- info / success / error / warning
-        Duration = 3,
-    }, cfg)
-    
-    local t = self.Theme
-    local gui = ensureNotifGui()
-    local typeColors = {
-        info    = t.Accent,
-        success = t.Success,
-        error   = t.Danger,
-        warning = t.Warning,
-    }
-    local color = typeColors[cfg.Type] or t.Accent
-    
-    local container = gui:FindFirstChild("Container")
-    if not container then
-        container = Instance.new("Frame")
-        container.Name = "Container"
-        container.Size = UDim2.new(0, 320, 1, -40)
-        container.Position = UDim2.new(1, -340, 0, 20)
-        container.BackgroundTransparency = 1
-        container.Parent = gui
-        listLayout(container, Enum.FillDirection.Vertical, 8)
-    end
-    
-    local card = Instance.new("Frame")
-    card.Size = UDim2.new(1, 0, 0, 0)
-    card.BackgroundColor3 = t.Surface
-    card.BorderSizePixel = 0
-    card.ClipsDescendants = true
-    card.Parent = container
-    corner(card, 8)
-    stroke(card, t.Line, 1, 0.4)
-    
-    local bar = Instance.new("Frame")
-    bar.Size = UDim2.new(0, 3, 1, 0)
-    bar.BackgroundColor3 = color
-    bar.BorderSizePixel = 0
-    bar.Parent = card
-    
-    local titleLbl = Instance.new("TextLabel")
-    titleLbl.Size = UDim2.new(1, -24, 0, 20)
-    titleLbl.Position = UDim2.new(0, 14, 0, 8)
-    titleLbl.BackgroundTransparency = 1
-    titleLbl.Text = cfg.Title
-    titleLbl.TextColor3 = t.Text
-    titleLbl.Font = Enum.Font.GothamBold
-    titleLbl.TextSize = 12
-    titleLbl.TextXAlignment = Enum.TextXAlignment.Left
-    titleLbl.Parent = card
-    
-    local textLbl = Instance.new("TextLabel")
-    textLbl.Size = UDim2.new(1, -24, 0, 0)
-    textLbl.Position = UDim2.new(0, 14, 0, 28)
-    textLbl.BackgroundTransparency = 1
-    textLbl.Text = cfg.Content
-    textLbl.TextColor3 = t.TextDim
-    textLbl.Font = Enum.Font.Gotham
-    textLbl.TextSize = 11
-    textLbl.TextWrapped = true
-    textLbl.TextXAlignment = Enum.TextXAlignment.Left
-    textLbl.TextYAlignment = Enum.TextYAlignment.Top
-    textLbl.Parent = card
-    
-    task.defer(function()
-        textLbl.Size = UDim2.new(1, -24, 0, textLbl.TextBounds.Y + 4)
-        local targetH = 34 + textLbl.TextBounds.Y + 6
-        tw(card, 0.3, { Size = UDim2.new(1, 0, 0, targetH) })
-    end)
-    
-    task.delay(cfg.Duration, function()
-        tw(card, 0.3, { Size = UDim2.new(1, 0, 0, 0) })
-        task.delay(0.35, function() card:Destroy() end)
-    end)
-end
-
--- ═══════════════════════════════════════════════════════════
+-- ═══════════════════════════════════════════════════════════════
 -- PUBLIC API
--- ═══════════════════════════════════════════════════════════
+-- ═══════════════════════════════════════════════════════════════
 function Nebula:CreateWindow(cfg)
     local w = buildWindow(cfg)
     self.Window = w
@@ -1887,11 +1783,183 @@ function Nebula:SetTheme(name)
     end
 end
 
-function Nebula:GetTheme()
-    return self.ThemeName
+-- ═══════════════════════════════════════════════════════════════
+-- GLOBAL BIND: Ctrl+K for palette
+-- ═══════════════════════════════════════════════════════════════
+buildPalette()
+
+UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
+    if input.KeyCode == Enum.KeyCode.K and UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+        if paletteOpen then closePalette() else openPalette() end
+    elseif input.KeyCode == Enum.KeyCode.Escape and paletteOpen then
+        closePalette()
+    end
+end)
+
+-- ═══════════════════════════════════════════════════════════════
+-- AUTO-DEMO — окно создаётся сразу при запуске
+-- Чтобы отключить, установи _G.NEBULA_NO_DEMO = true перед загрузкой
+-- ═══════════════════════════════════════════════════════════════
+local function launchDemo()
+    print("[Nebula] Создание окна...")
+    
+    local DemoWindow = Nebula:CreateWindow({
+        Name = "Nebula Frame",
+        Subtitle = "v" .. Nebula.Version .. " · Demo",
+    })
+    
+    -- ═══ MAIN TAB ═══
+    local Main = DemoWindow:CreateTab({ Name = "Главная", Pinned = true })
+    
+    Main:CreateSection("Кнопки")
+    Main:CreateButton({
+        Name = "Сказать Привет",
+        Description = "Проверка кнопки",
+        Callback = function()
+            Nebula:Notify({ Title = "Привет!", Content = "Кнопка работает ✔", Type = "success" })
+        end,
+    })
+    
+    Main:CreateButton({
+        Name = "Тест ошибки",
+        Description = "Проверка перехвата ошибок",
+        Callback = function()
+            error("Демо-ошибка — Nebula её перехватит")
+        end,
+    })
+    
+    Main:CreateSection("Элементы")
+    Main:CreateToggle({
+        Name = "Демо тумблер",
+        Description = "Переключи меня",
+        CurrentValue = false,
+        Callback = function(v)
+            Nebula:Notify({
+                Title = "Тумблер",
+                Content = v and "Включено ✔" or "Выключено",
+                Type = v and "success" or "info",
+            })
+        end,
+    })
+    
+    Main:CreateSlider({
+        Name = "Демо слайдер",
+        Range = { 0, 100 },
+        Increment = 1,
+        CurrentValue = 50,
+        Callback = function(v) end,
+    })
+    
+    Main:CreateInput({
+        Name = "Демо Input",
+        PlaceholderText = "Введи текст...",
+        Callback = function(text) end,
+    })
+    
+    Main:CreateDropdown({
+        Name = "Демо Dropdown",
+        Options = { "Яблоко", "Банан", "Вишня", "Драконий фрукт", "Ежевика" },
+        CurrentOption = "Яблоко",
+        Callback = function(v)
+            Nebula:Notify({ Title = "Выбрано", Content = tostring(v), Type = "info", Duration = 2 })
+        end,
+    })
+    
+    Main:CreateDropdown({
+        Name = "Мульти-выбор",
+        Options = { "Красный", "Зелёный", "Синий", "Жёлтый" },
+        CurrentOption = { "Красный" },
+        MultipleOptions = true,
+        Callback = function(t)
+            Nebula:Notify({ Title = "Мульти", Content = table.concat(t, ", "), Type = "info", Duration = 2 })
+        end,
+    })
+    
+    Main:CreateKeybind({
+        Name = "Демо бинд (Q)",
+        CurrentKeybind = "Q",
+        Callback = function(state)
+            if state then
+                Nebula:Notify({ Title = "Бинд", Content = "Q нажат", Type = "info", Duration = 1.5 })
+            end
+        end,
+    })
+    
+    Main:CreateSection("Labels")
+    Main:CreateLabel({ Text = "Обычный Label", Style = 1 })
+    Main:CreateLabel({ Text = "Info Label", Style = 2 })
+    Main:CreateLabel({ Text = "Warning Label", Style = 3 })
+    
+    Main:CreateDivider()
+    
+    Main:CreateParagraph({
+        Title = "О фреймворке",
+        Text = "Nebula Frame — минималистичная UI-библиотека. Нажми Ctrl+K для палитры команд и RightShift чтобы скрыть интерфейс.",
+    })
+    
+    -- ═══ UTILS TAB ═══
+    local Utils = DemoWindow:CreateTab({ Name = "Утилиты" })
+    Utils:CreateSection("Уведомления")
+    Utils:CreateButton({
+        Name = "Info",
+        Callback = function()
+            Nebula:Notify({ Title = "Info", Content = "Обычное уведомление", Type = "info" })
+        end,
+    })
+    Utils:CreateButton({
+        Name = "Success",
+        Callback = function()
+            Nebula:Notify({ Title = "Успех", Content = "Всё работает!", Type = "success" })
+        end,
+    })
+    Utils:CreateButton({
+        Name = "Warning",
+        Callback = function()
+            Nebula:Notify({ Title = "Внимание", Content = "Что-то не так", Type = "warning" })
+        end,
+    })
+    Utils:CreateButton({
+        Name = "Error",
+        Callback = function()
+            Nebula:Notify({ Title = "Ошибка", Content = "Что-то сломалось", Type = "error" })
+        end,
+    })
+    
+    -- ═══ THEME TAB ═══
+    DemoWindow:CreateThemeTab()
+    
+    -- ═══ WELCOME ═══
+    Nebula:Notify({
+        Title = "Nebula Frame загружен",
+        Content = "Ctrl+K — палитра · RightShift — скрыть UI",
+        Type = "success",
+        Duration = 6,
+    })
+    
+    print("[Nebula] Готово! Окно создано.")
 end
 
--- ═══════════════════════════════════════════════════════════
--- RETURN
--- ═══════════════════════════════════════════════════════════
+if not _G.NEBULA_NO_DEMO then
+    task.spawn(function()
+        local ok, err = pcall(launchDemo)
+        if not ok then
+            warn("[Nebula] Ошибка при создании окна:", err)
+            pcall(function()
+                Nebula:Notify({
+                    Title = "Ошибка",
+                    Content = tostring(err),
+                    Type = "error",
+                    Duration = 8,
+                })
+            end)
+        end
+    end)
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- GLOBAL EXPOSE (для повторного использования)
+-- ═══════════════════════════════════════════════════════════════
+_G.Nebula = Nebula
+
 return Nebula
