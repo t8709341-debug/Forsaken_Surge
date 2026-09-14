@@ -1,201 +1,187 @@
 --[[
     ═══════════════════════════════════════════════════════════════════════
-    🌌 NEBULA FRAME v2.0 — Mega Edition
-    Minimalist UI Framework with advanced features
-    
-    Features:
-      • 3-column layout (tabs / content / side panel)
-      • Clamped dragging (never off-screen)
-      • Command Palette (Ctrl+K)
-      • Global element search
-      • Config save/load system
-      • HSV Color Picker PRO
-      • Script executor
-      • Hotkey manager
-      • Live FPS graph
-      • Accordion sections
-      • 10 themes + custom editor
-      • Notification stack with progress bar
-      • Status bar
+    🌌 NEBULA FRAME v3.0 — "Aurora"
+    Minimalist UI Framework — rewrite
+
+    Ключевые отличия от v2:
+      • Один ScreenGui на всё (windows/palette/notifications)
+      • Настоящие секции-контейнеры (не прокси)
+      • Полная очистка коннектов и твинов при Destroy
+      • Реактивные темы (OnTheme)
+      • Виртуализированная палитра команд
+      • Правильный clamp окна (заголовок всегда виден)
+      • Рабочий FPS-граф (абсолютные размеры)
+      • Защита от отсутствия writefile / loadstring / gethui
+
+    API:
+      local Nebula = loadstring(...)() -- или require
+      Nebula:CreateWindow({ Name="...", Subtitle="..." })
+      local tab = win:CreateTab({ Name="Main", Pinned=true })
+      tab:CreateButton({...})
+      tab:CreateToggle({...}, "flag_name")
+      tab:CreateSlider({...}, "flag")
+      tab:CreateDropdown({...}, "flag")
+      tab:CreateInput({...}, "flag")
+      tab:CreateKeybind({...})
+      tab:CreateColorPicker({...}, "flag")
+      tab:CreateParagraph({...})
+      tab:CreateLabel({...})
+      tab:CreateDivider()
+      local sec = tab:CreateSection("Section Name")
+      sec:CreateButton({...}) -- секция как мини-таб
+      Nebula:Notify({ Title, Content, Type, Duration })
+      Nebula:SetTheme("Midnight")
+      win:SaveConfig("default")
+      win:LoadConfig("default")
+      win:Destroy()
+
+    Хоткеи:
+      Ctrl+K   — Command Palette
+      RightShift — скрыть/показать UI
+      Esc      — закрыть палитру
     ═══════════════════════════════════════════════════════════════════════
 ]]
 
-print("[Nebula v2.0] Загрузка...")
-
-local Players          = game:GetService("Players")
-local RunService       = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local TweenService     = game:GetService("TweenService")
-local HttpService      = game:GetService("HttpService")
-local CoreGui          = game:GetService("CoreGui")
-local Stats            = game:GetService("Stats")
-local Lighting         = game:GetService("Lighting")
+local Players           = game:GetService("Players")
+local RunService        = game:GetService("RunService")
+local UserInputService  = game:GetService("UserInputService")
+local TweenService      = game:GetService("TweenService")
+local HttpService       = game:GetService("HttpService")
+local CoreGui           = game:GetService("CoreGui")
+local Stats             = game:GetService("Stats")
 
 local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
 -- ═══════════════════════════════════════════════════════════════════════
--- FRAMEWORK OBJECT
+-- CORE
 -- ═══════════════════════════════════════════════════════════════════════
 local Nebula = {
-    Version = "2.0.0",
-    Options = {},
-    Configs = {},
-    Themes = {},
-    Hooks = {},
-    Window = nil,
+    Version   = "3.0.0",
+    Codename  = "Aurora",
+    Options   = {},        -- flag -> { Set, Get, Value, ... }
+    Themes    = {},
+    Hooks     = { theme = {} },
+    Windows   = {},
+    _gradients = {},       -- активные UIGradient для анимации
+    _gradConn  = nil,
+    _phase     = 0,
 }
-
 _G.Nebula = Nebula
+
+-- ═══════════════════════════════════════════════════════════════════════
+-- THEMES
+-- ═══════════════════════════════════════════════════════════════════════
+local function C(r, g, b) return Color3.fromRGB(r, g, b) end
+
 Nebula.Themes = {
-    Nebula = {
-        Accent = Color3.fromRGB(150, 170, 255),
-        Accent2 = Color3.fromRGB(180, 140, 220),
-        Background = Color3.fromRGB(18, 18, 24),
-        Surface = Color3.fromRGB(26, 26, 34),
-        Surface2 = Color3.fromRGB(34, 34, 44),
-        Surface3 = Color3.fromRGB(44, 44, 56),
-        Text = Color3.fromRGB(240, 240, 245),
-        TextDim = Color3.fromRGB(145, 145, 160),
-        Line = Color3.fromRGB(48, 48, 60),
-        Danger = Color3.fromRGB(255, 90, 90),
-        Success = Color3.fromRGB(120, 220, 140),
-        Warning = Color3.fromRGB(255, 200, 90),
+    Aurora = {
+        Accent   = C(150, 170, 255), Accent2  = C(180, 140, 220),
+        Background = C(16, 16, 22),  Surface  = C(24, 24, 32),
+        Surface2 = C(32, 32, 42),    Surface3 = C(42, 42, 54),
+        Text     = C(240, 240, 245), TextDim  = C(145, 145, 160),
+        Line     = C(46, 46, 58),    Danger   = C(255, 90, 90),
+        Success  = C(120, 220, 140), Warning  = C(255, 200, 90),
     },
     Midnight = {
-        Accent = Color3.fromRGB(100, 180, 255),
-        Accent2 = Color3.fromRGB(140, 120, 255),
-        Background = Color3.fromRGB(10, 12, 18),
-        Surface = Color3.fromRGB(16, 20, 28),
-        Surface2 = Color3.fromRGB(24, 30, 40),
-        Surface3 = Color3.fromRGB(34, 42, 54),
-        Text = Color3.fromRGB(235, 240, 250),
-        TextDim = Color3.fromRGB(130, 140, 160),
-        Line = Color3.fromRGB(36, 44, 56),
-        Danger = Color3.fromRGB(255, 100, 100),
-        Success = Color3.fromRGB(100, 220, 160),
-        Warning = Color3.fromRGB(255, 200, 100),
+        Accent   = C(100, 180, 255), Accent2  = C(140, 120, 255),
+        Background = C(10, 12, 18),  Surface  = C(16, 20, 28),
+        Surface2 = C(24, 30, 40),    Surface3 = C(34, 42, 54),
+        Text     = C(235, 240, 250), TextDim  = C(130, 140, 160),
+        Line     = C(36, 44, 56),    Danger   = C(255, 100, 100),
+        Success  = C(100, 220, 160), Warning  = C(255, 200, 100),
     },
     Sunset = {
-        Accent = Color3.fromRGB(255, 160, 120),
-        Accent2 = Color3.fromRGB(240, 110, 140),
-        Background = Color3.fromRGB(24, 16, 20),
-        Surface = Color3.fromRGB(34, 24, 30),
-        Surface2 = Color3.fromRGB(44, 32, 38),
-        Surface3 = Color3.fromRGB(56, 42, 50),
-        Text = Color3.fromRGB(250, 240, 235),
-        TextDim = Color3.fromRGB(180, 155, 150),
-        Line = Color3.fromRGB(60, 44, 50),
-        Danger = Color3.fromRGB(255, 90, 90),
-        Success = Color3.fromRGB(140, 220, 140),
-        Warning = Color3.fromRGB(255, 210, 120),
+        Accent   = C(255, 160, 120), Accent2  = C(240, 110, 140),
+        Background = C(24, 16, 20),  Surface  = C(34, 24, 30),
+        Surface2 = C(44, 32, 38),    Surface3 = C(56, 42, 50),
+        Text     = C(250, 240, 235), TextDim  = C(180, 155, 150),
+        Line     = C(60, 44, 50),    Danger   = C(255, 90, 90),
+        Success  = C(140, 220, 140), Warning  = C(255, 210, 120),
     },
     Forest = {
-        Accent = Color3.fromRGB(130, 210, 150),
-        Accent2 = Color3.fromRGB(80, 180, 130),
-        Background = Color3.fromRGB(14, 20, 16),
-        Surface = Color3.fromRGB(20, 28, 24),
-        Surface2 = Color3.fromRGB(30, 40, 34),
-        Surface3 = Color3.fromRGB(42, 54, 46),
-        Text = Color3.fromRGB(230, 245, 235),
-        TextDim = Color3.fromRGB(140, 165, 150),
-        Line = Color3.fromRGB(40, 54, 46),
-        Danger = Color3.fromRGB(255, 110, 110),
-        Success = Color3.fromRGB(160, 240, 170),
-        Warning = Color3.fromRGB(255, 210, 120),
+        Accent   = C(130, 210, 150), Accent2  = C(80, 180, 130),
+        Background = C(14, 20, 16),  Surface  = C(20, 28, 24),
+        Surface2 = C(30, 40, 34),    Surface3 = C(42, 54, 46),
+        Text     = C(230, 245, 235), TextDim  = C(140, 165, 150),
+        Line     = C(40, 54, 46),    Danger   = C(255, 110, 110),
+        Success  = C(160, 240, 170), Warning  = C(255, 210, 120),
     },
     Rose = {
-        Accent = Color3.fromRGB(255, 150, 190),
-        Accent2 = Color3.fromRGB(220, 120, 200),
-        Background = Color3.fromRGB(22, 16, 22),
-        Surface = Color3.fromRGB(30, 22, 30),
-        Surface2 = Color3.fromRGB(42, 32, 42),
-        Surface3 = Color3.fromRGB(56, 42, 56),
-        Text = Color3.fromRGB(248, 238, 248),
-        TextDim = Color3.fromRGB(175, 155, 175),
-        Line = Color3.fromRGB(56, 42, 56),
-        Danger = Color3.fromRGB(255, 100, 120),
-        Success = Color3.fromRGB(140, 230, 170),
-        Warning = Color3.fromRGB(255, 210, 130),
+        Accent   = C(255, 150, 190), Accent2  = C(220, 120, 200),
+        Background = C(22, 16, 22),  Surface  = C(30, 22, 30),
+        Surface2 = C(42, 32, 42),    Surface3 = C(56, 42, 56),
+        Text     = C(248, 238, 248), TextDim  = C(175, 155, 175),
+        Line     = C(56, 42, 56),    Danger   = C(255, 100, 120),
+        Success  = C(140, 230, 170), Warning  = C(255, 210, 130),
     },
     Mono = {
-        Accent = Color3.fromRGB(200, 200, 210),
-        Accent2 = Color3.fromRGB(160, 160, 170),
-        Background = Color3.fromRGB(14, 14, 16),
-        Surface = Color3.fromRGB(22, 22, 26),
-        Surface2 = Color3.fromRGB(32, 32, 38),
-        Surface3 = Color3.fromRGB(44, 44, 50),
-        Text = Color3.fromRGB(240, 240, 245),
-        TextDim = Color3.fromRGB(150, 150, 160),
-        Line = Color3.fromRGB(46, 46, 52),
-        Danger = Color3.fromRGB(255, 100, 100),
-        Success = Color3.fromRGB(150, 220, 150),
-        Warning = Color3.fromRGB(230, 210, 120),
+        Accent   = C(200, 200, 210), Accent2  = C(160, 160, 170),
+        Background = C(14, 14, 16),  Surface  = C(22, 22, 26),
+        Surface2 = C(32, 32, 38),    Surface3 = C(44, 44, 50),
+        Text     = C(240, 240, 245), TextDim  = C(150, 150, 160),
+        Line     = C(46, 46, 52),    Danger   = C(255, 100, 100),
+        Success  = C(150, 220, 150), Warning  = C(230, 210, 120),
     },
     Ocean = {
-        Accent = Color3.fromRGB(80, 200, 220),
-        Accent2 = Color3.fromRGB(60, 150, 240),
-        Background = Color3.fromRGB(10, 20, 28),
-        Surface = Color3.fromRGB(16, 30, 40),
-        Surface2 = Color3.fromRGB(24, 44, 56),
-        Surface3 = Color3.fromRGB(36, 58, 72),
-        Text = Color3.fromRGB(220, 245, 250),
-        TextDim = Color3.fromRGB(130, 170, 185),
-        Line = Color3.fromRGB(36, 58, 72),
-        Danger = Color3.fromRGB(255, 100, 100),
-        Success = Color3.fromRGB(120, 240, 200),
-        Warning = Color3.fromRGB(255, 210, 120),
+        Accent   = C(80, 200, 220),  Accent2  = C(60, 150, 240),
+        Background = C(10, 20, 28),  Surface  = C(16, 30, 40),
+        Surface2 = C(24, 44, 56),    Surface3 = C(36, 58, 72),
+        Text     = C(220, 245, 250), TextDim  = C(130, 170, 185),
+        Line     = C(36, 58, 72),    Danger   = C(255, 100, 100),
+        Success  = C(120, 240, 200), Warning  = C(255, 210, 120),
     },
     Blood = {
-        Accent = Color3.fromRGB(255, 70, 90),
-        Accent2 = Color3.fromRGB(180, 40, 60),
-        Background = Color3.fromRGB(18, 10, 12),
-        Surface = Color3.fromRGB(26, 16, 20),
-        Surface2 = Color3.fromRGB(38, 22, 28),
-        Surface3 = Color3.fromRGB(52, 30, 38),
-        Text = Color3.fromRGB(250, 230, 235),
-        TextDim = Color3.fromRGB(180, 130, 140),
-        Line = Color3.fromRGB(52, 30, 38),
-        Danger = Color3.fromRGB(255, 120, 120),
-        Success = Color3.fromRGB(160, 220, 140),
-        Warning = Color3.fromRGB(255, 200, 120),
+        Accent   = C(255, 70, 90),   Accent2  = C(180, 40, 60),
+        Background = C(18, 10, 12),  Surface  = C(26, 16, 20),
+        Surface2 = C(38, 22, 28),    Surface3 = C(52, 30, 38),
+        Text     = C(250, 230, 235), TextDim  = C(180, 130, 140),
+        Line     = C(52, 30, 38),    Danger   = C(255, 120, 120),
+        Success  = C(160, 220, 140), Warning  = C(255, 200, 120),
     },
     Matrix = {
-        Accent = Color3.fromRGB(80, 255, 130),
-        Accent2 = Color3.fromRGB(40, 200, 100),
-        Background = Color3.fromRGB(8, 16, 10),
-        Surface = Color3.fromRGB(14, 24, 16),
-        Surface2 = Color3.fromRGB(22, 36, 26),
-        Surface3 = Color3.fromRGB(34, 50, 38),
-        Text = Color3.fromRGB(220, 255, 230),
-        TextDim = Color3.fromRGB(120, 180, 140),
-        Line = Color3.fromRGB(34, 50, 38),
-        Danger = Color3.fromRGB(255, 120, 120),
-        Success = Color3.fromRGB(120, 255, 160),
-        Warning = Color3.fromRGB(255, 230, 120),
+        Accent   = C(80, 255, 130),  Accent2  = C(40, 200, 100),
+        Background = C(8, 16, 10),   Surface  = C(14, 24, 16),
+        Surface2 = C(22, 36, 26),    Surface3 = C(34, 50, 38),
+        Text     = C(220, 255, 230), TextDim  = C(120, 180, 140),
+        Line     = C(34, 50, 38),    Danger   = C(255, 120, 120),
+        Success  = C(120, 255, 160), Warning  = C(255, 230, 120),
     },
     Gold = {
-        Accent = Color3.fromRGB(255, 200, 90),
-        Accent2 = Color3.fromRGB(240, 150, 60),
-        Background = Color3.fromRGB(22, 18, 12),
-        Surface = Color3.fromRGB(32, 26, 18),
-        Surface2 = Color3.fromRGB(44, 36, 26),
-        Surface3 = Color3.fromRGB(58, 48, 34),
-        Text = Color3.fromRGB(250, 245, 230),
-        TextDim = Color3.fromRGB(180, 165, 130),
-        Line = Color3.fromRGB(58, 48, 34),
-        Danger = Color3.fromRGB(255, 100, 100),
-        Success = Color3.fromRGB(160, 230, 150),
-        Warning = Color3.fromRGB(255, 220, 120),
+        Accent   = C(255, 200, 90),  Accent2  = C(240, 150, 60),
+        Background = C(22, 18, 12),  Surface  = C(32, 26, 18),
+        Surface2 = C(44, 36, 26),    Surface3 = C(58, 48, 34),
+        Text     = C(250, 245, 230), TextDim  = C(180, 165, 130),
+        Line     = C(58, 48, 34),    Danger   = C(255, 100, 100),
+        Success  = C(160, 230, 150), Warning  = C(255, 220, 120),
+    },
+    // ── Nordic light ──
+    Snow = {
+        Accent   = C(80, 120, 220),  Accent2  = C(140, 100, 220),
+        Background = C(238, 240, 246), Surface = C(250, 250, 253),
+        Surface2 = C(232, 234, 242), Surface3 = C(220, 224, 234),
+        Text     = C(28, 32, 44),    TextDim  = C(110, 118, 140),
+        Line     = C(210, 216, 228), Danger   = C(220, 70, 80),
+        Success  = C(60, 180, 110),  Warning  = C(230, 160, 60),
     },
 }
 
-Nebula.Theme = Nebula.Themes.Nebula
-Nebula.ThemeName = "Nebula"
+Nebula.Theme     = Nebula.Themes.Aurora
+Nebula.ThemeName = "Aurora"
+
+function Nebula:SetTheme(name)
+    if not self.Themes[name] then return end
+    self.ThemeName = name
+    self.Theme = self.Themes[name]
+    for _, fn in ipairs(self.Hooks.theme) do pcall(fn, self.Theme) end
+end
+function Nebula:OnTheme(fn) table.insert(self.Hooks.theme, fn) end
+
 -- ═══════════════════════════════════════════════════════════════════════
 -- UTILS
 -- ═══════════════════════════════════════════════════════════════════════
 local function tw(obj, time, props, style, dir)
+    if not obj or not obj.Parent then return end
     local info = TweenInfo.new(time or 0.2, style or Enum.EasingStyle.Quart, dir or Enum.EasingDirection.Out)
     local t = TweenService:Create(obj, info, props)
     t:Play()
@@ -221,10 +207,10 @@ end
 
 local function padding(parent, t, r, b, l)
     local p = Instance.new("UIPadding")
-    p.PaddingTop = UDim.new(0, t or 0)
-    p.PaddingRight = UDim.new(0, r or 0)
+    p.PaddingTop    = UDim.new(0, t or 0)
+    p.PaddingRight  = UDim.new(0, r or 0)
     p.PaddingBottom = UDim.new(0, b or 0)
-    p.PaddingLeft = UDim.new(0, l or 0)
+    p.PaddingLeft   = UDim.new(0, l or 0)
     p.Parent = parent
     return p
 end
@@ -242,7 +228,7 @@ local function uid()
     return HttpService:GenerateGUID(false):gsub("-", ""):sub(1, 12)
 end
 
-local function kwargify(defaults, passed)
+local function merge(defaults, passed)
     passed = passed or {}
     for k, v in pairs(defaults) do
         if passed[k] == nil then passed[k] = v end
@@ -250,134 +236,147 @@ local function kwargify(defaults, passed)
     return passed
 end
 
-local function lerp(a, b, t)
-    return a + (b - a) * t
+-- Safe loadstring
+local function safeLoadString(code)
+    local loader = loadstring or load
+    if not loader then
+        return nil, "loadstring не поддерживается этим экзекьютором"
+    end
+    local fn, err = loader(code)
+    if not fn then return nil, err end
+    return fn
 end
 
--- ═══════════════════════════════════════════════════════════════════════
--- ROOT GUI
--- ═══════════════════════════════════════════════════════════════════════
-local function createRootGui(name)
-    local gui = Instance.new("ScreenGui")
-    gui.Name = name or ("Nebula_" .. uid())
-    gui.ResetOnSpawn = false
-    gui.IgnoreGuiInset = true
-    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    gui.DisplayOrder = 999999
-    
-    local parented = false
+-- Safe get a protected GUI parent
+local function getRootParent()
     if gethui then
-        pcall(function()
-            gui.Parent = gethui()
-            parented = true
-        end)
+        local ok, h = pcall(gethui)
+        if ok and h then return h end
     end
-    if not parented and syn and syn.protect_gui then
-        pcall(function()
-            syn.protect_gui(gui)
-            gui.Parent = CoreGui
-            parented = true
-        end)
+    if syn and syn.protect_gui then
+        return CoreGui -- protect_gui will handle it
     end
-    if not parented then
-        local ok = pcall(function() gui.Parent = CoreGui end)
-        if not ok then
-            gui.Parent = Player:WaitForChild("PlayerGui")
-        end
-    end
-    return gui
+    local ok = pcall(function() return CoreGui end)
+    if ok then return CoreGui end
+    return Player:WaitForChild("PlayerGui")
 end
 
 -- ═══════════════════════════════════════════════════════════════════════
--- GRADIENT ANIMATION
+-- ROOT GUI (Один на всё)
 -- ═══════════════════════════════════════════════════════════════════════
-local gradientObjects = {}
-local gradientConn
-local gradientPhase = 0
+local RootGui = Instance.new("ScreenGui")
+RootGui.Name = "NebulaUI_" .. uid()
+RootGui.ResetOnSpawn = false
+RootGui.IgnoreGuiInset = true
+RootGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+RootGui.DisplayOrder = 999999
+
+do
+    local parent = getRootParent()
+    if syn and syn.protect_gui then
+        pcall(function() syn.protect_gui(RootGui) end)
+    end
+    RootGui.Parent = parent
+end
+
+-- Хук очистки при выходе игрока / unload
+do
+    local oldDestroy = RootGui.Destroy
+end
+
+-- ═══════════════════════════════════════════════════════════════════════
+-- GRADIENT ANIMATION (единый RenderStepped)
+-- ═══════════════════════════════════════════════════════════════════════
+local gradientSet = setmetatable({}, { __mode = "k" })  -- weak keys
+local gradientCount = 0
 
 local function registerGradient(g)
-    table.insert(gradientObjects, g)
+    if not g then return end
+    gradientSet[g] = true
+    gradientCount = gradientCount + 1
+    if not Nebula._gradConn then
+        Nebula._gradConn = RunService.RenderStepped:Connect(function(dt)
+            Nebula._phase = (Nebula._phase + dt * 0.12) % 1
+            local t = Nebula.Theme
+            local c1 = t.Accent:Lerp(t.Accent2, Nebula._phase)
+            local c2 = t.Accent2:Lerp(t.Accent, Nebula._phase)
+            local seq = ColorSequence.new(c1, c2)
+            for g in pairs(gradientSet) do
+                if g.Parent then
+                    g.Color = seq
+                else
+                    gradientSet[g] = nil
+                    gradientCount = gradientCount - 1
+                end
+            end
+            if gradientCount <= 0 and Nebula._gradConn then
+                Nebula._gradConn:Disconnect()
+                Nebula._gradConn = nil
+            end
+        end)
+    end
 end
 
-local function startGradientAnim()
-    if gradientConn then return end
-    gradientConn = RunService.RenderStepped:Connect(function(dt)
-        gradientPhase = (gradientPhase + dt * 0.15) % 1
-        local t = Nebula.Theme
-        local c1 = t.Accent:Lerp(t.Accent2, gradientPhase)
-        local c2 = t.Accent2:Lerp(t.Accent, gradientPhase)
-        for i = #gradientObjects, 1, -1 do
-            local g = gradientObjects[i]
-            if g and g.Parent then
-                g.Color = ColorSequence.new(c1, c2)
-            else
-                table.remove(gradientObjects, i)
-            end
-        end
-    end)
-end
 -- ═══════════════════════════════════════════════════════════════════════
 -- NOTIFICATIONS
 -- ═══════════════════════════════════════════════════════════════════════
-local notifGui
-local function ensureNotifGui()
-    if notifGui and notifGui.Parent then return notifGui end
-    notifGui = createRootGui("NebulaNotifs")
-    notifGui.DisplayOrder = 9999998
-    return notifGui
+local notifContainer
+local function ensureNotifContainer()
+    if notifContainer and notifContainer.Parent then return notifContainer end
+    notifContainer = Instance.new("Frame")
+    notifContainer.Name = "NebulaNotifs"
+    notifContainer.Size = UDim2.new(0, 340, 1, -40)
+    notifContainer.Position = UDim2.new(1, -360, 0, 20)
+    notifContainer.BackgroundTransparency = 1
+    notifContainer.ZIndex = 5000
+    notifContainer.Parent = RootGui
+    local ll = listLayout(notifContainer, Enum.FillDirection.Vertical, 10)
+    ll.HorizontalAlignment = Enum.HorizontalAlignment.Right
+    ll.VerticalAlignment = Enum.VerticalAlignment.Top
+    return notifContainer
 end
 
+local notifTypeColor = {
+    info    = function(t) return t.Accent  end,
+    success = function(t) return t.Success end,
+    error   = function(t) return t.Danger  end,
+    warning = function(t) return t.Warning end,
+}
+
 function Nebula:Notify(cfg)
-    cfg = kwargify({
+    cfg = merge({
         Title = "Nebula",
         Content = "",
         Type = "info",
         Duration = 3,
     }, cfg)
-    
+
     local t = self.Theme
-    local gui = ensureNotifGui()
-    
-    local typeColors = {
-        info = t.Accent,
-        success = t.Success,
-        error = t.Danger,
-        warning = t.Warning,
-    }
-    local color = typeColors[cfg.Type] or t.Accent
-    
-    local container = gui:FindFirstChild("Container")
-    if not container then
-        container = Instance.new("Frame")
-        container.Name = "Container"
-        container.Size = UDim2.new(0, 340, 1, -40)
-        container.Position = UDim2.new(1, -360, 0, 20)
-        container.BackgroundTransparency = 1
-        container.Parent = gui
-        local ll = listLayout(container, Enum.FillDirection.Vertical, 10)
-        ll.HorizontalAlignment = Enum.HorizontalAlignment.Right
-    end
-    
+    local colorFn = notifTypeColor[cfg.Type] or notifTypeColor.info
+    local color = colorFn(t)
+
+    local container = ensureNotifContainer()
+
     local card = Instance.new("Frame")
-    card.Size = UDim2.new(1, 40, 0, 0)
+    card.Size = UDim2.new(1, 40, 0, 0) -- start hidden right
     card.Position = UDim2.new(0, 40, 0, 0)
     card.BackgroundColor3 = t.Surface
     card.BackgroundTransparency = 0.05
     card.BorderSizePixel = 0
     card.ClipsDescendants = true
+    card.ZIndex = 5001
     card.Parent = container
     corner(card, 10)
     local cardStroke = stroke(card, t.Line, 1, 0.3)
-    
-    -- left accent bar
+
     local bar = Instance.new("Frame")
     bar.Size = UDim2.new(0, 3, 1, 0)
     bar.BackgroundColor3 = color
     bar.BorderSizePixel = 0
+    bar.ZIndex = 5002
     bar.Parent = card
     corner(bar, 2)
-    
-    -- title
+
     local titleLbl = Instance.new("TextLabel")
     titleLbl.Size = UDim2.new(1, -24, 0, 22)
     titleLbl.Position = UDim2.new(0, 16, 0, 10)
@@ -387,9 +386,9 @@ function Nebula:Notify(cfg)
     titleLbl.Font = Enum.Font.GothamBold
     titleLbl.TextSize = 13
     titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+    titleLbl.ZIndex = 5002
     titleLbl.Parent = card
-    
-    -- body
+
     local textLbl = Instance.new("TextLabel")
     textLbl.Size = UDim2.new(1, -24, 0, 0)
     textLbl.Position = UDim2.new(0, 16, 0, 32)
@@ -401,245 +400,306 @@ function Nebula:Notify(cfg)
     textLbl.TextWrapped = true
     textLbl.TextXAlignment = Enum.TextXAlignment.Left
     textLbl.TextYAlignment = Enum.TextYAlignment.Top
+    textLbl.ZIndex = 5002
     textLbl.Parent = card
-    
-    -- progress bar
+
     local progress = Instance.new("Frame")
     progress.Size = UDim2.new(1, -16, 0, 2)
     progress.Position = UDim2.new(0, 8, 1, -8)
     progress.BackgroundColor3 = t.Surface3
     progress.BorderSizePixel = 0
+    progress.ZIndex = 5002
     progress.Parent = card
     corner(progress, 1)
-    
+
     local progressFill = Instance.new("Frame")
     progressFill.Size = UDim2.new(1, 0, 1, 0)
     progressFill.BackgroundColor3 = color
     progressFill.BorderSizePixel = 0
+    progressFill.ZIndex = 5003
     progressFill.Parent = progress
     corner(progressFill, 1)
-    
-    -- animate in
+
     task.defer(function()
+        if not card.Parent then return end
         textLbl.Size = UDim2.new(1, -24, 0, textLbl.TextBounds.Y + 4)
         local targetH = 36 + textLbl.TextBounds.Y + 18
-        tw(card, 0.35, { Size = UDim2.new(1, 0, 0, targetH), Position = UDim2.new(0, 0, 0, 0) })
-        
-        -- progress animation
+        tw(card, 0.32, { Size = UDim2.new(1, 0, 0, targetH), Position = UDim2.new(0, 0, 0, 0) })
         tw(progressFill, cfg.Duration, { Size = UDim2.new(0, 0, 1, 0) }, Enum.EasingStyle.Linear)
     end)
-    
-    -- animate out
+
     task.delay(cfg.Duration, function()
-        tw(card, 0.3, { Size = UDim2.new(1, 40, 0, 0), Position = UDim2.new(0, 40, 0, 0), BackgroundTransparency = 1 })
-        tw(cardStroke, 0.3, { Transparency = 1 })
-        task.delay(0.35, function()
+        if not card.Parent then return end
+        tw(card, 0.28, { Size = UDim2.new(1, 40, 0, 0), Position = UDim2.new(0, 40, 0, 0), BackgroundTransparency = 1 })
+        tw(cardStroke, 0.28, { Transparency = 1 })
+        task.delay(0.32, function()
             if card then card:Destroy() end
         end)
     end)
+
+    return card
 end
+
 -- ═══════════════════════════════════════════════════════════════════════
--- COMMAND PALETTE
+-- COMMAND REGISTRY + PALETTE
 -- ═══════════════════════════════════════════════════════════════════════
-local commandRegistry = {}
-local paletteGui, palettePanel, paletteDim, paletteSearch, paletteResults
-local paletteOpen = false
+local commands = {}
+local palette = {
+    open = false,
+    pool = {},           -- пул TextButton (до 40)
+    shown = 0,
+}
 
-local function registerCommand(name, type, action)
-    table.insert(commandRegistry, { name = name, type = type, action = action })
-end
-
-local function closePalette()
-    if not paletteOpen then return end
-    paletteOpen = false
-    tw(paletteDim, 0.2, { BackgroundTransparency = 1 })
-    tw(palettePanel, 0.2, { BackgroundTransparency = 1 })
-    task.delay(0.2, function()
-        if paletteDim then paletteDim.Visible = false end
-        if palettePanel then palettePanel.Visible = false end
-    end)
-end
-
-local function refreshPalette(query)
-    if not paletteResults then return end
-    for _, c in ipairs(paletteResults:GetChildren()) do
-        if c:IsA("TextButton") then c:Destroy() end
-    end
-    local t = Nebula.Theme
-    query = query:lower()
-    local count = 0
-    for _, cmd in ipairs(commandRegistry) do
-        if query == "" or cmd.name:lower():find(query, 1, true) then
-            count = count + 1
-            if count > 40 then break end
-            
-            local btn = Instance.new("TextButton")
-            btn.Size = UDim2.new(1, 0, 0, 36)
-            btn.BackgroundColor3 = t.Surface
-            btn.BorderSizePixel = 0
-            btn.Text = ""
-            btn.AutoButtonColor = false
-            btn.Parent = paletteResults
-            corner(btn, 6)
-            
-            local nameLbl = Instance.new("TextLabel")
-            nameLbl.Size = UDim2.new(1, -90, 1, 0)
-            nameLbl.Position = UDim2.new(0, 14, 0, 0)
-            nameLbl.BackgroundTransparency = 1
-            nameLbl.Text = cmd.name
-            nameLbl.TextColor3 = t.Text
-            nameLbl.Font = Enum.Font.Gotham
-            nameLbl.TextSize = 13
-            nameLbl.TextXAlignment = Enum.TextXAlignment.Left
-            nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
-            nameLbl.Parent = btn
-            
-            local typeLbl = Instance.new("TextLabel")
-            typeLbl.Size = UDim2.new(0, 80, 1, 0)
-            typeLbl.Position = UDim2.new(1, -90, 0, 0)
-            typeLbl.BackgroundTransparency = 1
-            typeLbl.Text = cmd.type
-            typeLbl.TextColor3 = t.TextDim
-            typeLbl.Font = Enum.Font.Gotham
-            typeLbl.TextSize = 10
-            typeLbl.TextXAlignment = Enum.TextXAlignment.Right
-            typeLbl.Parent = btn
-            
-            btn.MouseEnter:Connect(function()
-                tw(btn, 0.12, { BackgroundColor3 = t.Surface2 })
-            end)
-            btn.MouseLeave:Connect(function()
-                tw(btn, 0.12, { BackgroundColor3 = t.Surface })
-            end)
-            btn.MouseButton1Click:Connect(function()
-                closePalette()
-                pcall(cmd.action)
-            end)
-        end
-    end
-    paletteResults.CanvasSize = UDim2.new(0, 0, 0, paletteResults.UIListLayout.AbsoluteContentSize.Y + 8)
-end
-
-local function openPalette()
-    paletteOpen = true
-    paletteDim.Visible = true
-    palettePanel.Visible = true
-    tw(paletteDim, 0.2, { BackgroundTransparency = 0.6 })
-    tw(palettePanel, 0.2, { BackgroundTransparency = 0 })
-    paletteSearch.Text = ""
-    refreshPalette("")
-    paletteSearch:CaptureFocus()
+function Nebula:RegisterCommand(name, kind, action, category)
+    table.insert(commands, { name = name, kind = kind, action = action, category = category or "" })
 end
 
 local function buildPalette()
-    if paletteGui then return end
-    paletteGui = createRootGui("NebulaPalette")
-    paletteGui.DisplayOrder = 1000000
     local t = Nebula.Theme
-    
-    paletteDim = Instance.new("Frame")
-    paletteDim.Size = UDim2.fromScale(1, 1)
-    paletteDim.BackgroundColor3 = Color3.new(0, 0, 0)
-    paletteDim.BackgroundTransparency = 1
-    paletteDim.BorderSizePixel = 0
-    paletteDim.Visible = false
-    paletteDim.Parent = paletteGui
-    
-    palettePanel = Instance.new("Frame")
-    palettePanel.Size = UDim2.new(0, 560, 0, 420)
-    palettePanel.Position = UDim2.fromScale(0.5, 0.35)
-    palettePanel.AnchorPoint = Vector2.new(0.5, 0.5)
-    palettePanel.BackgroundColor3 = t.Background
-    palettePanel.BorderSizePixel = 0
-    palettePanel.Visible = false
-    palettePanel.Parent = paletteGui
-    corner(palettePanel, 12)
-    stroke(palettePanel, t.Line, 1, 0.3)
-    
-    paletteSearch = Instance.new("TextBox")
-    paletteSearch.Size = UDim2.new(1, -28, 0, 46)
-    paletteSearch.Position = UDim2.new(0, 14, 0, 14)
-    paletteSearch.BackgroundColor3 = t.Surface
-    paletteSearch.BorderSizePixel = 0
-    paletteSearch.Text = ""
-    paletteSearch.PlaceholderText = "🔍 Поиск команд... (Esc — закрыть)"
-    paletteSearch.PlaceholderColor3 = t.TextDim
-    paletteSearch.TextColor3 = t.Text
-    paletteSearch.Font = Enum.Font.Gotham
-    paletteSearch.TextSize = 14
-    paletteSearch.TextXAlignment = Enum.TextXAlignment.Left
-    paletteSearch.ClearTextOnFocus = false
-    paletteSearch.Parent = palettePanel
-    corner(paletteSearch, 8)
-    padding(paletteSearch, 0, 14, 0, 14)
-    stroke(paletteSearch, t.Line, 1, 0.5)
-    
-    paletteResults = Instance.new("ScrollingFrame")
-    paletteResults.Size = UDim2.new(1, -28, 1, -80)
-    paletteResults.Position = UDim2.new(0, 14, 0, 68)
-    paletteResults.BackgroundTransparency = 1
-    paletteResults.BorderSizePixel = 0
-    paletteResults.ScrollBarThickness = 3
-    paletteResults.ScrollBarImageColor3 = t.Accent
-    paletteResults.CanvasSize = UDim2.new(0, 0, 0, 0)
-    paletteResults.Parent = palettePanel
-    listLayout(paletteResults, Enum.FillDirection.Vertical, 4)
-    
-    paletteSearch:GetPropertyChangedSignal("Text"):Connect(function()
-        refreshPalette(paletteSearch.Text)
+
+    -- Dim
+    palette.dim = Instance.new("Frame")
+    palette.dim.Size = UDim2.fromScale(1, 1)
+    palette.dim.BackgroundColor3 = Color3.new(0, 0, 0)
+    palette.dim.BackgroundTransparency = 1
+    palette.dim.BorderSizePixel = 0
+    palette.dim.Visible = false
+    palette.dim.ZIndex = 4000
+    palette.dim.Parent = RootGui
+
+    -- Panel
+    palette.panel = Instance.new("Frame")
+    palette.panel.Size = UDim2.new(0, 580, 0, 440)
+    palette.panel.Position = UDim2.fromScale(0.5, 0.32)
+    palette.panel.AnchorPoint = Vector2.new(0.5, 0.5)
+    palette.panel.BackgroundColor3 = t.Background
+    palette.panel.BackgroundTransparency = 1
+    palette.panel.BorderSizePixel = 0
+    palette.panel.Visible = false
+    palette.panel.ZIndex = 4001
+    palette.panel.Parent = RootGui
+    corner(palette.panel, 14)
+    stroke(palette.panel, t.Line, 1, 0.3)
+
+    -- Search
+    palette.search = Instance.new("TextBox")
+    palette.search.Size = UDim2.new(1, -28, 0, 48)
+    palette.search.Position = UDim2.new(0, 14, 0, 14)
+    palette.search.BackgroundColor3 = t.Surface
+    palette.search.BorderSizePixel = 0
+    palette.search.Text = ""
+    palette.search.PlaceholderText = "🔍  Поиск команд..."
+    palette.search.PlaceholderColor3 = t.TextDim
+    palette.search.TextColor3 = t.Text
+    palette.search.Font = Enum.Font.Gotham
+    palette.search.TextSize = 14
+    palette.search.TextXAlignment = Enum.TextXAlignment.Left
+    palette.search.ClearTextOnFocus = false
+    palette.search.ZIndex = 4002
+    palette.search.Parent = palette.panel
+    corner(palette.search, 10)
+    padding(palette.search, 0, 14, 0, 14)
+    stroke(palette.search, t.Line, 1, 0.5)
+
+    -- Results scroll
+    palette.results = Instance.new("ScrollingFrame")
+    palette.results.Size = UDim2.new(1, -28, 1, -82)
+    palette.results.Position = UDim2.new(0, 14, 0, 70)
+    palette.results.BackgroundTransparency = 1
+    palette.results.BorderSizePixel = 0
+    palette.results.ScrollBarThickness = 3
+    palette.results.ScrollBarImageColor3 = t.Accent
+    palette.results.CanvasSize = UDim2.new(0, 0, 0, 0)
+    palette.results.ZIndex = 4002
+    palette.results.Parent = palette.panel
+    listLayout(palette.results, Enum.FillDirection.Vertical, 4)
+
+    -- Пул кнопок (переиспользуем)
+    for i = 1, 40 do
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(1, 0, 0, 38)
+        btn.BackgroundColor3 = t.Surface
+        btn.BorderSizePixel = 0
+        btn.Text = ""
+        btn.AutoButtonColor = false
+        btn.Visible = false
+        btn.ZIndex = 4003
+        btn.Parent = palette.results
+        corner(btn, 8)
+
+        local nameLbl = Instance.new("TextLabel")
+        nameLbl.Size = UDim2.new(1, -110, 1, 0)
+        nameLbl.Position = UDim2.new(0, 14, 0, 0)
+        nameLbl.BackgroundTransparency = 1
+        nameLbl.Text = ""
+        nameLbl.TextColor3 = t.Text
+        nameLbl.Font = Enum.Font.Gotham
+        nameLbl.TextSize = 13
+        nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+        nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
+        nameLbl.ZIndex = 4004
+        nameLbl.Parent = btn
+
+        local kindLbl = Instance.new("TextLabel")
+        kindLbl.Size = UDim2.new(0, 90, 1, 0)
+        kindLbl.Position = UDim2.new(1, -100, 0, 0)
+        kindLbl.BackgroundTransparency = 1
+        kindLbl.Text = ""
+        kindLbl.TextColor3 = t.TextDim
+        kindLbl.Font = Enum.Font.Gotham
+        kindLbl.TextSize = 10
+        kindLbl.TextXAlignment = Enum.TextXAlignment.Right
+        kindLbl.ZIndex = 4004
+        kindLbl.Parent = btn
+
+        btn.MouseEnter:Connect(function()
+            tw(btn, 0.12, { BackgroundColor3 = Nebula.Theme.Surface2 })
+        end)
+        btn.MouseLeave:Connect(function()
+            tw(btn, 0.12, { BackgroundColor3 = Nebula.Theme.Surface })
+        end)
+        btn.MouseButton1Click:Connect(function()
+            local cmd = btn:GetAttribute("cmdIndex")
+            if cmd and commands[cmd] then
+                local action = commands[cmd].action
+                closePalette()
+                task.defer(function() pcall(action) end)
+            end
+        end)
+
+        palette.pool[i] = { button = btn, nameLbl = nameLbl, kindLbl = kindLbl }
+    end
+
+    palette.search:GetPropertyChangedSignal("Text"):Connect(function()
+        if palette.open then refreshPalette(palette.search.Text) end
     end)
-    
-    paletteDim.InputBegan:Connect(function(input)
+
+    palette.dim.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             closePalette()
         end
     end)
 end
+
+function refreshPalette(query)
+    if not palette.pool or #palette.pool == 0 then return end
+    query = (query or ""):lower()
+    local t = Nebula.Theme
+
+    -- фильтрация
+    local filtered = {}
+    for i, cmd in ipairs(commands) do
+        if query == "" or cmd.name:lower():find(query, 1, true) then
+            table.insert(filtered, i)
+            if #filtered >= 40 then break end
+        end
+    end
+
+    for i = 1, 40 do
+        local entry = palette.pool[i]
+        local btn = entry.button
+        if i <= #filtered then
+            local idx = filtered[i]
+            local cmd = commands[idx]
+            btn.Visible = true
+            btn:SetAttribute("cmdIndex", idx)
+            entry.nameLbl.Text = cmd.name
+            entry.kindLbl.Text = cmd.kind
+            btn.BackgroundColor3 = t.Surface
+            entry.nameLbl.TextColor3 = t.Text
+            entry.kindLbl.TextColor3 = t.TextDim
+            btn.UIStroke = btn:FindFirstChildOfClass("UIStroke")
+        else
+            btn.Visible = false
+            btn:SetAttribute("cmdIndex", nil)
+        end
+    end
+
+    palette.results.CanvasSize = UDim2.new(0, 0, 0, palette.results.UIListLayout.AbsoluteContentSize.Y + 8)
+end
+
+function openPalette()
+    if palette.open then return end
+    palette.open = true
+    palette.dim.Visible = true
+    palette.panel.Visible = true
+    tw(palette.dim, 0.2, { BackgroundTransparency = 0.55 })
+    tw(palette.panel, 0.22, { BackgroundTransparency = 0 })
+    palette.search.Text = ""
+    refreshPalette("")
+    task.defer(function()
+        if palette.search and palette.search.Parent then
+            palette.search:CaptureFocus()
+        end
+    end)
+end
+
+function closePalette()
+    if not palette.open then return end
+    palette.open = false
+    tw(palette.dim, 0.18, { BackgroundTransparency = 1 })
+    tw(palette.panel, 0.18, { BackgroundTransparency = 1 })
+    task.delay(0.2, function()
+        if palette.dim then palette.dim.Visible = false end
+        if palette.panel then palette.panel.Visible = false end
+    end)
+end
+
+buildPalette()
+
+-- ═══════════════════════════════════════════════════════════════════════
+-- GLOBAL INPUT
+-- ═══════════════════════════════════════════════════════════════════════
+UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
+
+    -- Ctrl+K
+    if input.KeyCode == Enum.KeyCode.K and UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+        if palette.open then closePalette() else openPalette() end
+        return
+    end
+    -- Esc закрывает палитру
+    if input.KeyCode == Enum.KeyCode.Escape and palette.open then
+        closePalette()
+        return
+    end
+    -- RightShift — toggle всех окон
+    if input.KeyCode == Enum.KeyCode.RightShift then
+        for _, w in ipairs(Nebula.Windows) do
+            if w.ToggleVisible then pcall(w.ToggleVisible, w) end
+        end
+    end
+end)
+
 -- ═══════════════════════════════════════════════════════════════════════
 -- WINDOW BUILDER
 -- ═══════════════════════════════════════════════════════════════════════
 local function buildWindow(config)
-    config = kwargify({
+    config = merge({
         Name = "Nebula Frame",
         Subtitle = "v" .. Nebula.Version,
         ConfigFolder = "NebulaFrame",
-        Size = UDim2.new(0, 860, 0, 520),
-        MinSize = UDim2.new(0, 500, 0, 42),
+        Size = UDim2.new(0, 880, 0, 540),
+        MinWidth = 480,
     }, config)
-    
+
     local t = Nebula.Theme
-    local rootGui = createRootGui("NebulaWindow_" .. uid())
     local window = {
         Tabs = {},
         CurrentTab = nil,
         Minimized = false,
         Hidden = false,
-        ScreenGui = rootGui,
         ConfigFolder = config.ConfigFolder,
+        _conns = {},
+        _themeConn = {},
     }
-    
-    -- ═══ CLAMP HELPERS ═══
-    local function getScreenBounds()
-        local viewport = Camera.ViewportSize
-        return viewport.X, viewport.Y
+
+    -- track helper
+    local function track(conn)
+        table.insert(window._conns, conn)
+        return conn
     end
-    
-    local function clampPosition(pos, size)
-        local sw, sh = getScreenBounds()
-        local w = size.X.Offset
-        local h = size.Y.Offset
-        local x = pos.X.Offset
-        local y = pos.Y.Offset
-        -- never let more than 30px off-screen
-        local minX = -w + 80
-        local maxX = sw - 80
-        local minY = 0
-        local maxY = sh - 44
-        x = math.clamp(x, minX, maxX)
-        y = math.clamp(y, minY, maxY)
-        return UDim2.new(0, x, 0, y)
-    end
-    
+
     -- ═══ SHADOW ═══
     local shadow = Instance.new("ImageLabel")
     shadow.Name = "Shadow"
@@ -652,10 +712,10 @@ local function buildWindow(config)
     shadow.Size = config.Size
     shadow.Position = UDim2.new(0.5, 0, 0.5, 0)
     shadow.AnchorPoint = Vector2.new(0.5, 0.5)
-    shadow.ZIndex = 0
-    shadow.Parent = rootGui
-    
-    -- ═══ MAIN ═══
+    shadow.ZIndex = 10
+    shadow.Parent = RootGui
+
+    -- ═══ MAIN FRAME ═══
     local main = Instance.new("Frame")
     main.Name = "Main"
     main.Size = config.Size
@@ -664,129 +724,129 @@ local function buildWindow(config)
     main.BackgroundColor3 = t.Background
     main.BorderSizePixel = 0
     main.ClipsDescendants = true
-    main.ZIndex = 1
-    main.Parent = rootGui
+    main.ZIndex = 11
+    main.Parent = RootGui
     corner(main, 12)
-    stroke(main, t.Line, 1, 0.3)
+    local mainStroke = stroke(main, t.Line, 1, 0.3)
+
     window.Frame = main
-    
+    window.Shadow = shadow
+
     -- ═══ HEADER ═══
     local header = Instance.new("Frame")
     header.Name = "Header"
-    header.Size = UDim2.new(1, 0, 0, 48)
+    header.Size = UDim2.new(1, 0, 0, 50)
     header.BackgroundColor3 = t.Surface
     header.BorderSizePixel = 0
-    header.ZIndex = 2
+    header.ZIndex = 12
     header.Parent = main
-    
-    -- accent line (animated)
+
     local accentLine = Instance.new("Frame")
     accentLine.Size = UDim2.new(1, 0, 0, 2)
+    accentLine.Position = UDim2.new(0, 0, 1, -2)
     accentLine.BackgroundColor3 = t.Accent
     accentLine.BorderSizePixel = 0
-    accentLine.ZIndex = 3
+    accentLine.ZIndex = 13
     accentLine.Parent = header
     local accentGrad = Instance.new("UIGradient")
     accentGrad.Color = ColorSequence.new(t.Accent, t.Accent2)
     accentGrad.Parent = accentLine
     registerGradient(accentGrad)
-    
-    -- logo
+
     local logoDot = Instance.new("Frame")
-    logoDot.Size = UDim2.new(0, 10, 0, 10)
-    logoDot.Position = UDim2.new(0, 18, 0.5, 0)
+    logoDot.Size = UDim2.new(0, 12, 0, 12)
+    logoDot.Position = UDim2.new(0, 20, 0.5, 0)
     logoDot.AnchorPoint = Vector2.new(0, 0.5)
     logoDot.BackgroundColor3 = t.Accent
     logoDot.BorderSizePixel = 0
-    logoDot.ZIndex = 3
+    logoDot.ZIndex = 14
     logoDot.Parent = header
-    corner(logoDot, 5)
-    
+    corner(logoDot, 6)
+
     local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(0, 300, 0, 22)
-    title.Position = UDim2.new(0, 38, 0, 6)
+    title.Size = UDim2.new(0, 300, 0, 20)
+    title.Position = UDim2.new(0, 42, 0, 8)
     title.BackgroundTransparency = 1
     title.Text = config.Name
     title.TextColor3 = t.Text
     title.Font = Enum.Font.GothamBold
     title.TextSize = 14
     title.TextXAlignment = Enum.TextXAlignment.Left
-    title.ZIndex = 3
+    title.ZIndex = 14
     title.Parent = header
-    
+
     local subtitle = Instance.new("TextLabel")
     subtitle.Size = UDim2.new(0, 300, 0, 16)
-    subtitle.Position = UDim2.new(0, 38, 0, 26)
+    subtitle.Position = UDim2.new(0, 42, 0, 28)
     subtitle.BackgroundTransparency = 1
     subtitle.Text = config.Subtitle
     subtitle.TextColor3 = t.TextDim
     subtitle.Font = Enum.Font.Gotham
     subtitle.TextSize = 10
     subtitle.TextXAlignment = Enum.TextXAlignment.Left
-    subtitle.ZIndex = 3
+    subtitle.ZIndex = 14
     subtitle.Parent = header
-    
-    -- controls
+
+    -- Controls
     local controls = Instance.new("Frame")
-    controls.Size = UDim2.new(0, 100, 1, 0)
-    controls.Position = UDim2.new(1, -108, 0, 0)
+    controls.Size = UDim2.new(0, 80, 1, 0)
+    controls.Position = UDim2.new(1, -88, 0, 0)
     controls.BackgroundTransparency = 1
-    controls.ZIndex = 3
+    controls.ZIndex = 14
     controls.Parent = header
-    
-    local function makeCtrlBtn(xPos, symbol, color, onClick)
+
+    local function makeCtrlBtn(xPos, symbol, hoverColor, onClick)
         local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(0, 28, 0, 28)
+        btn.Size = UDim2.new(0, 30, 0, 30)
         btn.Position = UDim2.new(0, xPos, 0.5, 0)
         btn.AnchorPoint = Vector2.new(0, 0.5)
         btn.BackgroundColor3 = t.Surface2
         btn.BorderSizePixel = 0
         btn.Text = symbol
-        btn.TextColor3 = color
+        btn.TextColor3 = t.TextDim
         btn.Font = Enum.Font.GothamBold
-        btn.TextSize = 13
+        btn.TextSize = 14
         btn.AutoButtonColor = false
-        btn.ZIndex = 3
+        btn.ZIndex = 15
         btn.Parent = controls
-        corner(btn, 7)
+        corner(btn, 8)
         btn.MouseEnter:Connect(function()
-            tw(btn, 0.15, { BackgroundColor3 = color, TextColor3 = t.Background })
+            tw(btn, 0.15, { BackgroundColor3 = hoverColor, TextColor3 = t.Background })
         end)
         btn.MouseLeave:Connect(function()
-            tw(btn, 0.15, { BackgroundColor3 = t.Surface2, TextColor3 = color })
+            tw(btn, 0.15, { BackgroundColor3 = t.Surface2, TextColor3 = t.TextDim })
         end)
         btn.MouseButton1Click:Connect(onClick)
         return btn
     end
-    
+
     local minBtn = makeCtrlBtn(0, "−", t.TextDim, function()
         window:ToggleMinimize()
     end)
-    makeCtrlBtn(34, "×", t.Danger, function()
+    makeCtrlBtn(38, "×", t.Danger, function()
         window:Destroy()
     end)
-    
-    -- ═══ CONTENT AREA ═══
+
+    -- ═══ CONTENT ═══
     local content = Instance.new("Frame")
     content.Name = "Content"
-    content.Size = UDim2.new(1, 0, 1, -48 - 24)
-    content.Position = UDim2.new(0, 0, 0, 48)
+    content.Size = UDim2.new(1, 0, 1, -50 - 24)
+    content.Position = UDim2.new(0, 0, 0, 50)
     content.BackgroundTransparency = 1
-    content.ZIndex = 2
+    content.ZIndex = 12
     content.Parent = main
-    
-    -- ═══ SIDEBAR (tabs) ═══
+
+    -- ═══ SIDEBAR ═══
     local sidebar = Instance.new("Frame")
     sidebar.Name = "Sidebar"
-    sidebar.Size = UDim2.new(0, 200, 1, 0)
+    sidebar.Size = UDim2.new(0, 210, 1, 0)
     sidebar.BackgroundColor3 = t.Surface
     sidebar.BorderSizePixel = 0
-    sidebar.ZIndex = 2
+    sidebar.ZIndex = 12
     sidebar.Parent = content
-    
-    -- Tab search
+
     local tabSearch = Instance.new("TextBox")
-    tabSearch.Size = UDim2.new(1, -16, 0, 30)
+    tabSearch.Size = UDim2.new(1, -16, 0, 32)
     tabSearch.Position = UDim2.new(0, 8, 0, 8)
     tabSearch.BackgroundColor3 = t.Surface2
     tabSearch.BorderSizePixel = 0
@@ -798,34 +858,34 @@ local function buildWindow(config)
     tabSearch.TextSize = 11
     tabSearch.TextXAlignment = Enum.TextXAlignment.Left
     tabSearch.ClearTextOnFocus = false
-    tabSearch.ZIndex = 4
+    tabSearch.ZIndex = 14
     tabSearch.Parent = sidebar
-    corner(tabSearch, 6)
+    corner(tabSearch, 7)
     padding(tabSearch, 0, 10, 0, 10)
     stroke(tabSearch, t.Line, 1, 0.5)
-    
+
     local sidebarList = Instance.new("ScrollingFrame")
-    sidebarList.Size = UDim2.new(1, -8, 1, -52)
-    sidebarList.Position = UDim2.new(0, 4, 0, 46)
+    sidebarList.Size = UDim2.new(1, -8, 1, -54)
+    sidebarList.Position = UDim2.new(0, 4, 0, 48)
     sidebarList.BackgroundTransparency = 1
     sidebarList.BorderSizePixel = 0
     sidebarList.ScrollBarThickness = 3
     sidebarList.ScrollBarImageColor3 = t.Accent
     sidebarList.CanvasSize = UDim2.new(0, 0, 0, 0)
-    sidebarList.ZIndex = 3
+    sidebarList.ZIndex = 13
     sidebarList.Parent = sidebar
     listLayout(sidebarList, Enum.FillDirection.Vertical, 3)
     padding(sidebarList, 4, 2, 4, 2)
-    
+
     -- ═══ PAGES ═══
     local pages = Instance.new("Frame")
     pages.Name = "Pages"
-    pages.Size = UDim2.new(1, -200 - 240, 1, 0)
-    pages.Position = UDim2.new(0, 200, 0, 0)
+    pages.Size = UDim2.new(1, -210 - 240, 1, 0)
+    pages.Position = UDim2.new(0, 210, 0, 0)
     pages.BackgroundTransparency = 1
-    pages.ZIndex = 2
+    pages.ZIndex = 12
     pages.Parent = content
-    
+
     -- ═══ RIGHT PANEL ═══
     local rightPanel = Instance.new("Frame")
     rightPanel.Name = "RightPanel"
@@ -833,61 +893,65 @@ local function buildWindow(config)
     rightPanel.Position = UDim2.new(1, -240, 0, 0)
     rightPanel.BackgroundColor3 = t.Surface
     rightPanel.BorderSizePixel = 0
-    rightPanel.ZIndex = 2
+    rightPanel.ZIndex = 12
     rightPanel.Parent = content
-    
-    -- Right panel: FPS Graph
-    local graphTitle = Instance.new("TextLabel")
-    graphTitle.Size = UDim2.new(1, -20, 0, 20)
-    graphTitle.Position = UDim2.new(0, 10, 0, 10)
-    graphTitle.BackgroundTransparency = 1
-    graphTitle.Text = "LIVE STATS"
-    graphTitle.TextColor3 = t.TextDim
-    graphTitle.Font = Enum.Font.GothamBold
-    graphTitle.TextSize = 10
-    graphTitle.TextXAlignment = Enum.TextXAlignment.Left
-    graphTitle.Parent = rightPanel
-    
+
+    -- Stats title
+    local statsTitle = Instance.new("TextLabel")
+    statsTitle.Size = UDim2.new(1, -20, 0, 20)
+    statsTitle.Position = UDim2.new(0, 12, 0, 12)
+    statsTitle.BackgroundTransparency = 1
+    statsTitle.Text = "LIVE STATS"
+    statsTitle.TextColor3 = t.TextDim
+    statsTitle.Font = Enum.Font.GothamBold
+    statsTitle.TextSize = 10
+    statsTitle.TextXAlignment = Enum.TextXAlignment.Left
+    statsTitle.ZIndex = 13
+    statsTitle.Parent = rightPanel
+
     local graphFrame = Instance.new("Frame")
-    graphFrame.Size = UDim2.new(1, -20, 0, 80)
-    graphFrame.Position = UDim2.new(0, 10, 0, 34)
+    graphFrame.Size = UDim2.new(1, -24, 0, 90)
+    graphFrame.Position = UDim2.new(0, 12, 0, 36)
     graphFrame.BackgroundColor3 = t.Surface2
     graphFrame.BorderSizePixel = 0
+    graphFrame.ZIndex = 13
     graphFrame.Parent = rightPanel
-    corner(graphFrame, 8)
+    corner(graphFrame, 10)
     stroke(graphFrame, t.Line, 1, 0.5)
-    
+
     local fpsLabel = Instance.new("TextLabel")
-    fpsLabel.Size = UDim2.new(1, -8, 0, 16)
-    fpsLabel.Position = UDim2.new(0, 4, 0, 4)
+    fpsLabel.Size = UDim2.new(1, -16, 0, 16)
+    fpsLabel.Position = UDim2.new(0, 10, 0, 8)
     fpsLabel.BackgroundTransparency = 1
     fpsLabel.Text = "FPS"
-    fpsLabel.TextColor3 = t.Text
+    fpsLabel.TextColor3 = t.TextDim
     fpsLabel.Font = Enum.Font.GothamBold
     fpsLabel.TextSize = 10
     fpsLabel.TextXAlignment = Enum.TextXAlignment.Left
+    fpsLabel.ZIndex = 14
     fpsLabel.Parent = graphFrame
-    
+
     local fpsValue = Instance.new("TextLabel")
-    fpsValue.Size = UDim2.new(1, -8, 0, 16)
-    fpsValue.Position = UDim2.new(0, 4, 0, 4)
+    fpsValue.Size = UDim2.new(1, -16, 0, 16)
+    fpsValue.Position = UDim2.new(0, 10, 0, 8)
     fpsValue.BackgroundTransparency = 1
     fpsValue.Text = "--"
     fpsValue.TextColor3 = t.Accent
     fpsValue.Font = Enum.Font.Code
-    fpsValue.TextSize = 11
+    fpsValue.TextSize = 12
     fpsValue.TextXAlignment = Enum.TextXAlignment.Right
+    fpsValue.ZIndex = 14
     fpsValue.Parent = graphFrame
-    
-    -- graph bars
+
     local barsFrame = Instance.new("Frame")
     barsFrame.Size = UDim2.new(1, -16, 0, 50)
-    barsFrame.Position = UDim2.new(0, 8, 0, 24)
+    barsFrame.Position = UDim2.new(0, 8, 0, 30)
     barsFrame.BackgroundTransparency = 1
+    barsFrame.ZIndex = 14
     barsFrame.Parent = graphFrame
-    
+
+    local barCount = 32
     local bars = {}
-    local barCount = 30
     for i = 1, barCount do
         local bar = Instance.new("Frame")
         bar.Size = UDim2.new(0, 0, 0, 0)
@@ -895,57 +959,52 @@ local function buildWindow(config)
         bar.AnchorPoint = Vector2.new(0, 1)
         bar.BackgroundColor3 = t.Accent
         bar.BorderSizePixel = 0
+        bar.ZIndex = 15
         bar.Parent = barsFrame
-        corner(bar, 1)
         bars[i] = bar
     end
-    
-    -- Right panel: Actions
+
+    -- Quick actions
     local actionsTitle = Instance.new("TextLabel")
     actionsTitle.Size = UDim2.new(1, -20, 0, 20)
-    actionsTitle.Position = UDim2.new(0, 10, 0, 130)
+    actionsTitle.Position = UDim2.new(0, 12, 0, 142)
     actionsTitle.BackgroundTransparency = 1
     actionsTitle.Text = "БЫСТРЫЕ ДЕЙСТВИЯ"
     actionsTitle.TextColor3 = t.TextDim
     actionsTitle.Font = Enum.Font.GothamBold
     actionsTitle.TextSize = 10
     actionsTitle.TextXAlignment = Enum.TextXAlignment.Left
+    actionsTitle.ZIndex = 13
     actionsTitle.Parent = rightPanel
-    
+
     local quickActions = {
-        { name = "🎯 Reset Position", action = function()
+        { name = "🎯  В центр",        action = function()
             main.Position = UDim2.new(0.5, 0, 0.5, 0)
             shadow.Position = main.Position
             Nebula:Notify({ Title = "Позиция", Content = "Окно возвращено в центр", Type = "success" })
         end },
-        { name = "🎨 Открыть палитру", action = function()
-            openPalette()
-        end },
-        { name = "📋 Хоткеи", action = function()
-            window:ShowHotkeys()
-        end },
-        { name = "💾 Сохранить конфиг", action = function()
-            window:SaveConfig("autosave")
-        end },
-        { name = "⚡ Скрипт-раннер", action = function()
-            window:ShowScriptRunner()
-        end },
+        { name = "🎨  Палитра (Ctrl+K)", action = function() openPalette() end },
+        { name = "⌨  Хоткеи",          action = function() window:ShowHotkeys() end },
+        { name = "💾  Сохранить конфиг", action = function() window:SaveConfig("autosave") end },
+        { name = "📂  Загрузить конфиг", action = function() window:LoadConfig("autosave") end },
+        { name = "⚡  Script Runner",    action = function() window:ShowScriptRunner() end },
     }
-    
+
     local actionList = Instance.new("ScrollingFrame")
-    actionList.Size = UDim2.new(1, -20, 1, -300)
-    actionList.Position = UDim2.new(0, 10, 0, 158)
+    actionList.Size = UDim2.new(1, -24, 1, -190)
+    actionList.Position = UDim2.new(0, 12, 0, 168)
     actionList.BackgroundTransparency = 1
     actionList.BorderSizePixel = 0
     actionList.ScrollBarThickness = 3
     actionList.ScrollBarImageColor3 = t.Accent
     actionList.CanvasSize = UDim2.new(0, 0, 0, 0)
+    actionList.ZIndex = 13
     actionList.Parent = rightPanel
     listLayout(actionList, Enum.FillDirection.Vertical, 6)
-    
+
     for _, qa in ipairs(quickActions) do
         local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(1, 0, 0, 32)
+        btn.Size = UDim2.new(1, 0, 0, 34)
         btn.BackgroundColor3 = t.Surface2
         btn.BorderSizePixel = 0
         btn.Text = qa.name
@@ -953,24 +1012,27 @@ local function buildWindow(config)
         btn.Font = Enum.Font.Gotham
         btn.TextSize = 11
         btn.AutoButtonColor = false
+        btn.TextXAlignment = Enum.TextXAlignment.Left
+        btn.ZIndex = 14
         btn.Parent = actionList
-        corner(btn, 6)
-        stroke(btn, t.Line, 1, 0.5)
-        
+        corner(btn, 7)
+        local btnStroke = stroke(btn, t.Line, 1, 0.5)
+        padding(btn, 0, 0, 0, 12)
+
         btn.MouseEnter:Connect(function()
             tw(btn, 0.15, { BackgroundColor3 = t.Surface3 })
-            tw(btn.UIStroke, 0.15, { Color = t.Accent })
+            tw(btnStroke, 0.15, { Color = t.Accent })
         end)
         btn.MouseLeave:Connect(function()
             tw(btn, 0.15, { BackgroundColor3 = t.Surface2 })
-            tw(btn.UIStroke, 0.15, { Color = t.Line })
+            tw(btnStroke, 0.15, { Color = t.Line })
         end)
         btn.MouseButton1Click:Connect(function()
             pcall(qa.action)
         end)
     end
     actionList.CanvasSize = UDim2.new(0, 0, 0, actionList.UIListLayout.AbsoluteContentSize.Y + 8)
-    
+
     -- ═══ STATUS BAR ═══
     local statusBar = Instance.new("Frame")
     statusBar.Name = "StatusBar"
@@ -978,42 +1040,63 @@ local function buildWindow(config)
     statusBar.Position = UDim2.new(0, 0, 1, -24)
     statusBar.BackgroundColor3 = t.Surface
     statusBar.BorderSizePixel = 0
-    statusBar.ZIndex = 3
+    statusBar.ZIndex = 14
     statusBar.Parent = main
-    
+
     local statusLeft = Instance.new("TextLabel")
     statusLeft.Size = UDim2.new(0.5, -10, 1, 0)
-    statusLeft.Position = UDim2.new(0, 10, 0, 0)
+    statusLeft.Position = UDim2.new(0, 12, 0, 0)
     statusLeft.BackgroundTransparency = 1
     statusLeft.Text = Player.Name .. " · " .. Player.DisplayName
     statusLeft.TextColor3 = t.TextDim
     statusLeft.Font = Enum.Font.Code
     statusLeft.TextSize = 10
     statusLeft.TextXAlignment = Enum.TextXAlignment.Left
+    statusLeft.ZIndex = 15
     statusLeft.Parent = statusBar
-    
+
     local statusRight = Instance.new("TextLabel")
     statusRight.Size = UDim2.new(0.5, -10, 1, 0)
     statusRight.Position = UDim2.new(0.5, 0, 0, 0)
     statusRight.BackgroundTransparency = 1
-    statusRight.Text = "FPS 60 · Ping 0ms · Mem 0MB"
+    statusRight.Text = "FPS -- · Ping --ms · Mem --MB"
     statusRight.TextColor3 = t.TextDim
     statusRight.Font = Enum.Font.Code
     statusRight.TextSize = 10
     statusRight.TextXAlignment = Enum.TextXAlignment.Right
+    statusRight.ZIndex = 15
     statusRight.Parent = statusBar
-    
-    -- ═══ DRAG (CLAMPED) ═══
-    local dragging, dragStart, startPos
-    header.InputBegan:Connect(function(input)
+
+    -- ═══ DRAG (локальный, clamp) ═══
+    local dragStart, startPos
+    local dragging = false
+
+    local function clampPos(pos, size)
+        local vp = Camera.ViewportSize
+        local w = size.X.Offset
+        local h = size.Y.Offset
+        local x = pos.X.Offset
+        local y = pos.Y.Offset
+        -- минимум 80px от окна и 32px сверху
+        local minX = -(w - 80)
+        local maxX = vp.X - 80
+        local minY = 0
+        local maxY = math.max(0, vp.Y - 40)
+        return UDim2.new(0, math.clamp(x, minX, maxX), 0, math.clamp(y, minY, maxY))
+    end
+
+    track(header.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1
         or input.UserInputType == Enum.UserInputType.Touch then
+            if window.Minimized then
+                -- разрешаем перетаскивание свёрнутого окна тоже
+            end
             dragging = true
             dragStart = input.Position
             startPos = main.Position
         end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
+    end))
+    track(UserInputService.InputChanged:Connect(function(input)
         if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
         or input.UserInputType == Enum.UserInputType.Touch) then
             local delta = input.Position - dragStart
@@ -1021,115 +1104,107 @@ local function buildWindow(config)
                 startPos.X.Scale, startPos.X.Offset + delta.X,
                 startPos.Y.Scale, startPos.Y.Offset + delta.Y
             )
-            -- CLAMP
-            newPos = clampPosition(newPos, main.Size)
+            newPos = clampPos(newPos, main.Size)
             main.Position = newPos
             shadow.Position = newPos
         end
-    end)
-    UserInputService.InputEnded:Connect(function(input)
+    end))
+    track(UserInputService.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1
         or input.UserInputType == Enum.UserInputType.Touch then
             dragging = false
         end
-    end)
-    
-    -- ═══ RESIZE HANDLER (fix off-screen) ═══
-    local lastViewport = Camera.ViewportSize
-    task.spawn(function()
-        while rootGui.Parent do
-            task.wait(1)
-            if Camera.ViewportSize ~= lastViewport then
-                lastViewport = Camera.ViewportSize
-                main.Position = clampPosition(main.Position, main.Size)
-                shadow.Position = main.Position
-            end
+    end))
+
+    -- Clamp при resize viewport
+    local lastVp = Camera.ViewportSize
+    track(RunService.RenderStepped:Connect(function()
+        if Camera.ViewportSize ~= lastVp then
+            lastVp = Camera.ViewportSize
+            local newPos = clampPos(main.Position, main.Size)
+            main.Position = newPos
+            shadow.Position = newPos
         end
-    end)
-    
-    -- ═══ MONITOR LOOP ═══
+    end))
+
+    -- ═══ MONITOR LOOP (FPS / ping / mem) ═══
     task.spawn(function()
         local frames = 0
         local lastTime = tick()
         local fps = 60
-        local fpsHistory = {}
-        for i = 1, barCount do fpsHistory[i] = 60 end
-        
-        RunService.RenderStepped:Connect(function()
+        local history = {}
+        for i = 1, barCount do history[i] = 60 end
+
+        track(RunService.RenderStepped:Connect(function()
             frames = frames + 1
-            if tick() - lastTime >= 0.5 then
-                fps = math.floor(frames / (tick() - lastTime))
+            local now = tick()
+            if now - lastTime >= 0.5 then
+                fps = math.floor(frames / (now - lastTime) + 0.5)
                 frames = 0
-                lastTime = tick()
-                table.remove(fpsHistory, 1)
-                table.insert(fpsHistory, fps)
+                lastTime = now
+                table.remove(history, 1)
+                table.insert(history, fps)
                 fpsValue.Text = tostring(fps)
-                
-                -- update bars
+
+                -- update bars (abs size)
+                local bw = math.max(1, math.floor(barsFrame.AbsoluteSize.X / barCount) - 1)
+                local bh = math.max(1, barsFrame.AbsoluteSize.Y)
                 local maxFPS = 120
                 for i, b in ipairs(bars) do
-                    local val = math.clamp(fpsHistory[i] / maxFPS, 0, 1)
+                    local val = math.clamp((history[i] or 0) / maxFPS, 0.02, 1)
                     local col = t.Accent
-                    if fpsHistory[i] < 30 then col = t.Danger
-                    elseif fpsHistory[i] < 60 then col = t.Warning end
+                    if (history[i] or 0) < 30 then col = t.Danger
+                    elseif (history[i] or 0) < 60 then col = t.Warning end
                     b.BackgroundColor3 = col
-                    b.Size = UDim2.new(0.6/barCount * 1000 / 100, 0, val, 0)
+                    b.Size = UDim2.new(0, bw, 0, math.floor(bh * val))
                 end
             end
-        end)
-        
-        while rootGui.Parent do
+        end))
+
+        while RootGui.Parent and not window._destroyed do
             task.wait(1)
             local ping = 0
+            local mem = 0
             pcall(function()
-                ping = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
+                local statsItem = Stats.Network and Stats.Network.ServerStatsItem
+                if statsItem and statsItem["Data Ping"] then
+                    ping = math.floor(statsItem["Data Ping"]:GetValue())
+                end
             end)
-            local mem = math.floor(Stats:GetTotalMemoryUsageMb())
+            pcall(function()
+                mem = math.floor(Stats:GetTotalMemoryUsageMb())
+            end)
             statusRight.Text = string.format("FPS %d · Ping %dms · Mem %dMB", fps, ping, mem)
         end
     end)
-    
-    -- ═══ HIDE / SHOW (RightShift) ═══
-    UserInputService.InputBegan:Connect(function(input, gp)
-        if gp then return end
-        if input.KeyCode == Enum.KeyCode.RightShift then
-            window.Hidden = not window.Hidden
-            if window.Hidden then
-                for _, d in ipairs(main:GetDescendants()) do
-                    if d:IsA("GuiObject") then
-                        d:SetAttribute("_nb_vis", d.Visible)
-                        d.Visible = false
-                    end
-                end
-                main.Visible = true
-                main.BackgroundTransparency = 1
-                shadow.Visible = false
-                Nebula:Notify({ Title = "UI скрыт", Content = "Нажми RightShift чтобы вернуть", Type = "info", Duration = 2 })
-            else
-                for _, d in ipairs(main:GetDescendants()) do
-                    local v = d:GetAttribute("_nb_vis")
-                    if v ~= nil then d.Visible = v end
-                end
-                main.BackgroundTransparency = 0
-                shadow.Visible = true
-            end
+
+    -- ═══ HIDE / SHOW ═══
+    function window:ToggleVisible()
+        window.Hidden = not window.Hidden
+        if window.Hidden then
+            shadow.Visible = false
+            main.Visible = false
+        else
+            shadow.Visible = true
+            main.Visible = true
         end
-    end)
-    
-    -- ═══ WINDOW METHODS ═══
+    end
+
+    -- ═══ METHODS ═══
     function window:ToggleMinimize()
         window.Minimized = not window.Minimized
         if window.Minimized then
             main.ClipsDescendants = false
-            tw(main, 0.3, { Size = UDim2.new(config.Size.X.Offset, 0, 0, 48) })
-            tw(shadow, 0.3, { Size = UDim2.new(config.Size.X.Offset, 0, 0, 48) })
+            tw(main, 0.28, { Size = UDim2.new(config.Size.X.Offset, 0, 0, 50) })
+            tw(shadow, 0.28, { Size = UDim2.new(config.Size.X.Offset, 0, 0, 50) })
             content.Visible = false
             statusBar.Visible = false
             minBtn.Text = "+"
         else
-            tw(main, 0.3, { Size = config.Size })
-            tw(shadow, 0.3, { Size = config.Size })
-            task.delay(0.15, function()
+            tw(main, 0.28, { Size = config.Size })
+            tw(shadow, 0.28, { Size = config.Size })
+            task.delay(0.14, function()
+                if window._destroyed then return end
                 content.Visible = true
                 statusBar.Visible = true
                 main.ClipsDescendants = true
@@ -1137,154 +1212,164 @@ local function buildWindow(config)
             minBtn.Text = "−"
         end
     end
-    
+
     function window:Destroy()
-        if gradientConn then
-            gradientConn:Disconnect()
-            gradientConn = nil
+        window._destroyed = true
+        for _, c in ipairs(window._conns) do
+            pcall(function() c:Disconnect() end)
         end
-        rootGui:Destroy()
-        if paletteGui then paletteGui:Destroy() end
-        Nebula.Window = nil
+        window._conns = {}
+        for i, w in ipairs(Nebula.Windows) do
+            if w == window then
+                table.remove(Nebula.Windows, i)
+                break
+            end
+        end
+        main:Destroy()
+        shadow:Destroy()
     end
-    
+
     function window:ShowHotkeys()
-        local hotkeyGui = createRootGui("NebulaHotkeys_" .. uid())
-        local t2 = Nebula.Theme
-        
-        local dim = Instance.new("Frame")
-        dim.Size = UDim2.fromScale(1, 1)
-        dim.BackgroundColor3 = Color3.new(0, 0, 0)
-        dim.BackgroundTransparency = 0.5
-        dim.BorderSizePixel = 0
-        dim.Parent = hotkeyGui
-        
+        local gui = Instance.new("Frame")
+        gui.Name = "NebulaHotkeys"
+        gui.Size = UDim2.fromScale(1, 1)
+        gui.BackgroundColor3 = Color3.new(0, 0, 0)
+        gui.BackgroundTransparency = 0.5
+        gui.BorderSizePixel = 0
+        gui.ZIndex = 3000
+        gui.Parent = RootGui
+
         local panel = Instance.new("Frame")
-        panel.Size = UDim2.new(0, 400, 0, 500)
+        panel.Size = UDim2.new(0, 420, 0, 480)
         panel.Position = UDim2.fromScale(0.5, 0.5)
         panel.AnchorPoint = Vector2.new(0.5, 0.5)
-        panel.BackgroundColor3 = t2.Background
+        panel.BackgroundColor3 = t.Background
         panel.BorderSizePixel = 0
-        panel.Parent = hotkeyGui
+        panel.ZIndex = 3001
+        panel.Parent = gui
         corner(panel, 12)
-        stroke(panel, t2.Line, 1, 0.3)
-        
+        stroke(panel, t.Line, 1, 0.3)
+
         local title = Instance.new("TextLabel")
-        title.Size = UDim2.new(1, -20, 0, 40)
-        title.Position = UDim2.new(0, 10, 0, 10)
+        title.Size = UDim2.new(1, -24, 0, 40)
+        title.Position = UDim2.new(0, 12, 0, 12)
         title.BackgroundTransparency = 1
-        title.Text = "⌨ Все горячие клавиши"
-        title.TextColor3 = t2.Text
+        title.Text = "⌨  Горячие клавиши"
+        title.TextColor3 = t.Text
         title.Font = Enum.Font.GothamBold
         title.TextSize = 16
         title.TextXAlignment = Enum.TextXAlignment.Left
+        title.ZIndex = 3002
         title.Parent = panel
-        
+
         local scroll = Instance.new("ScrollingFrame")
-        scroll.Size = UDim2.new(1, -20, 1, -100)
-        scroll.Position = UDim2.new(0, 10, 0, 60)
+        scroll.Size = UDim2.new(1, -24, 1, -110)
+        scroll.Position = UDim2.new(0, 12, 0, 62)
         scroll.BackgroundTransparency = 1
         scroll.BorderSizePixel = 0
         scroll.ScrollBarThickness = 3
-        scroll.ScrollBarImageColor3 = t2.Accent
+        scroll.ScrollBarImageColor3 = t.Accent
         scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+        scroll.ZIndex = 3002
         scroll.Parent = panel
         listLayout(scroll, Enum.FillDirection.Vertical, 6)
-        
+
         local hotkeys = {
-            { "Ctrl + K", "Command Palette" },
-            { "RightShift", "Скрыть / Показать UI" },
-            { "Esc", "Закрыть палитру" },
+            { "Ctrl + K",   "Command Palette" },
+            { "RightShift", "Скрыть / показать UI" },
+            { "Esc",        "Закрыть палитру" },
         }
-        
+
         for _, hk in ipairs(hotkeys) do
             local row = Instance.new("Frame")
             row.Size = UDim2.new(1, 0, 0, 36)
-            row.BackgroundColor3 = t2.Surface
+            row.BackgroundColor3 = t.Surface
             row.BorderSizePixel = 0
+            row.ZIndex = 3003
             row.Parent = scroll
             corner(row, 6)
-            
+
             local kLbl = Instance.new("TextLabel")
             kLbl.Size = UDim2.new(0, 140, 1, 0)
             kLbl.Position = UDim2.new(0, 12, 0, 0)
             kLbl.BackgroundTransparency = 1
             kLbl.Text = hk[1]
-            kLbl.TextColor3 = t2.Accent
+            kLbl.TextColor3 = t.Accent
             kLbl.Font = Enum.Font.Code
             kLbl.TextSize = 12
             kLbl.TextXAlignment = Enum.TextXAlignment.Left
+            kLbl.ZIndex = 3004
             kLbl.Parent = row
-            
+
             local dLbl = Instance.new("TextLabel")
             dLbl.Size = UDim2.new(1, -160, 1, 0)
             dLbl.Position = UDim2.new(0, 156, 0, 0)
             dLbl.BackgroundTransparency = 1
             dLbl.Text = hk[2]
-            dLbl.TextColor3 = t2.Text
+            dLbl.TextColor3 = t.Text
             dLbl.Font = Enum.Font.Gotham
             dLbl.TextSize = 12
             dLbl.TextXAlignment = Enum.TextXAlignment.Left
+            dLbl.ZIndex = 3004
             dLbl.Parent = row
         end
         scroll.CanvasSize = UDim2.new(0, 0, 0, scroll.UIListLayout.AbsoluteContentSize.Y + 8)
-        
+
         local closeBtn = Instance.new("TextButton")
-        closeBtn.Size = UDim2.new(1, -20, 0, 32)
-        closeBtn.Position = UDim2.new(0, 10, 1, -42)
-        closeBtn.BackgroundColor3 = t2.Surface2
+        closeBtn.Size = UDim2.new(1, -24, 0, 34)
+        closeBtn.Position = UDim2.new(0, 12, 1, -46)
+        closeBtn.BackgroundColor3 = t.Surface2
         closeBtn.BorderSizePixel = 0
         closeBtn.Text = "Закрыть"
-        closeBtn.TextColor3 = t2.Text
+        closeBtn.TextColor3 = t.Text
         closeBtn.Font = Enum.Font.GothamBold
         closeBtn.TextSize = 12
+        closeBtn.ZIndex = 3003
         closeBtn.Parent = panel
-        corner(closeBtn, 6)
-        closeBtn.MouseButton1Click:Connect(function()
-            hotkeyGui:Destroy()
-        end)
+        corner(closeBtn, 8)
+        closeBtn.MouseButton1Click:Connect(function() gui:Destroy() end)
     end
-    
+
     function window:ShowScriptRunner()
-        local runnerGui = createRootGui("NebulaRunner_" .. uid())
-        local t2 = Nebula.Theme
-        
-        local dim = Instance.new("Frame")
-        dim.Size = UDim2.fromScale(1, 1)
-        dim.BackgroundColor3 = Color3.new(0, 0, 0)
-        dim.BackgroundTransparency = 0.5
-        dim.BorderSizePixel = 0
-        dim.Parent = runnerGui
-        
+        local gui = Instance.new("Frame")
+        gui.Name = "NebulaRunner"
+        gui.Size = UDim2.fromScale(1, 1)
+        gui.BackgroundColor3 = Color3.new(0, 0, 0)
+        gui.BackgroundTransparency = 0.5
+        gui.BorderSizePixel = 0
+        gui.ZIndex = 3000
+        gui.Parent = RootGui
+
         local panel = Instance.new("Frame")
-        panel.Size = UDim2.new(0, 600, 0, 400)
+        panel.Size = UDim2.new(0, 620, 0, 420)
         panel.Position = UDim2.fromScale(0.5, 0.5)
         panel.AnchorPoint = Vector2.new(0.5, 0.5)
-        panel.BackgroundColor3 = t2.Background
+        panel.BackgroundColor3 = t.Background
         panel.BorderSizePixel = 0
-        panel.Parent = runnerGui
+        panel.ZIndex = 3001
+        panel.Parent = gui
         corner(panel, 12)
-        stroke(panel, t2.Line, 1, 0.3)
-        
+        stroke(panel, t.Line, 1, 0.3)
+
         local title = Instance.new("TextLabel")
-        title.Size = UDim2.new(1, -20, 0, 40)
-        title.Position = UDim2.new(0, 10, 0, 10)
+        title.Size = UDim2.new(1, -24, 0, 40)
+        title.Position = UDim2.new(0, 12, 0, 12)
         title.BackgroundTransparency = 1
-        title.Text = "⚡ Script Runner"
-        title.TextColor3 = t2.Text
+        title.Text = "⚡  Script Runner"
+        title.TextColor3 = t.Text
         title.Font = Enum.Font.GothamBold
         title.TextSize = 16
         title.TextXAlignment = Enum.TextXAlignment.Left
+        title.ZIndex = 3002
         title.Parent = panel
-        
+
         local box = Instance.new("TextBox")
-        box.Size = UDim2.new(1, -20, 1, -120)
-        box.Position = UDim2.new(0, 10, 0, 55)
-        box.BackgroundColor3 = t2.Surface
+        box.Size = UDim2.new(1, -24, 1, -130)
+        box.Position = UDim2.new(0, 12, 0, 60)
+        box.BackgroundColor3 = t.Surface
         box.BorderSizePixel = 0
-        box.Text = "-- Введите Luau код тут\nprint('Hello from Nebula!')"
-        box.TextColor3 = t2.Text
-        box.PlaceholderColor3 = t2.TextDim
+        box.Text = "-- Введите Luau-код\nprint('Hello from Nebula v" .. Nebula.Version .. "')"
+        box.TextColor3 = t.Text
         box.Font = Enum.Font.Code
         box.TextSize = 12
         box.TextXAlignment = Enum.TextXAlignment.Left
@@ -1292,38 +1377,40 @@ local function buildWindow(config)
         box.TextWrapped = true
         box.ClearTextOnFocus = false
         box.MultiLine = true
+        box.ZIndex = 3002
         box.Parent = panel
         corner(box, 8)
         padding(box, 10, 10, 10, 10)
-        stroke(box, t2.Line, 1, 0.5)
-        
+        stroke(box, t.Line, 1, 0.5)
+
         local runBtn = Instance.new("TextButton")
-        runBtn.Size = UDim2.new(0.5, -15, 0, 36)
-        runBtn.Position = UDim2.new(0, 10, 1, -46)
-        runBtn.BackgroundColor3 = t2.Accent
+        runBtn.Size = UDim2.new(0.5, -18, 0, 38)
+        runBtn.Position = UDim2.new(0, 12, 1, -50)
+        runBtn.BackgroundColor3 = t.Accent
         runBtn.BorderSizePixel = 0
-        runBtn.Text = "▶ Выполнить"
-        runBtn.TextColor3 = t2.Background
+        runBtn.Text = "▶  Выполнить"
+        runBtn.TextColor3 = t.Background
         runBtn.Font = Enum.Font.GothamBold
         runBtn.TextSize = 13
+        runBtn.ZIndex = 3002
         runBtn.Parent = panel
         corner(runBtn, 8)
-        
+
         local closeBtn = Instance.new("TextButton")
-        closeBtn.Size = UDim2.new(0.5, -15, 0, 36)
-        closeBtn.Position = UDim2.new(0.5, 5, 1, -46)
-        closeBtn.BackgroundColor3 = t2.Surface2
+        closeBtn.Size = UDim2.new(0.5, -18, 0, 38)
+        closeBtn.Position = UDim2.new(0.5, 6, 1, -50)
+        closeBtn.BackgroundColor3 = t.Surface2
         closeBtn.BorderSizePixel = 0
         closeBtn.Text = "Закрыть"
-        closeBtn.TextColor3 = t2.Text
+        closeBtn.TextColor3 = t.Text
         closeBtn.Font = Enum.Font.GothamBold
         closeBtn.TextSize = 13
+        closeBtn.ZIndex = 3002
         closeBtn.Parent = panel
         corner(closeBtn, 8)
-        
+
         runBtn.MouseButton1Click:Connect(function()
-            local code = box.Text
-            local fn, err = loadstring(code)
+            local fn, err = safeLoadString(box.Text)
             if not fn then
                 Nebula:Notify({ Title = "Ошибка компиляции", Content = tostring(err), Type = "error", Duration = 5 })
                 return
@@ -1335,365 +1422,435 @@ local function buildWindow(config)
                 Nebula:Notify({ Title = "Ошибка", Content = tostring(runErr), Type = "error", Duration = 5 })
             end
         end)
-        
-        closeBtn.MouseButton1Click:Connect(function()
-            runnerGui:Destroy()
-        end)
+
+        closeBtn.MouseButton1Click:Connect(function() gui:Destroy() end)
     end
-    
+
+    -- ═══ CONFIG SAVE / LOAD ═══
     function window:SaveConfig(name)
         local data = {}
         for flag, opt in pairs(Nebula.Options) do
-            if opt.CurrentValue ~= nil then data[flag] = opt.CurrentValue
-            elseif opt.CurrentOption ~= nil then data[flag] = opt.CurrentOption
-            elseif opt.Color ~= nil then
-                data[flag] = { R = opt.Color.R, G = opt.Color.G, B = opt.Color.B }
+            if opt.Get then
+                local ok, v = pcall(opt.Get)
+                if ok then data[flag] = v end
+            elseif opt.Value ~= nil then
+                data[flag] = opt.Value
             end
         end
-        local ok, json = pcall(HttpService.JSONEncode, HttpService, data)
+        -- Color3 → table
+        for k, v in pairs(data) do
+            if typeof(v) == "Color3" then
+                data[k] = { __color = true, R = v.R, G = v.G, B = v.B }
+            end
+        end
+        local ok, json = pcall(function() return HttpService:JSONEncode(data) end)
         if not ok then
             Nebula:Notify({ Title = "Ошибка", Content = "Не удалось сериализовать", Type = "error" })
             return
         end
         if writefile then
-            pcall(function()
+            local success = pcall(function()
                 if not isfolder(Nebula.ConfigFolder or "NebulaFrame") then
                     makefolder(Nebula.ConfigFolder or "NebulaFrame")
                 end
                 writefile((Nebula.ConfigFolder or "NebulaFrame") .. "/" .. name .. ".json", json)
             end)
-            Nebula:Notify({ Title = "Конфиг сохранён", Content = name .. ".json", Type = "success" })
+            if success then
+                Nebula:Notify({ Title = "Конфиг сохранён", Content = name .. ".json", Type = "success" })
+            else
+                Nebula:Notify({ Title = "Ошибка", Content = "writefile провалился", Type = "error" })
+            end
+        elseif setclipboard then
+            pcall(setclipboard, json)
+            Nebula:Notify({ Title = "Конфиг в буфере", Content = "writefile нет — JSON скопирован", Type = "warning" })
         else
-            Nebula:Notify({ Title = "Конфиг", Content = "writefile недоступен в этом экзекьюторе", Type = "warning" })
+            Nebula:Notify({ Title = "Конфиг", Content = "Нет writefile/clipboard", Type = "warning" })
         end
     end
-    
+
+    function window:LoadConfig(name)
+        if not (readfile and isfile) then
+            Nebula:Notify({ Title = "Конфиг", Content = "readfile недоступен", Type = "warning" })
+            return
+        end
+        local path = (Nebula.ConfigFolder or "NebulaFrame") .. "/" .. name .. ".json"
+        if not isfile(path) then
+            Nebula:Notify({ Title = "Конфиг", Content = "Файл не найден: " .. name, Type = "warning" })
+            return
+        end
+        local ok, content = pcall(readfile, path)
+        if not ok then
+            Nebula:Notify({ Title = "Ошибка", Content = "readfile провалился", Type = "error" })
+            return
+        end
+        local ok2, data = pcall(function() return HttpService:JSONDecode(content) end)
+        if not ok2 or type(data) ~= "table" then
+            Nebula:Notify({ Title = "Ошибка", Content = "Некорректный JSON", Type = "error" })
+            return
+        end
+        local count = 0
+        for flag, val in pairs(data) do
+            local opt = Nebula.Options[flag]
+            if opt and opt.Set then
+                if type(val) == "table" and val.__color then
+                    val = Color3.new(val.R, val.G, val.B)
+                end
+                pcall(opt.Set, val)
+                count = count + 1
+            end
+        end
+        Nebula:Notify({ Title = "Конфиг загружен", Content = count .. " опций применено", Type = "success" })
+    end
+
+    -- ═══ REACTIVE THEME ═══
+    Nebula:OnTheme(function(newT)
+        if window._destroyed then return end
+        tw(main, 0.25, { BackgroundColor3 = newT.Background })
+        tw(header, 0.25, { BackgroundColor3 = newT.Surface })
+        tw(sidebar, 0.25, { BackgroundColor3 = newT.Surface })
+        tw(rightPanel, 0.25, { BackgroundColor3 = newT.Surface })
+        tw(statusBar, 0.25, { BackgroundColor3 = newT.Surface })
+        tw(title, 0.25, { TextColor3 = newT.Text })
+        tw(subtitle, 0.25, { TextColor3 = newT.TextDim })
+        tw(logoDot, 0.25, { BackgroundColor3 = newT.Accent })
+        tw(fpsValue, 0.25, { TextColor3 = newT.Accent })
+    end)
+
     -- ═══ TAB CREATION ═══
     function window:CreateTab(tabCfg)
-        tabCfg = kwargify({
+        tabCfg = merge({
             Name = "Tab",
             Pinned = false,
             Color = nil,
+            Icon = nil,
         }, tabCfg)
-        
-        local tab = { Name = tabCfg.Name }
-        local tabColor = tabCfg.Color or t.Accent
-        
-        -- tab button
+
+        local tab = { Name = tabCfg.Name, _destroyed = false }
+        local tabColor = tabCfg.Color or Nebula.Theme.Accent
+
+        -- Sidebar button
         local btn = Instance.new("TextButton")
         btn.Size = UDim2.new(1, 0, 0, 36)
-        btn.BackgroundColor3 = t.Surface
+        btn.BackgroundColor3 = Nebula.Theme.Surface
         btn.BorderSizePixel = 0
         btn.Text = ""
         btn.AutoButtonColor = false
-        btn.ZIndex = 3
+        btn.ZIndex = 14
         btn.Parent = sidebarList
         corner(btn, 8)
-        
+
         local dot = Instance.new("Frame")
         dot.Size = UDim2.new(0, 6, 0, 6)
         dot.Position = UDim2.new(0, 12, 0.5, 0)
         dot.AnchorPoint = Vector2.new(0, 0.5)
         dot.BackgroundColor3 = tabColor
         dot.BorderSizePixel = 0
-        dot.ZIndex = 4
+        dot.ZIndex = 15
         dot.Parent = btn
         corner(dot, 3)
-        
+
         local btnLabel = Instance.new("TextLabel")
         btnLabel.Size = UDim2.new(1, -32, 1, 0)
-        btnLabel.Position = UDim2.new(0, 24, 0, 0)
+        btnLabel.Position = UDim2.new(0, 26, 0, 0)
         btnLabel.BackgroundTransparency = 1
         btnLabel.Text = tabCfg.Name
-        btnLabel.TextColor3 = t.TextDim
+        btnLabel.TextColor3 = Nebula.Theme.TextDim
         btnLabel.Font = Enum.Font.Gotham
         btnLabel.TextSize = 12
         btnLabel.TextXAlignment = Enum.TextXAlignment.Left
-        btnLabel.ZIndex = 4
+        btnLabel.TextTruncate = Enum.TextTruncate.AtEnd
+        btnLabel.ZIndex = 15
         btnLabel.Parent = btn
-        
-        -- page
+
+        -- Page
         local page = Instance.new("ScrollingFrame")
         page.Size = UDim2.new(1, 0, 1, 0)
         page.BackgroundTransparency = 1
         page.BorderSizePixel = 0
         page.ScrollBarThickness = 4
-        page.ScrollBarImageColor3 = t.Accent
+        page.ScrollBarImageColor3 = Nebula.Theme.Accent
         page.CanvasSize = UDim2.new(0, 0, 0, 0)
         page.Visible = false
-        page.ZIndex = 3
+        page.ZIndex = 13
         page.Parent = pages
         listLayout(page, Enum.FillDirection.Vertical, 6)
         padding(page, 14, 14, 14, 14)
-        
+
         tab.Button = btn
         tab.Page = page
         tab.Color = tabColor
-        
+
         local function recalc()
+            if tab._destroyed then return end
             page.CanvasSize = UDim2.new(0, 0, 0, page.UIListLayout.AbsoluteContentSize.Y + 20)
         end
         tab.Recalc = recalc
-        
+
         function tab:Activate()
-            for _, otherTab in pairs(window.Tabs) do
-                otherTab.Page.Visible = false
-                tw(otherTab.Button, 0.15, { BackgroundColor3 = t.Surface })
-                tw(otherTab.Button:FindFirstChildOfClass("TextLabel"), 0.15, { TextColor3 = t.TextDim })
-                local dd = otherTab.Button:FindFirstChild("Frame")
-                if dd then dd.BackgroundColor3 = otherTab.Color end
+            for _, other in pairs(window.Tabs) do
+                other.Page.Visible = false
+                tw(other.Button, 0.15, { BackgroundColor3 = Nebula.Theme.Surface })
+                tw(other.Button:FindFirstChildOfClass("TextLabel"), 0.15, { TextColor3 = Nebula.Theme.TextDim })
             end
             page.Visible = true
-            tw(btn, 0.15, { BackgroundColor3 = t.Surface2 })
-            tw(btnLabel, 0.15, { TextColor3 = t.Text })
+            tw(btn, 0.15, { BackgroundColor3 = Nebula.Theme.Surface2 })
+            tw(btnLabel, 0.15, { TextColor3 = Nebula.Theme.Text })
             window.CurrentTab = tab
         end
-        
+
         btn.MouseEnter:Connect(function()
-            if window.CurrentTab ~= tab then                tw(btn, 0.15, { BackgroundColor3 = t.Surface2 })
+            if window.CurrentTab ~= tab then
+                tw(btn, 0.15, { BackgroundColor3 = Nebula.Theme.Surface2 })
             end
         end)
         btn.MouseLeave:Connect(function()
             if window.CurrentTab ~= tab then
-                tw(btn, 0.15, { BackgroundColor3 = t.Surface })
+                tw(btn, 0.15, { BackgroundColor3 = Nebula.Theme.Surface })
             end
         end)
-        btn.MouseButton1Click:Connect(function()
-            tab:Activate()
-        end)
-        
+        btn.MouseButton1Click:Connect(function() tab:Activate() end)
+
         table.insert(window.Tabs, tab)
-        
-        if #window.Tabs == 1 or tabCfg.Pinned then
-            task.defer(function() tab:Activate() end)
-        end
-        
-        -- ═══════════════════════════════════════════════════════════
-        -- ELEMENT CONSTRUCTORS
-        -- ═══════════════════════════════════════════════════════════
-        
-        -- SECTION (accordion)
+
+        -- Фильтр поиска по табам
+        tabSearch:GetPropertyChangedSignal("Text"):Connect(function()
+            local q = tabSearch.Text:lower()
+            local match = q == "" or tabCfg.Name:lower():find(q, 1, true)
+            btn.Visible = match
+        end)
+
+        -- ═══════════════════════════════════════════════════════════════
+        -- ELEMENTS (все принимают parent = page | section.Frame)
+        -- ═══════════════════════════════════════════════════════════════
+
+        -- SECTION (настоящий контейнер)
         function tab:CreateSection(name)
-            local sec = { expanded = true, name = name or "SECTION" }
-            
+            local section = { expanded = true, Name = name or "SECTION", _children = {} }
+
             local wrapper = Instance.new("Frame")
             wrapper.Size = UDim2.new(1, 0, 0, 30)
             wrapper.BackgroundTransparency = 1
+            wrapper.ZIndex = 13
             wrapper.Parent = page
-            
+
             local headerBtn = Instance.new("TextButton")
             headerBtn.Size = UDim2.new(1, 0, 0, 24)
             headerBtn.BackgroundTransparency = 1
             headerBtn.Text = ""
             headerBtn.AutoButtonColor = false
+            headerBtn.ZIndex = 14
             headerBtn.Parent = wrapper
-            
+
             local lbl = Instance.new("TextLabel")
             lbl.Size = UDim2.new(1, -30, 1, 0)
             lbl.BackgroundTransparency = 1
-            lbl.Text = string.upper(sec.name)
-            lbl.TextColor3 = t.TextDim
+            lbl.Text = string.upper(section.Name)
+            lbl.TextColor3 = Nebula.Theme.TextDim
             lbl.Font = Enum.Font.GothamBold
             lbl.TextSize = 10
             lbl.TextXAlignment = Enum.TextXAlignment.Left
+            lbl.ZIndex = 15
             lbl.Parent = headerBtn
-            
+
             local arrow = Instance.new("TextLabel")
             arrow.Size = UDim2.new(0, 20, 1, 0)
             arrow.Position = UDim2.new(1, -20, 0, 0)
             arrow.BackgroundTransparency = 1
             arrow.Text = "▾"
-            arrow.TextColor3 = t.TextDim
+            arrow.TextColor3 = Nebula.Theme.TextDim
             arrow.Font = Enum.Font.Gotham
             arrow.TextSize = 11
+            arrow.ZIndex = 15
             arrow.Parent = headerBtn
-            
+
             local line = Instance.new("Frame")
             line.Size = UDim2.new(1, 0, 0, 1)
             line.Position = UDim2.new(0, 0, 1, 0)
-            line.BackgroundColor3 = t.Line
+            line.BackgroundColor3 = Nebula.Theme.Line
             line.BorderSizePixel = 0
+            line.ZIndex = 14
             line.Parent = wrapper
-            
+
             local contentFrame = Instance.new("Frame")
             contentFrame.Size = UDim2.new(1, 0, 0, 0)
             contentFrame.BackgroundTransparency = 1
+            contentFrame.ZIndex = 13
             contentFrame.Parent = page
             listLayout(contentFrame, Enum.FillDirection.Vertical, 6)
-            
+
+            -- авторазмер
+            local function resizeContent()
+                local h = contentFrame.UIListLayout.AbsoluteContentSize.Y
+                contentFrame.Size = UDim2.new(1, 0, 0, h)
+            end
+            contentFrame.ChildAdded:Connect(function() task.defer(resizeContent) end)
+            contentFrame.ChildRemoved:Connect(function() task.defer(resizeContent) end)
+
             headerBtn.MouseButton1Click:Connect(function()
-                sec.expanded = not sec.expanded
-                if sec.expanded then
-                    contentFrame.Visible = true
-                    arrow.Text = "▾"
-                else
-                    contentFrame.Visible = false
-                    arrow.Text = "▸"
-                end
+                section.expanded = not section.expanded
+                contentFrame.Visible = section.expanded
+                arrow.Text = section.expanded and "▾" or "▸"
                 recalc()
             end)
-            
+
+            -- Section API (как mini-tab)
+            function section:CreateButton(cfg) return tab:CreateButton(cfg, contentFrame) end
+            function section:CreateToggle(cfg, flag) return tab:CreateToggle(cfg, flag, contentFrame) end
+            function section:CreateSlider(cfg, flag) return tab:CreateSlider(cfg, flag, contentFrame) end
+            function section:CreateDropdown(cfg, flag) return tab:CreateDropdown(cfg, flag, contentFrame) end
+            function section:CreateInput(cfg, flag) return tab:CreateInput(cfg, flag, contentFrame) end
+            function section:CreateKeybind(cfg) return tab:CreateKeybind(cfg, contentFrame) end
+            function section:CreateColorPicker(cfg, flag) return tab:CreateColorPicker(cfg, flag, contentFrame) end
+            function section:CreateParagraph(cfg) return tab:CreateParagraph(cfg, contentFrame) end
+            function section:CreateLabel(cfg) return tab:CreateLabel(cfg, contentFrame) end
+            function section:CreateDivider() return tab:CreateDivider(contentFrame) end
+
+            resizeContent()
             recalc()
-            
-            -- return section object that also works as a tab (redirects CreateX)
-            local sectionObj = {}
-            sectionObj.expanded = true
-            sectionObj.Frame = contentFrame
-            
-            -- Override parent for elements
-            local originalPage = page
-            function sectionObj:asElementParent()
-                return contentFrame
-            end
-            
-            -- We'll just return contentFrame wrapped
-            local proxy = setmetatable({}, {
-                __index = function(_, k)
-                    if type(tab[k]) == "function" then
-                        return function(_, cfg, flag)
-                            -- temporarily swap page
-                            local origPage = page
-                            -- Not clean, but works: create element then move it
-                            return tab[k](tab, cfg, flag)
-                        end
-                    end
-                    return tab[k]
-                end
-            })
-            
-            return sectionObj
+            return section
         end
-        
+
         -- DIVIDER
         function tab:CreateDivider(parent)
             local d = Instance.new("Frame")
             d.Size = UDim2.new(1, 0, 0, 1)
-            d.BackgroundColor3 = t.Line
+            d.BackgroundColor3 = Nebula.Theme.Line
             d.BorderSizePixel = 0
+            d.ZIndex = 13
             d.Parent = parent or page
             recalc()
-            return d
+            return { Destroy = function() d:Destroy(); recalc() end }
         end
-        
+
         -- LABEL
         function tab:CreateLabel(cfg, parent)
-            cfg = kwargify({ Text = "Label", Style = 1 }, cfg)
-            local colors = { [1] = t.Text, [2] = t.Accent, [3] = t.Warning }
+            cfg = merge({ Text = "Label", Style = 1 }, cfg)
+            local colors = { [1] = Nebula.Theme.Text, [2] = Nebula.Theme.Accent, [3] = Nebula.Theme.Warning }
             local lbl = Instance.new("TextLabel")
             lbl.Size = UDim2.new(1, 0, 0, 22)
             lbl.BackgroundTransparency = 1
             lbl.Text = cfg.Text
-            lbl.TextColor3 = colors[cfg.Style] or t.Text
+            lbl.TextColor3 = colors[cfg.Style] or Nebula.Theme.Text
             lbl.Font = Enum.Font.Gotham
             lbl.TextSize = 12
             lbl.TextXAlignment = Enum.TextXAlignment.Left
+            lbl.ZIndex = 14
             lbl.Parent = parent or page
             recalc()
-            
+
             local v = {}
             function v:Set(newText) lbl.Text = newText end
             function v:Destroy() lbl:Destroy(); recalc() end
             return v
         end
-        
+
         -- PARAGRAPH
         function tab:CreateParagraph(cfg, parent)
-            cfg = kwargify({ Title = "Paragraph", Text = "" }, cfg)
+            cfg = merge({ Title = "Paragraph", Text = "" }, cfg)
             local f = Instance.new("Frame")
             f.Size = UDim2.new(1, 0, 0, 60)
-            f.BackgroundColor3 = t.Surface
+            f.BackgroundColor3 = Nebula.Theme.Surface
             f.BorderSizePixel = 0
+            f.ZIndex = 13
             f.Parent = parent or page
             corner(f, 8)
-            stroke(f, t.Line, 1, 0.5)
-            
+            stroke(f, Nebula.Theme.Line, 1, 0.5)
+
             local titleLbl = Instance.new("TextLabel")
             titleLbl.Size = UDim2.new(1, -20, 0, 20)
             titleLbl.Position = UDim2.new(0, 12, 0, 10)
             titleLbl.BackgroundTransparency = 1
             titleLbl.Text = cfg.Title
-            titleLbl.TextColor3 = t.Text
+            titleLbl.TextColor3 = Nebula.Theme.Text
             titleLbl.Font = Enum.Font.GothamBold
             titleLbl.TextSize = 12
             titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+            titleLbl.ZIndex = 14
             titleLbl.Parent = f
-            
+
             local textLbl = Instance.new("TextLabel")
             textLbl.Size = UDim2.new(1, -20, 0, 20)
             textLbl.Position = UDim2.new(0, 12, 0, 32)
             textLbl.BackgroundTransparency = 1
             textLbl.Text = cfg.Text
-            textLbl.TextColor3 = t.TextDim
+            textLbl.TextColor3 = Nebula.Theme.TextDim
             textLbl.Font = Enum.Font.Gotham
             textLbl.TextSize = 11
             textLbl.TextWrapped = true
             textLbl.TextXAlignment = Enum.TextXAlignment.Left
             textLbl.TextYAlignment = Enum.TextYAlignment.Top
+            textLbl.ZIndex = 14
             textLbl.Parent = f
-            
+
             task.defer(function()
+                if not f.Parent then return end
                 textLbl.Size = UDim2.new(1, -20, 0, textLbl.TextBounds.Y + 4)
-                f.Size = UDim2.new(1, 0, 0, 32 + textLbl.TextBounds.Y + 12)
+                f.Size = UDim2.new(1, 0, 0, 32 + textLbl.TextBounds.Y + 14)
                 recalc()
             end)
-            
+
             recalc()
             local v = {}
-            function v:Set(c) textLbl.Text = c.Text or cfg.Text end
+            function v:Set(c)
+                if c.Title then titleLbl.Text = c.Title end
+                if c.Text then textLbl.Text = c.Text end
+                textLbl.Size = UDim2.new(1, -20, 0, textLbl.TextBounds.Y + 4)
+                f.Size = UDim2.new(1, 0, 0, 32 + textLbl.TextBounds.Y + 14)
+                recalc()
+            end
             function v:Destroy() f:Destroy(); recalc() end
             return v
         end
-        
+
         -- BUTTON
         function tab:CreateButton(cfg, parent)
-            cfg = kwargify({
-                Name = "Button",
-                Description = nil,
-                Callback = function() end,
-            }, cfg)
-            
+            cfg = merge({ Name = "Button", Description = nil, Callback = function() end }, cfg)
             local hasDesc = cfg.Description and cfg.Description ~= ""
+
             local btn = Instance.new("TextButton")
-            btn.Size = UDim2.new(1, 0, 0, hasDesc and 50 or 36)
-            btn.BackgroundColor3 = t.Surface
+            btn.Size = UDim2.new(1, 0, 0, hasDesc and 50 or 38)
+            btn.BackgroundColor3 = Nebula.Theme.Surface
             btn.BorderSizePixel = 0
             btn.Text = ""
             btn.AutoButtonColor = false
+            btn.ZIndex = 13
             btn.Parent = parent or page
             corner(btn, 8)
-            stroke(btn, t.Line, 1, 0.5)
-            
+            local btnStroke = stroke(btn, Nebula.Theme.Line, 1, 0.5)
+
             local lbl = Instance.new("TextLabel")
-            lbl.Size = UDim2.new(1, -20, 0, hasDesc and 20 or 36)
+            lbl.Size = UDim2.new(1, -20, 0, hasDesc and 20 or 38)
             lbl.Position = UDim2.new(0, 12, 0, hasDesc and 7 or 0)
             lbl.BackgroundTransparency = 1
             lbl.Text = cfg.Name
-            lbl.TextColor3 = t.Text
+            lbl.TextColor3 = Nebula.Theme.Text
             lbl.Font = Enum.Font.Gotham
             lbl.TextSize = 12
             lbl.TextXAlignment = Enum.TextXAlignment.Left
+            lbl.ZIndex = 14
             lbl.Parent = btn
-            
+
             if hasDesc then
                 local desc = Instance.new("TextLabel")
                 desc.Size = UDim2.new(1, -20, 0, 16)
                 desc.Position = UDim2.new(0, 12, 0, 27)
                 desc.BackgroundTransparency = 1
                 desc.Text = cfg.Description
-                desc.TextColor3 = t.TextDim
+                desc.TextColor3 = Nebula.Theme.TextDim
                 desc.Font = Enum.Font.Gotham
                 desc.TextSize = 10
                 desc.TextXAlignment = Enum.TextXAlignment.Left
+                desc.ZIndex = 14
                 desc.Parent = btn
             end
-            
+
             btn.MouseEnter:Connect(function()
-                tw(btn, 0.15, { BackgroundColor3 = t.Surface2 })
-                tw(btn.UIStroke, 0.15, { Color = t.Accent, Transparency = 0.3 })
+                tw(btn, 0.15, { BackgroundColor3 = Nebula.Theme.Surface2 })
+                tw(btnStroke, 0.15, { Color = Nebula.Theme.Accent, Transparency = 0.3 })
             end)
             btn.MouseLeave:Connect(function()
-                tw(btn, 0.15, { BackgroundColor3 = t.Surface })
-                tw(btn.UIStroke, 0.15, { Color = t.Line, Transparency = 0.5 })
+                tw(btn, 0.15, { BackgroundColor3 = Nebula.Theme.Surface })
+                tw(btnStroke, 0.15, { Color = Nebula.Theme.Line, Transparency = 0.5 })
             end)
             btn.MouseButton1Click:Connect(function()
                 local ok, err = pcall(cfg.Callback)
@@ -1701,196 +1858,223 @@ local function buildWindow(config)
                     Nebula:Notify({ Title = "Ошибка", Content = tostring(err), Type = "error" })
                 end
             end)
-            
+
             recalc()
             local v = {}
-            function v:Set(c) c = kwargify(cfg, c); lbl.Text = c.Name; cfg = c end
+            function v:Set(c)
+                c = merge(cfg, c)
+                lbl.Text = c.Name
+                cfg = c
+            end
             function v:Destroy() btn:Destroy(); recalc() end
-            
-            registerCommand(tab.Name .. " → " .. cfg.Name, "Button", function() 
+
+            Nebula:RegisterCommand(tab.Name .. " → " .. cfg.Name, "Button", function()
                 pcall(cfg.Callback)
             end)
             return v
         end
-        
+
         -- TOGGLE
         function tab:CreateToggle(cfg, flag, parent)
-            cfg = kwargify({
+            cfg = merge({
                 Name = "Toggle",
                 Description = nil,
                 CurrentValue = false,
                 Callback = function() end,
             }, cfg)
-            
             local hasDesc = cfg.Description and cfg.Description ~= ""
+
             local row = Instance.new("TextButton")
-            row.Size = UDim2.new(1, 0, 0, hasDesc and 50 or 36)
-            row.BackgroundColor3 = t.Surface
+            row.Size = UDim2.new(1, 0, 0, hasDesc and 50 or 38)
+            row.BackgroundColor3 = Nebula.Theme.Surface
             row.BorderSizePixel = 0
             row.Text = ""
             row.AutoButtonColor = false
+            row.ZIndex = 13
             row.Parent = parent or page
             corner(row, 8)
-            stroke(row, t.Line, 1, 0.5)
-            
+            stroke(row, Nebula.Theme.Line, 1, 0.5)
+
             local lbl = Instance.new("TextLabel")
-            lbl.Size = UDim2.new(1, -80, 0, hasDesc and 20 or 36)
+            lbl.Size = UDim2.new(1, -80, 0, hasDesc and 20 or 38)
             lbl.Position = UDim2.new(0, 12, 0, hasDesc and 7 or 0)
             lbl.BackgroundTransparency = 1
             lbl.Text = cfg.Name
-            lbl.TextColor3 = t.Text
+            lbl.TextColor3 = Nebula.Theme.Text
             lbl.Font = Enum.Font.Gotham
             lbl.TextSize = 12
             lbl.TextXAlignment = Enum.TextXAlignment.Left
+            lbl.ZIndex = 14
             lbl.Parent = row
-            
+
             if hasDesc then
                 local desc = Instance.new("TextLabel")
                 desc.Size = UDim2.new(1, -80, 0, 16)
                 desc.Position = UDim2.new(0, 12, 0, 27)
                 desc.BackgroundTransparency = 1
                 desc.Text = cfg.Description
-                desc.TextColor3 = t.TextDim
+                desc.TextColor3 = Nebula.Theme.TextDim
                 desc.Font = Enum.Font.Gotham
                 desc.TextSize = 10
                 desc.TextXAlignment = Enum.TextXAlignment.Left
+                desc.ZIndex = 14
                 desc.Parent = row
             end
-            
+
             local track = Instance.new("Frame")
-            track.Size = UDim2.new(0, 38, 0, 20)
-            track.Position = UDim2.new(1, -50, 0.5, 0)
+            track.Size = UDim2.new(0, 40, 0, 20)
+            track.Position = UDim2.new(1, -52, 0.5, 0)
             track.AnchorPoint = Vector2.new(0, 0.5)
-            track.BackgroundColor3 = t.Surface2
+            track.BackgroundColor3 = Nebula.Theme.Surface2
             track.BorderSizePixel = 0
+            track.ZIndex = 14
             track.Parent = row
             corner(track, 10)
-            
+
             local knob = Instance.new("Frame")
             knob.Size = UDim2.new(0, 16, 0, 16)
             knob.Position = UDim2.new(0, 2, 0.5, 0)
             knob.AnchorPoint = Vector2.new(0, 0.5)
-            knob.BackgroundColor3 = t.TextDim
+            knob.BackgroundColor3 = Nebula.Theme.TextDim
             knob.BorderSizePixel = 0
+            knob.ZIndex = 15
             knob.Parent = track
             corner(knob, 8)
-            
+
             local state = cfg.CurrentValue
-            
+
+            local function applyVisual(val)
+                if val then
+                    tw(track, 0.2, { BackgroundColor3 = Nebula.Theme.Accent })
+                    tw(knob, 0.2, { Position = UDim2.new(1, -18, 0.5, 0), BackgroundColor3 = Nebula.Theme.Background })
+                else
+                    tw(track, 0.2, { BackgroundColor3 = Nebula.Theme.Surface2 })
+                    tw(knob, 0.2, { Position = UDim2.new(0, 2, 0.5, 0), BackgroundColor3 = Nebula.Theme.TextDim })
+                end
+            end
+
             local function setState(val, silent)
                 state = val
-                if val then
-                    tw(track, 0.2, { BackgroundColor3 = t.Accent })
-                    tw(knob, 0.2, { Position = UDim2.new(1, -18, 0.5, 0), BackgroundColor3 = t.Background })
-                else
-                    tw(track, 0.2, { BackgroundColor3 = t.Surface2 })
-                    tw(knob, 0.2, { Position = UDim2.new(0, 2, 0.5, 0), BackgroundColor3 = t.TextDim })
-                end
+                applyVisual(val)
                 if not silent then
                     local ok, err = pcall(cfg.Callback, val)
                     if not ok then Nebula:Notify({ Title = "Ошибка", Content = tostring(err), Type = "error" }) end
                 end
             end
-            
-            setState(cfg.CurrentValue, true)
-            
+
+            applyVisual(cfg.CurrentValue)
+
             row.MouseEnter:Connect(function()
-                tw(row, 0.15, { BackgroundColor3 = t.Surface2 })
+                tw(row, 0.15, { BackgroundColor3 = Nebula.Theme.Surface2 })
             end)
             row.MouseLeave:Connect(function()
-                tw(row, 0.15, { BackgroundColor3 = t.Surface })
+                tw(row, 0.15, { BackgroundColor3 = Nebula.Theme.Surface })
             end)
             row.MouseButton1Click:Connect(function() setState(not state) end)
-            
+
             if flag then
-                Nebula.Options[flag] = { Set = setState, CurrentValue = cfg.CurrentValue }
+                Nebula.Options[flag] = {
+                    Set = setState,
+                    Get = function() return state end,
+                    Value = state,
+                }
             end
-            registerCommand(tab.Name .. " → " .. cfg.Name, "Toggle", function() setState(not state) end)
-            
+
+            Nebula:RegisterCommand(tab.Name .. " → " .. cfg.Name, "Toggle", function() setState(not state) end)
+
             recalc()
             local v = {}
             function v:Set(c)
-                c = kwargify(cfg, c)
+                c = merge(cfg, c)
                 if c.Name then lbl.Text = c.Name end
-                if c.CurrentValue ~= nil then setState(c.CurrentValue) end
+                if c.CurrentValue ~= nil then setState(c.CurrentValue, true) end
             end
             function v:Destroy() row:Destroy(); recalc() end
             return v
         end
-        
+
         -- SLIDER
         function tab:CreateSlider(cfg, flag, parent)
-            cfg = kwargify({
+            cfg = merge({
                 Name = "Slider",
                 Range = { 0, 100 },
                 Increment = 1,
                 CurrentValue = 50,
+                Suffix = "",
                 Callback = function() end,
             }, cfg)
-            
+
             local row = Instance.new("Frame")
-            row.Size = UDim2.new(1, 0, 0, 52)
-            row.BackgroundColor3 = t.Surface
+            row.Size = UDim2.new(1, 0, 0, 54)
+            row.BackgroundColor3 = Nebula.Theme.Surface
             row.BorderSizePixel = 0
+            row.ZIndex = 13
             row.Parent = parent or page
             corner(row, 8)
-            stroke(row, t.Line, 1, 0.5)
-            
+            stroke(row, Nebula.Theme.Line, 1, 0.5)
+
             local lbl = Instance.new("TextLabel")
-            lbl.Size = UDim2.new(1, -80, 0, 20)
+            lbl.Size = UDim2.new(1, -100, 0, 20)
             lbl.Position = UDim2.new(0, 12, 0, 8)
             lbl.BackgroundTransparency = 1
             lbl.Text = cfg.Name
-            lbl.TextColor3 = t.Text
+            lbl.TextColor3 = Nebula.Theme.Text
             lbl.Font = Enum.Font.Gotham
             lbl.TextSize = 12
             lbl.TextXAlignment = Enum.TextXAlignment.Left
+            lbl.ZIndex = 14
             lbl.Parent = row
-            
+
             local valLbl = Instance.new("TextLabel")
-            valLbl.Size = UDim2.new(0, 60, 0, 20)
-            valLbl.Position = UDim2.new(1, -70, 0, 8)
+            valLbl.Size = UDim2.new(0, 80, 0, 20)
+            valLbl.Position = UDim2.new(1, -92, 0, 8)
             valLbl.BackgroundTransparency = 1
-            valLbl.Text = tostring(cfg.CurrentValue)
-            valLbl.TextColor3 = t.Accent
+            valLbl.Text = tostring(cfg.CurrentValue) .. cfg.Suffix
+            valLbl.TextColor3 = Nebula.Theme.Accent
             valLbl.Font = Enum.Font.Code
             valLbl.TextSize = 12
             valLbl.TextXAlignment = Enum.TextXAlignment.Right
+            valLbl.ZIndex = 14
             valLbl.Parent = row
-            
+
             local bar = Instance.new("Frame")
             bar.Size = UDim2.new(1, -24, 0, 6)
-            bar.Position = UDim2.new(0, 12, 0, 36)
-            bar.BackgroundColor3 = t.Surface2
+            bar.Position = UDim2.new(0, 12, 0, 38)
+            bar.BackgroundColor3 = Nebula.Theme.Surface2
             bar.BorderSizePixel = 0
+            bar.ZIndex = 14
             bar.Parent = row
             corner(bar, 3)
-            
+
             local fill = Instance.new("Frame")
-            fill.Size = UDim2.new((cfg.CurrentValue - cfg.Range[1]) / math.max(cfg.Range[2] - cfg.Range[1], 0.001), 0, 1, 0)
-            fill.BackgroundColor3 = t.Accent
+            fill.Size = UDim2.new(0, 0, 1, 0)
+            fill.BackgroundColor3 = Nebula.Theme.Accent
             fill.BorderSizePixel = 0
+            fill.ZIndex = 15
             fill.Parent = bar
             corner(fill, 3)
-            
-            local fg = Instance.new("UIGradient")
-            fg.Color = ColorSequence.new(t.Accent, t.Accent2)
-            fg.Parent = fill
-            registerGradient(fg)
-            
+
+            local fillGrad = Instance.new("UIGradient")
+            fillGrad.Color = ColorSequence.new(Nebula.Theme.Accent, Nebula.Theme.Accent2)
+            fillGrad.Parent = fill
+            registerGradient(fillGrad)
+
             local dragging = false
-            local function updateFromX(x)
-                local rel = math.clamp((x - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
+            local function updateFromX(x, silent)
+                local rel = math.clamp((x - bar.AbsolutePosition.X) / math.max(bar.AbsoluteSize.X, 1), 0, 1)
                 local val = cfg.Range[1] + rel * (cfg.Range[2] - cfg.Range[1])
                 val = math.floor(val / cfg.Increment + 0.5) * cfg.Increment
                 val = math.clamp(val, cfg.Range[1], cfg.Range[2])
-                fill.Size = UDim2.new(rel, 0, 1, 0)
-                valLbl.Text = tostring(val)
+                local newRel = (val - cfg.Range[1]) / math.max(cfg.Range[2] - cfg.Range[1], 0.0001)
+                fill.Size = UDim2.new(newRel, 0, 1, 0)
+                valLbl.Text = tostring(val) .. cfg.Suffix
                 cfg.CurrentValue = val
-                local ok, err = pcall(cfg.Callback, val)
-                if not ok then Nebula:Notify({ Title = "Ошибка", Content = tostring(err), Type = "error" }) end
+                if not silent then
+                    local ok, err = pcall(cfg.Callback, val)
+                    if not ok then Nebula:Notify({ Title = "Ошибка", Content = tostring(err), Type = "error" }) end
+                end
             end
-            
+
             bar.InputBegan:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1
                 or input.UserInputType == Enum.UserInputType.Touch then
@@ -1898,164 +2082,188 @@ local function buildWindow(config)
                     updateFromX(input.Position.X)
                 end
             end)
-            UserInputService.InputChanged:Connect(function(input)
+            track(UserInputService.InputChanged:Connect(function(input)
                 if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
                 or input.UserInputType == Enum.UserInputType.Touch) then
                     updateFromX(input.Position.X)
                 end
-            end)
-            UserInputService.InputEnded:Connect(function(input)
+            end))
+            track(UserInputService.InputEnded:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1
                 or input.UserInputType == Enum.UserInputType.Touch then
                     dragging = false
                 end
+            end))
+
+            -- init visual
+            task.defer(function()
+                if fill and bar then
+                    local rel = (cfg.CurrentValue - cfg.Range[1]) / math.max(cfg.Range[2] - cfg.Range[1], 0.0001)
+                    fill.Size = UDim2.new(math.clamp(rel, 0, 1), 0, 1, 0)
+                end
             end)
-            
+
             if flag then
-                Nebula.Options[flag] = { Set = function(val)
-                    updateFromX(bar.AbsolutePosition.X + (val - cfg.Range[1]) / (cfg.Range[2] - cfg.Range[1]) * bar.AbsoluteSize.X)
-                end, CurrentValue = cfg.CurrentValue }
+                Nebula.Options[flag] = {
+                    Set = function(val)
+                        val = math.clamp(val, cfg.Range[1], cfg.Range[2])
+                        local rel = (val - cfg.Range[1]) / math.max(cfg.Range[2] - cfg.Range[1], 0.0001)
+                        fill.Size = UDim2.new(rel, 0, 1, 0)
+                        valLbl.Text = tostring(val) .. cfg.Suffix
+                        cfg.CurrentValue = val
+                        pcall(cfg.Callback, val)
+                    end,
+                    Get = function() return cfg.CurrentValue end,
+                }
             end
-            
+
             recalc()
             local v = {}
             function v:Set(c)
-                if c.CurrentValue then 
-                    updateFromX(bar.AbsolutePosition.X + (c.CurrentValue - cfg.Range[1]) / (cfg.Range[2] - cfg.Range[1]) * bar.AbsoluteSize.X) 
-                end
                 if c.Name then lbl.Text = c.Name end
+                if c.CurrentValue then
+                    Nebula.Options[flag] and Nebula.Options[flag].Set(c.CurrentValue)
+                end
             end
-            function v:UpdateValue(val)
-                updateFromX(bar.AbsolutePosition.X + (val - cfg.Range[1]) / (cfg.Range[2] - cfg.Range[1]) * bar.AbsoluteSize.X)
-            end
+            function v:UpdateValue(val) Nebula.Options[flag] and Nebula.Options[flag].Set(val) end
             function v:Destroy() row:Destroy(); recalc() end
             return v
         end
-        
-        -- DROPDOWN (с fuzzy search)
+
+        -- DROPDOWN
         function tab:CreateDropdown(cfg, flag, parent)
-            cfg = kwargify({
+            cfg = merge({
                 Name = "Dropdown",
                 Options = {},
                 CurrentOption = nil,
                 MultipleOptions = false,
                 Callback = function() end,
             }, cfg)
-            
+
             local current = {}
             if cfg.CurrentOption then
-                if type(cfg.CurrentOption) == "table" then current = cfg.CurrentOption
-                else current = { cfg.CurrentOption } end
+                if type(cfg.CurrentOption) == "table" then
+                    current = table.clone(cfg.CurrentOption)
+                else
+                    current = { cfg.CurrentOption }
+                end
             end
-            
+
             local expanded = false
             local row = Instance.new("Frame")
-            row.Size = UDim2.new(1, 0, 0, 36)
-            row.BackgroundColor3 = t.Surface
+            row.Size = UDim2.new(1, 0, 0, 38)
+            row.BackgroundColor3 = Nebula.Theme.Surface
             row.BorderSizePixel = 0
             row.ClipsDescendants = true
+            row.ZIndex = 13
             row.Parent = parent or page
             corner(row, 8)
-            stroke(row, t.Line, 1, 0.5)
-            
+            stroke(row, Nebula.Theme.Line, 1, 0.5)
+
             local headerBtn = Instance.new("TextButton")
-            headerBtn.Size = UDim2.new(1, 0, 0, 36)
+            headerBtn.Size = UDim2.new(1, 0, 0, 38)
             headerBtn.BackgroundTransparency = 1
             headerBtn.Text = ""
+            headerBtn.ZIndex = 14
             headerBtn.Parent = row
-            
+
             local lbl = Instance.new("TextLabel")
-            lbl.Size = UDim2.new(1, -150, 0, 36)
+            lbl.Size = UDim2.new(1, -150, 0, 38)
             lbl.Position = UDim2.new(0, 12, 0, 0)
             lbl.BackgroundTransparency = 1
             lbl.Text = cfg.Name
-            lbl.TextColor3 = t.Text
+            lbl.TextColor3 = Nebula.Theme.Text
             lbl.Font = Enum.Font.Gotham
             lbl.TextSize = 12
             lbl.TextXAlignment = Enum.TextXAlignment.Left
+            lbl.ZIndex = 15
             lbl.Parent = row
-            
+
             local selectedLbl = Instance.new("TextLabel")
-            selectedLbl.Size = UDim2.new(0, 100, 0, 36)
+            selectedLbl.Size = UDim2.new(0, 100, 0, 38)
             selectedLbl.Position = UDim2.new(1, -120, 0, 0)
             selectedLbl.BackgroundTransparency = 1
             selectedLbl.Text = #current > 0 and table.concat(current, ", ") or "None"
-            selectedLbl.TextColor3 = t.Accent
+            selectedLbl.TextColor3 = Nebula.Theme.Accent
             selectedLbl.Font = Enum.Font.Gotham
             selectedLbl.TextSize = 11
             selectedLbl.TextXAlignment = Enum.TextXAlignment.Right
             selectedLbl.TextTruncate = Enum.TextTruncate.AtEnd
+            selectedLbl.ZIndex = 15
             selectedLbl.Parent = row
-            
+
             local arrow = Instance.new("TextLabel")
-            arrow.Size = UDim2.new(0, 20, 0, 36)
+            arrow.Size = UDim2.new(0, 20, 0, 38)
             arrow.Position = UDim2.new(1, -22, 0, 0)
             arrow.BackgroundTransparency = 1
             arrow.Text = "▾"
-            arrow.TextColor3 = t.TextDim
+            arrow.TextColor3 = Nebula.Theme.TextDim
             arrow.Font = Enum.Font.Gotham
             arrow.TextSize = 12
+            arrow.ZIndex = 15
             arrow.Parent = row
-            
-            -- search inside dropdown
+
             local searchBox = Instance.new("TextBox")
-            searchBox.Size = UDim2.new(1, -16, 0, 0)
-            searchBox.Position = UDim2.new(0, 8, 0, 36)
-            searchBox.BackgroundColor3 = t.Surface2
+            searchBox.Size = UDim2.new(1, -16, 0, 28)
+            searchBox.Position = UDim2.new(0, 8, 0, 40)
+            searchBox.BackgroundColor3 = Nebula.Theme.Surface2
             searchBox.BorderSizePixel = 0
             searchBox.Text = ""
             searchBox.PlaceholderText = "Поиск..."
-            searchBox.PlaceholderColor3 = t.TextDim
-            searchBox.TextColor3 = t.Text
+            searchBox.PlaceholderColor3 = Nebula.Theme.TextDim
+            searchBox.TextColor3 = Nebula.Theme.Text
             searchBox.Font = Enum.Font.Gotham
             searchBox.TextSize = 11
             searchBox.TextXAlignment = Enum.TextXAlignment.Left
             searchBox.ClearTextOnFocus = false
             searchBox.Visible = false
+            searchBox.ZIndex = 15
             searchBox.Parent = row
-            corner(searchBox, 5)
+            corner(searchBox, 6)
             padding(searchBox, 0, 8, 0, 8)
-            
+
             local optionsFrame = Instance.new("ScrollingFrame")
             optionsFrame.Size = UDim2.new(1, -16, 0, 0)
-            optionsFrame.Position = UDim2.new(0, 8, 0, 66)
+            optionsFrame.Position = UDim2.new(0, 8, 0, 74)
             optionsFrame.BackgroundTransparency = 1
             optionsFrame.BorderSizePixel = 0
             optionsFrame.ScrollBarThickness = 3
-            optionsFrame.ScrollBarImageColor3 = t.Accent
+            optionsFrame.ScrollBarImageColor3 = Nebula.Theme.Accent
             optionsFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
             optionsFrame.Visible = false
+            optionsFrame.ZIndex = 15
             optionsFrame.Parent = row
             listLayout(optionsFrame, Enum.FillDirection.Vertical, 2)
-            
+
+            local optionBtns = {}
+
             local function refreshOptions(filter)
-                for _, c in ipairs(optionsFrame:GetChildren()) do
-                    if c:IsA("TextButton") then c:Destroy() end
-                end
                 filter = (filter or ""):lower()
+                for _, b in ipairs(optionBtns) do b:Destroy() end
+                optionBtns = {}
+
                 for _, opt in ipairs(cfg.Options) do
-                    if filter == "" or opt:lower():find(filter, 1, true) then
+                    if filter == "" or tostring(opt):lower():find(filter, 1, true) then
                         local o = Instance.new("TextButton")
-                        o.Size = UDim2.new(1, 0, 0, 28)
-                        o.BackgroundColor3 = t.Surface2
+                        o.Size = UDim2.new(1, 0, 0, 30)
+                        o.BackgroundColor3 = Nebula.Theme.Surface2
                         o.BorderSizePixel = 0
-                        o.Text = opt
-                        o.TextColor3 = t.Text
+                        o.Text = tostring(opt)
+                        o.TextColor3 = table.find(current, opt) and Nebula.Theme.Accent or Nebula.Theme.Text
                         o.Font = Enum.Font.Gotham
                         o.TextSize = 11
                         o.AutoButtonColor = false
+                        o.TextXAlignment = Enum.TextXAlignment.Left
+                        o.ZIndex = 16
                         o.Parent = optionsFrame
-                        corner(o, 5)
-                        
-                        if table.find(current, opt) then
-                            o.TextColor3 = t.Accent
-                        end
-                        
+                        corner(o, 6)
+                        padding(o, 0, 0, 0, 10)
+
                         o.MouseEnter:Connect(function()
-                            tw(o, 0.12, { BackgroundColor3 = t.Surface3 })
+                            tw(o, 0.12, { BackgroundColor3 = Nebula.Theme.Surface3 })
                         end)
                         o.MouseLeave:Connect(function()
-                            tw(o, 0.12, { BackgroundColor3 = t.Surface2 })
+                            tw(o, 0.12, { BackgroundColor3 = Nebula.Theme.Surface2 })
                         end)
                         o.MouseButton1Click:Connect(function()
                             if cfg.MultipleOptions then
@@ -2067,51 +2275,66 @@ local function buildWindow(config)
                             end
                             selectedLbl.Text = #current > 0 and table.concat(current, ", ") or "None"
                             refreshOptions(searchBox.Text)
-                            local val = cfg.MultipleOptions and current or current[1]
+                            local val = cfg.MultipleOptions and table.clone(current) or current[1]
                             local ok, err = pcall(cfg.Callback, val)
                             if not ok then Nebula:Notify({ Title = "Ошибка", Content = tostring(err), Type = "error" }) end
                             if not cfg.MultipleOptions then
                                 expanded = false
-                                tw(row, 0.2, { Size = UDim2.new(1, 0, 0, 36) })
+                                tw(row, 0.2, { Size = UDim2.new(1, 0, 0, 38) })
                                 optionsFrame.Visible = false
                                 searchBox.Visible = false
                                 arrow.Text = "▾"
+                                recalc()
                             end
                         end)
+                        table.insert(optionBtns, o)
                     end
                 end
                 optionsFrame.CanvasSize = UDim2.new(0, 0, 0, optionsFrame.UIListLayout.AbsoluteContentSize.Y + 4)
             end
             refreshOptions()
-            
+
             searchBox:GetPropertyChangedSignal("Text"):Connect(function()
                 refreshOptions(searchBox.Text)
             end)
-            
+
             headerBtn.MouseButton1Click:Connect(function()
                 expanded = not expanded
                 optionsFrame.Visible = expanded
                 searchBox.Visible = expanded
                 if expanded then
                     local h = math.min(180, optionsFrame.UIListLayout.AbsoluteContentSize.Y + 8)
-                    tw(row, 0.2, { Size = UDim2.new(1, 0, 0, 36 + 30 + h) })
+                    tw(row, 0.2, { Size = UDim2.new(1, 0, 0, 38 + 36 + h) })
                     arrow.Text = "▴"
-                    searchBox:CaptureFocus()
                 else
-                    tw(row, 0.2, { Size = UDim2.new(1, 0, 0, 36) })
+                    tw(row, 0.2, { Size = UDim2.new(1, 0, 0, 38) })
                     arrow.Text = "▾"
                     searchBox.Text = ""
                 end
                 recalc()
             end)
-            
-            if flag then Nebula.Options[flag] = { CurrentOption = current } end
+
+            if flag then
+                Nebula.Options[flag] = {
+                    Set = function(val)
+                        if type(val) == "table" then current = table.clone(val)
+                        else current = { val } end
+                        selectedLbl.Text = #current > 0 and table.concat(current, ", ") or "None"
+                        refreshOptions(searchBox.Text)
+                    end,
+                    Get = function()
+                        return cfg.MultipleOptions and table.clone(current) or current[1]
+                    end,
+                }
+            end
+
             recalc()
             local v = {}
             function v:Set(c)
                 if c.Options then cfg.Options = c.Options; refreshOptions() end
                 if c.CurrentOption then
-                    current = type(c.CurrentOption) == "table" and c.CurrentOption or { c.CurrentOption }
+                    if type(c.CurrentOption) == "table" then current = table.clone(c.CurrentOption)
+                    else current = { c.CurrentOption } end
                     selectedLbl.Text = #current > 0 and table.concat(current, ", ") or "None"
                     refreshOptions()
                 end
@@ -2119,10 +2342,10 @@ local function buildWindow(config)
             function v:Destroy() row:Destroy(); recalc() end
             return v
         end
-        
+
         -- INPUT
         function tab:CreateInput(cfg, flag, parent)
-            cfg = kwargify({
+            cfg = merge({
                 Name = "Input",
                 PlaceholderText = "",
                 CurrentValue = "",
@@ -2132,44 +2355,51 @@ local function buildWindow(config)
                 RemoveTextAfterFocusLost = false,
                 Callback = function() end,
             }, cfg)
-            
+
             local row = Instance.new("Frame")
-            row.Size = UDim2.new(1, 0, 0, 36)
-            row.BackgroundColor3 = t.Surface
+            row.Size = UDim2.new(1, 0, 0, 38)
+            row.BackgroundColor3 = Nebula.Theme.Surface
             row.BorderSizePixel = 0
+            row.ZIndex = 13
             row.Parent = parent or page
             corner(row, 8)
-            stroke(row, t.Line, 1, 0.5)
-            
+            stroke(row, Nebula.Theme.Line, 1, 0.5)
+
             local lbl = Instance.new("TextLabel")
-            lbl.Size = UDim2.new(0, 130, 0, 36)
+            lbl.Size = UDim2.new(0, 130, 0, 38)
             lbl.Position = UDim2.new(0, 12, 0, 0)
             lbl.BackgroundTransparency = 1
             lbl.Text = cfg.Name
-            lbl.TextColor3 = t.Text
+            lbl.TextColor3 = Nebula.Theme.Text
             lbl.Font = Enum.Font.Gotham
             lbl.TextSize = 12
             lbl.TextXAlignment = Enum.TextXAlignment.Left
+            lbl.ZIndex = 14
             lbl.Parent = row
-            
+
             local box = Instance.new("TextBox")
             box.Size = UDim2.new(1, -160, 0, 26)
             box.Position = UDim2.new(1, -150, 0.5, 0)
             box.AnchorPoint = Vector2.new(0, 0.5)
-            box.BackgroundColor3 = t.Surface2
+            box.BackgroundColor3 = Nebula.Theme.Surface2
             box.BorderSizePixel = 0
-            box.Text = cfg.CurrentValue
+            box.Text = tostring(cfg.CurrentValue)
             box.PlaceholderText = cfg.PlaceholderText
-            box.PlaceholderColor3 = t.TextDim
-            box.TextColor3 = t.Text
+            box.PlaceholderColor3 = Nebula.Theme.TextDim
+            box.TextColor3 = Nebula.Theme.Text
             box.Font = Enum.Font.Gotham
             box.TextSize = 11
             box.ClearTextOnFocus = false
+            box.ZIndex = 14
             box.Parent = row
             corner(box, 6)
             padding(box, 0, 10, 0, 10)
-            
+
+            local applying = false
+
             box:GetPropertyChangedSignal("Text"):Connect(function()
+                if applying then return end
+                applying = true
                 if cfg.MaxCharacters and #box.Text > cfg.MaxCharacters then
                     box.Text = box.Text:sub(1, cfg.MaxCharacters)
                 end
@@ -2177,12 +2407,13 @@ local function buildWindow(config)
                     local filtered = box.Text:gsub("[^%d%.%-]", "")
                     if filtered ~= box.Text then box.Text = filtered end
                 end
+                applying = false
                 if not cfg.Enter then
                     local ok, err = pcall(cfg.Callback, box.Text)
                     if not ok then Nebula:Notify({ Title = "Ошибка", Content = tostring(err), Type = "error" }) end
                 end
             end)
-            
+
             box.FocusLost:Connect(function(enterPressed)
                 if cfg.Enter and enterPressed then
                     local ok, err = pcall(cfg.Callback, box.Text)
@@ -2190,8 +2421,15 @@ local function buildWindow(config)
                 end
                 if cfg.RemoveTextAfterFocusLost then box.Text = "" end
             end)
-            
-            if flag then Nebula.Options[flag] = { CurrentValue = cfg.CurrentValue } end
+
+            if flag then
+                Nebula.Options[flag] = {
+                    Set = function(val) box.Text = tostring(val) end,
+                    Get = function() return box.Text end,
+                    Value = cfg.CurrentValue,
+                }
+            end
+
             recalc()
             local v = {}
             function v:Set(c)
@@ -2201,71 +2439,78 @@ local function buildWindow(config)
             function v:Destroy() row:Destroy(); recalc() end
             return v
         end
-        
+
         -- KEYBIND
         function tab:CreateKeybind(cfg, parent)
-            cfg = kwargify({
+            cfg = merge({
                 Name = "Keybind",
                 CurrentKeybind = "Q",
                 HoldToInteract = false,
                 Callback = function() end,
             }, cfg)
-            
+
             local row = Instance.new("Frame")
-            row.Size = UDim2.new(1, 0, 0, 36)
-            row.BackgroundColor3 = t.Surface
+            row.Size = UDim2.new(1, 0, 0, 38)
+            row.BackgroundColor3 = Nebula.Theme.Surface
             row.BorderSizePixel = 0
+            row.ZIndex = 13
             row.Parent = parent or page
             corner(row, 8)
-            stroke(row, t.Line, 1, 0.5)
-            
+            stroke(row, Nebula.Theme.Line, 1, 0.5)
+
             local lbl = Instance.new("TextLabel")
-            lbl.Size = UDim2.new(1, -100, 0, 36)
+            lbl.Size = UDim2.new(1, -110, 0, 38)
             lbl.Position = UDim2.new(0, 12, 0, 0)
             lbl.BackgroundTransparency = 1
             lbl.Text = cfg.Name
-            lbl.TextColor3 = t.Text
+            lbl.TextColor3 = Nebula.Theme.Text
             lbl.Font = Enum.Font.Gotham
             lbl.TextSize = 12
             lbl.TextXAlignment = Enum.TextXAlignment.Left
+            lbl.ZIndex = 14
             lbl.Parent = row
-            
+
             local keyBtn = Instance.new("TextButton")
-            keyBtn.Size = UDim2.new(0, 60, 0, 26)
-            keyBtn.Position = UDim2.new(1, -72, 0.5, 0)
+            keyBtn.Size = UDim2.new(0, 72, 0, 28)
+            keyBtn.Position = UDim2.new(1, -84, 0.5, 0)
             keyBtn.AnchorPoint = Vector2.new(0, 0.5)
-            keyBtn.BackgroundColor3 = t.Surface2
+            keyBtn.BackgroundColor3 = Nebula.Theme.Surface2
             keyBtn.BorderSizePixel = 0
             keyBtn.Text = cfg.CurrentKeybind
-            keyBtn.TextColor3 = t.Accent
+            keyBtn.TextColor3 = Nebula.Theme.Accent
             keyBtn.Font = Enum.Font.Code
             keyBtn.TextSize = 11
             keyBtn.AutoButtonColor = false
+            keyBtn.ZIndex = 14
             keyBtn.Parent = row
-            corner(keyBtn, 5)
-            
+            corner(keyBtn, 6)
+
             local listening = false
             local active = false
-            
+
             keyBtn.MouseButton1Click:Connect(function()
                 listening = true
                 keyBtn.Text = "..."
-                keyBtn.TextColor3 = t.Warning
+                keyBtn.TextColor3 = Nebula.Theme.Warning
             end)
-            
-            UserInputService.InputBegan:Connect(function(input, gp)
-                if gp then return end
+
+            track(UserInputService.InputBegan:Connect(function(input, gp)
+                if gp and not listening then return end
                 if listening then
+                    if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
                     listening = false
                     local key = input.KeyCode.Name
                     if key ~= "Unknown" then
                         cfg.CurrentKeybind = key
                         keyBtn.Text = key
-                        keyBtn.TextColor3 = t.Accent
+                        keyBtn.TextColor3 = Nebula.Theme.Accent
+                    else
+                        keyBtn.Text = cfg.CurrentKeybind
+                        keyBtn.TextColor3 = Nebula.Theme.Accent
                     end
                     return
                 end
-                if not listening and input.KeyCode.Name == cfg.CurrentKeybind then
+                if not gp and input.KeyCode.Name == cfg.CurrentKeybind then
                     if cfg.HoldToInteract then
                         pcall(cfg.Callback, true)
                         active = true
@@ -2274,109 +2519,117 @@ local function buildWindow(config)
                         pcall(cfg.Callback, active)
                     end
                 end
-            end)
-            
-            UserInputService.InputEnded:Connect(function(input)
-                if input.KeyCode.Name == cfg.CurrentKeybind and cfg.HoldToInteract and active then
+            end))
+
+            track(UserInputService.InputEnded:Connect(function(input)
+                if input.KeyCode and input.KeyCode.Name == cfg.CurrentKeybind and cfg.HoldToInteract and active then
                     pcall(cfg.Callback, false)
                     active = false
                 end
-            end)
-            
+            end))
+
             recalc()
             local v = {}
             function v:Set(c)
-                if c.CurrentKeybind then cfg.CurrentKeybind = c.CurrentKeybind; keyBtn.Text = c.CurrentKeybind end
+                if c.CurrentKeybind then
+                    cfg.CurrentKeybind = c.CurrentKeybind
+                    keyBtn.Text = c.CurrentKeybind
+                end
                 if c.Name then lbl.Text = c.Name end
             end
             function v:Destroy() row:Destroy(); recalc() end
             return v
         end
-        
-        -- COLOR PICKER PRO (HSV)
+
+        -- COLOR PICKER (HSV + HEX)
         function tab:CreateColorPicker(cfg, flag, parent)
-            cfg = kwargify({
+            cfg = merge({
                 Name = "Цвет",
                 Color = Color3.fromRGB(255, 255, 255),
                 Callback = function() end,
             }, cfg)
-            
+
             local h, s, v = cfg.Color:ToHSV()
             local open = false
-            
+
             local row = Instance.new("Frame")
-            row.Size = UDim2.new(1, 0, 0, 40)
-            row.BackgroundColor3 = t.Surface
+            row.Size = UDim2.new(1, 0, 0, 42)
+            row.BackgroundColor3 = Nebula.Theme.Surface
             row.BorderSizePixel = 0
             row.ClipsDescendants = true
+            row.ZIndex = 13
             row.Parent = parent or page
             corner(row, 8)
-            stroke(row, t.Line, 1, 0.5)
-            
-            local header = Instance.new("TextButton")
-            header.Size = UDim2.new(1, 0, 0, 40)
-            header.BackgroundTransparency = 1
-            header.Text = ""
-            header.Parent = row
-            
+            stroke(row, Nebula.Theme.Line, 1, 0.5)
+
+            local headerBtn = Instance.new("TextButton")
+            headerBtn.Size = UDim2.new(1, 0, 0, 42)
+            headerBtn.BackgroundTransparency = 1
+            headerBtn.Text = ""
+            headerBtn.ZIndex = 14
+            headerBtn.Parent = row
+
             local lbl = Instance.new("TextLabel")
-            lbl.Size = UDim2.new(1, -100, 0, 40)
+            lbl.Size = UDim2.new(1, -100, 0, 42)
             lbl.Position = UDim2.new(0, 12, 0, 0)
             lbl.BackgroundTransparency = 1
             lbl.Text = cfg.Name
-            lbl.TextColor3 = t.Text
+            lbl.TextColor3 = Nebula.Theme.Text
             lbl.Font = Enum.Font.Gotham
             lbl.TextSize = 12
             lbl.TextXAlignment = Enum.TextXAlignment.Left
+            lbl.ZIndex = 15
             lbl.Parent = row
-            
+
             local preview = Instance.new("Frame")
-            preview.Size = UDim2.new(0, 60, 0, 22)
+            preview.Size = UDim2.new(0, 60, 0, 24)
             preview.Position = UDim2.new(1, -72, 0.5, 0)
             preview.AnchorPoint = Vector2.new(0, 0.5)
             preview.BackgroundColor3 = cfg.Color
             preview.BorderSizePixel = 0
+            preview.ZIndex = 15
             preview.Parent = row
             corner(preview, 6)
-            stroke(preview, t.Line, 1, 0.4)
-            
-            -- editor (hidden by default)
+            stroke(preview, Nebula.Theme.Line, 1, 0.4)
+
             local editor = Instance.new("Frame")
-            editor.Size = UDim2.new(1, -24, 0, 130)
-            editor.Position = UDim2.new(0, 12, 0, 48)
+            editor.Size = UDim2.new(1, -24, 0, 160)
+            editor.Position = UDim2.new(0, 12, 0, 50)
             editor.BackgroundTransparency = 1
             editor.Visible = false
+            editor.ZIndex = 15
             editor.Parent = row
-            
-            -- SV area
+
             local svArea = Instance.new("ImageLabel")
-            svArea.Size = UDim2.new(1, -50, 0, 110)
+            svArea.Size = UDim2.new(1, -50, 0, 120)
             svArea.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
             svArea.BorderSizePixel = 0
             svArea.Image = "rbxassetid://4155801252"
             svArea.ImageColor3 = Color3.fromHSV(h, 1, 1)
+            svArea.ZIndex = 16
             svArea.Parent = editor
             corner(svArea, 6)
-            
+
             local svCursor = Instance.new("Frame")
-            svCursor.Size = UDim2.new(0, 10, 0, 10)
+            svCursor.Size = UDim2.new(0, 12, 0, 12)
             svCursor.AnchorPoint = Vector2.new(0.5, 0.5)
             svCursor.BackgroundColor3 = Color3.new(1, 1, 1)
             svCursor.BorderSizePixel = 0
             svCursor.Position = UDim2.new(s, 0, 1-v, 0)
+            svCursor.ZIndex = 17
             svCursor.Parent = svArea
-            corner(svCursor, 5)
+            corner(svCursor, 6)
             stroke(svCursor, Color3.new(0, 0, 0), 1, 0)
-            
-            -- hue slider
+
             local hueBar = Instance.new("Frame")
-            hueBar.Size = UDim2.new(0, 20, 0, 110)
+            hueBar.Size = UDim2.new(0, 20, 0, 120)
             hueBar.Position = UDim2.new(1, -36, 0, 0)
             hueBar.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
             hueBar.BorderSizePixel = 0
+            hueBar.ZIndex = 16
             hueBar.Parent = editor
             corner(hueBar, 6)
-            
+
             local hueGrad = Instance.new("UIGradient")
             hueGrad.Color = ColorSequence.new({
                 ColorSequenceKeypoint.new(0.00, Color3.fromRGB(255, 0, 0)),
@@ -2389,37 +2642,39 @@ local function buildWindow(config)
             })
             hueGrad.Rotation = 90
             hueGrad.Parent = hueBar
-            
+
             local hueCursor = Instance.new("Frame")
             hueCursor.Size = UDim2.new(1, 0, 0, 3)
             hueCursor.AnchorPoint = Vector2.new(0, 0.5)
             hueCursor.BackgroundColor3 = Color3.new(1, 1, 1)
             hueCursor.BorderSizePixel = 0
             hueCursor.Position = UDim2.new(0, 0, h, 0)
+            hueCursor.ZIndex = 17
             hueCursor.Parent = hueBar
             corner(hueCursor, 2)
-            
-            -- hex input
+
             local hexBox = Instance.new("TextBox")
-            hexBox.Size = UDim2.new(1, 0, 0, 26)
-            hexBox.Position = UDim2.new(0, 0, 0, 118)
-            hexBox.BackgroundColor3 = t.Surface2
+            hexBox.Size = UDim2.new(1, 0, 0, 28)
+            hexBox.Position = UDim2.new(0, 0, 0, 128)
+            hexBox.BackgroundColor3 = Nebula.Theme.Surface2
             hexBox.BorderSizePixel = 0
-            hexBox.Text = string.format("#%02X%02X%02X", 
-                math.floor(cfg.Color.R*255), 
-                math.floor(cfg.Color.G*255), 
+            hexBox.Text = string.format("#%02X%02X%02X",
+                math.floor(cfg.Color.R*255),
+                math.floor(cfg.Color.G*255),
                 math.floor(cfg.Color.B*255))
-            hexBox.TextColor3 = t.Text
+            hexBox.TextColor3 = Nebula.Theme.Text
             hexBox.Font = Enum.Font.Code
             hexBox.TextSize = 11
             hexBox.ClearTextOnFocus = false
+            hexBox.ZIndex = 16
             hexBox.Parent = editor
             corner(hexBox, 6)
             padding(hexBox, 0, 10, 0, 10)
-            
+
             local draggingSV, draggingHue
-            
-            local function updateColor()
+            local applyingHex = false
+
+            local function updateColor(silent)
                 local col = Color3.fromHSV(h, s, v)
                 cfg.Color = col
                 preview.BackgroundColor3 = col
@@ -2427,60 +2682,64 @@ local function buildWindow(config)
                 svArea.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
                 svCursor.Position = UDim2.new(s, 0, 1-v, 0)
                 hueCursor.Position = UDim2.new(0, 0, h, 0)
-                hexBox.Text = string.format("#%02X%02X%02X", 
-                    math.floor(col.R*255), 
-                    math.floor(col.G*255), 
-                    math.floor(col.B*255))
-                pcall(cfg.Callback, col)
+                if not applyingHex then
+                    hexBox.Text = string.format("#%02X%02X%02X",
+                        math.floor(col.R*255),
+                        math.floor(col.G*255),
+                        math.floor(col.B*255))
+                end
+                if not silent then
+                    pcall(cfg.Callback, col)
+                end
             end
-            
+
             svArea.InputBegan:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1
                 or input.UserInputType == Enum.UserInputType.Touch then
                     draggingSV = true
-                    local rel = (input.Position.X - svArea.AbsolutePosition.X) / svArea.AbsoluteSize.X
-                    local relY = (input.Position.Y - svArea.AbsolutePosition.Y) / svArea.AbsoluteSize.Y
-                    s = math.clamp(rel, 0, 1)
-                    v = math.clamp(1-relY, 0, 1)
+                    local rel = math.clamp((input.Position.X - svArea.AbsolutePosition.X) / svArea.AbsoluteSize.X, 0, 1)
+                    local relY = math.clamp((input.Position.Y - svArea.AbsolutePosition.Y) / svArea.AbsoluteSize.Y, 0, 1)
+                    s = rel
+                    v = 1 - relY
                     updateColor()
                 end
             end)
-            
+
             hueBar.InputBegan:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1
                 or input.UserInputType == Enum.UserInputType.Touch then
                     draggingHue = true
-                    local rel = (input.Position.Y - hueBar.AbsolutePosition.Y) / hueBar.AbsoluteSize.Y
-                    h = math.clamp(rel, 0, 1)
-                    updateColor()
-                end
-            end)
-            
-            UserInputService.InputChanged:Connect(function(input)
-                if draggingSV and (input.UserInputType == Enum.UserInputType.MouseMovement
-                or input.UserInputType == Enum.UserInputType.Touch) then
-                    local rel = math.clamp((input.Position.X - svArea.AbsolutePosition.X) / svArea.AbsoluteSize.X, 0, 1)
-                    local relY = math.clamp((input.Position.Y - svArea.AbsolutePosition.Y) / svArea.AbsoluteSize.Y, 0, 1)
-                    s = rel
-                    v = 1-relY
-                    updateColor()
-                end
-                if draggingHue and (input.UserInputType == Enum.UserInputType.MouseMovement
-                or input.UserInputType == Enum.UserInputType.Touch) then
                     local rel = math.clamp((input.Position.Y - hueBar.AbsolutePosition.Y) / hueBar.AbsoluteSize.Y, 0, 1)
                     h = rel
                     updateColor()
                 end
             end)
-            
-            UserInputService.InputEnded:Connect(function(input)
+
+            track(UserInputService.InputChanged:Connect(function(input)
+                if draggingSV and (input.UserInputType == Enum.UserInputType.MouseMovement
+                or input.UserInputType == Enum.UserInputType.Touch) then
+                    local rel = math.clamp((input.Position.X - svArea.AbsolutePosition.X) / math.max(svArea.AbsoluteSize.X, 1), 0, 1)
+                    local relY = math.clamp((input.Position.Y - svArea.AbsolutePosition.Y) / math.max(svArea.AbsoluteSize.Y, 1), 0, 1)
+                    s = rel
+                    v = 1 - relY
+                    updateColor()
+                end
+                if draggingHue and (input.UserInputType == Enum.UserInputType.MouseMovement
+                or input.UserInputType == Enum.UserInputType.Touch) then
+                    local rel = math.clamp((input.Position.Y - hueBar.AbsolutePosition.Y) / math.max(hueBar.AbsoluteSize.Y, 1), 0, 1)
+                    h = rel
+                    updateColor()
+                end
+            end))
+
+            track(UserInputService.InputEnded:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1
                 or input.UserInputType == Enum.UserInputType.Touch then
                     draggingSV = false
                     draggingHue = false
                 end
-            end)
-            
+            end))
+
             hexBox.FocusLost:Connect(function()
                 local hex = hexBox.Text:gsub("#", "")
                 if #hex == 6 then
@@ -2488,58 +2747,71 @@ local function buildWindow(config)
                     local g = tonumber(hex:sub(3,4), 16)
                     local b = tonumber(hex:sub(5,6), 16)
                     if r and g and b then
+                        applyingHex = true
                         local newCol = Color3.fromRGB(r, g, b)
                         h, s, v = newCol:ToHSV()
                         updateColor()
+                        applyingHex = false
                     end
                 end
             end)
-            
-            header.MouseButton1Click:Connect(function()
+
+            headerBtn.MouseButton1Click:Connect(function()
                 open = not open
                 editor.Visible = open
                 if open then
-                    tw(row, 0.25, { Size = UDim2.new(1, 0, 0, 40 + 152) })
+                    tw(row, 0.25, { Size = UDim2.new(1, 0, 0, 42 + 170) })
                 else
-                    tw(row, 0.25, { Size = UDim2.new(1, 0, 0, 40) })
+                    tw(row, 0.25, { Size = UDim2.new(1, 0, 0, 42) })
                 end
                 recalc()
             end)
-            
-            if flag then Nebula.Options[flag] = { Color = cfg.Color } end
+
+            if flag then
+                Nebula.Options[flag] = {
+                    Set = function(c)
+                        if typeof(c) == "Color3" then
+                            h, s, v = c:ToHSV()
+                            updateColor(true)
+                        end
+                    end,
+                    Get = function() return cfg.Color end,
+                }
+            end
+
             recalc()
             local v2 = {}
             function v2:Set(c)
                 if c.Color then
                     h, s, v = c.Color:ToHSV()
-                    updateColor()
+                    updateColor(true)
                 end
                 if c.Name then lbl.Text = c.Name end
             end
             function v2:Destroy() row:Destroy(); recalc() end
             return v2
         end
-        
+
         return tab
     end
-    
+
     -- ═══ THEME TAB ═══
     function window:CreateThemeTab()
-        local tab = window:CreateTab({ Name = "🎨 Темы" })
-        tab:CreateSection("Пресеты")
+        local tab = window:CreateTab({ Name = "🎨  Темы" })
+        local sec = tab:CreateSection("Пресеты")
         for name, _ in pairs(Nebula.Themes) do
-            tab:CreateButton({
+            sec:CreateButton({
                 Name = name,
                 Callback = function()
-                    Nebula.ThemeName = name
-                    Nebula.Theme = Nebula.Themes[name]
-                    Nebula:Notify({ Title = "Тема выбрана", Content = name .. " — перезапусти скрипт", Type = "info", Duration = 4 })
+                    Nebula:SetTheme(name)
+                    Nebula:Notify({ Title = "Тема", Content = name, Type = "success", Duration = 2 })
                 end,
             })
         end
         return tab
     end
-    
+
+    table.insert(Nebula.Windows, window)
     return window
 end
 
@@ -2547,139 +2819,123 @@ end
 -- PUBLIC API
 -- ═══════════════════════════════════════════════════════════════════════
 function Nebula:CreateWindow(cfg)
-    local w = buildWindow(cfg)
-    self.Window = w
-    return w
+    return buildWindow(cfg)
 end
 
-function Nebula:SetTheme(name)
-    if self.Themes[name] then
-        self.Theme = self.Themes[name]
-        self.ThemeName = name
+function Nebula:DestroyAll()
+    for _, w in ipairs(self.Windows) do
+        pcall(function() w:Destroy() end)
     end
+    self.Windows = {}
+    if RootGui then pcall(function() RootGui:Destroy() end) end
 end
 
-buildPalette()
-
-UserInputService.InputBegan:Connect(function(input, gp)
-    if gp then return end
-    if input.KeyCode == Enum.KeyCode.K and UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
-        if paletteOpen then closePalette() else openPalette() end
-    elseif input.KeyCode == Enum.KeyCode.Escape and paletteOpen then
-        closePalette()
-    end
-end)
 -- ═══════════════════════════════════════════════════════════════════════
--- AUTO-DEMO
+-- DEMO (отключается через _G.NEBULA_NO_DEMO = true)
 -- ═══════════════════════════════════════════════════════════════════════
-local function launchDemo()
-    print("[Nebula] Создание окна...")
-    
-    local DemoWindow = Nebula:CreateWindow({
-        Name = "Nebula Frame",
-        Subtitle = "v" .. Nebula.Version .. " · Mega Edition",
-    })
-    
-    local Main = DemoWindow:CreateTab({ Name = "🏠 Главная", Pinned = true })
-    Main:CreateSection("Приветствие")
-    Main:CreateButton({
-        Name = "Сказать Привет",
-        Description = "Проверка кнопки",
-        Callback = function()
-            Nebula:Notify({ Title = "Привет!", Content = "Кнопка работает ✔", Type = "success" })
-        end,
-    })
-    
-    Main:CreateSection("Интерактив")
-    Main:CreateToggle({
-        Name = "Демо тумблер",
-        Description = "Переключи меня",
-        CurrentValue = false,
-        Callback = function(v)
-            Nebula:Notify({
-                Title = "Тумблер",
-                Content = v and "Включено ✔" or "Выключено",
-                Type = v and "success" or "info",
-            })
-        end,
-    })
-    
-    Main:CreateSlider({
-        Name = "Демо слайдер",
-        Range = { 0, 100 },
-        Increment = 1,
-        CurrentValue = 50,
-        Callback = function(v) end,
-    })
-    
-    Main:CreateDropdown({
-        Name = "Демо Dropdown (с поиском)",
-        Options = { "Яблоко", "Банан", "Вишня", "Драконий фрукт", "Ежевика", "Киви", "Лимон", "Манго" },
-        CurrentOption = "Яблоко",
-        Callback = function(v)
-            Nebula:Notify({ Title = "Выбрано", Content = tostring(v), Type = "info", Duration = 2 })
-        end,
-    })
-    
-    Main:CreateInput({
-        Name = "Текстовое поле",
-        PlaceholderText = "Введи текст...",
-        Callback = function(text) end,
-    })
-    
-    Main:CreateKeybind({
-        Name = "Демо бинд (Q)",
-        CurrentKeybind = "Q",
-        Callback = function(state)
-            if state then
-                Nebula:Notify({ Title = "Бинд", Content = "Q нажат", Type = "info", Duration = 1.5 })
-            end
-        end,
-    })
-    
-    Main:CreateColorPicker({
-        Name = "Цвет (HSV-пикер)",
-        Color = Color3.fromRGB(150, 170, 255),
-        Callback = function(c) end,
-    })
-    
-    Main:CreateParagraph({
-        Title = "О фреймворке",
-        Text = "Nebula Frame v2.0 — минималистичная UI-библиотека. Нажми Ctrl+K для палитры команд. Правый Shift — скрыть/показать. Окно нельзя увести за экран.",
-    })
-    
-    local Utils = DemoWindow:CreateTab({ Name = "⚙ Утилиты" })
-    Utils:CreateSection("Уведомления")
-    Utils:CreateButton({ Name = "Info", Callback = function()
-        Nebula:Notify({ Title = "Info", Content = "Обычное уведомление", Type = "info" })
-    end })
-    Utils:CreateButton({ Name = "Success", Callback = function()
-        Nebula:Notify({ Title = "Успех", Content = "Всё работает!", Type = "success" })
-    end })
-    Utils:CreateButton({ Name = "Warning", Callback = function()
-        Nebula:Notify({ Title = "Внимание", Content = "Что-то не так", Type = "warning" })
-    end })
-    Utils:CreateButton({ Name = "Error", Callback = function()
-        Nebula:Notify({ Title = "Ошибка", Content = "Что-то сломалось", Type = "error" })
-    end })
-    
-    DemoWindow:CreateThemeTab()
-    
-    Nebula:Notify({
-        Title = "Nebula Frame v2.0 загружен",
-        Content = "Ctrl+K — команды · RightShift — скрыть",
-        Type = "success",
-        Duration = 6,
-    })
-    
-    print("[Nebula] Готово!")
-end
-
 if not _G.NEBULA_NO_DEMO then
     task.spawn(function()
-        local ok, err = pcall(launchDemo)
+        local ok, err = pcall(function()
+            local DemoWindow = Nebula:CreateWindow({
+                Name = "Nebula Frame",
+                Subtitle = "v" .. Nebula.Version .. " · " .. Nebula.Codename,
+            })
+
+            local Main = DemoWindow:CreateTab({ Name = "🏠  Главная", Pinned = true })
+
+            local sec1 = Main:CreateSection("Приветствие")
+            sec1:CreateButton({
+                Name = "Сказать Привет",
+                Description = "Проверка кнопки",
+                Callback = function()
+                    Nebula:Notify({ Title = "Привет!", Content = "Кнопка работает ✔", Type = "success" })
+                end,
+            })
+            sec1:CreateParagraph({
+                Title = "О фреймворке",
+                Text = "Nebula v3.0 — Aurora. Ctrl+K для палитры команд, RightShift чтобы скрыть UI. Окно нельзя увести за экран.",
+            })
+
+            local sec2 = Main:CreateSection("Интерактив")
+            sec2:CreateToggle({
+                Name = "Демо тумблер",
+                Description = "Переключи меня",
+                CurrentValue = false,
+                Callback = function(v)
+                    Nebula:Notify({
+                        Title = "Тумблер",
+                        Content = v and "Включено ✔" or "Выключено",
+                        Type = v and "success" or "info",
+                        Duration = 1.5,
+                    })
+                end,
+            }, "demo_toggle")
+
+            sec2:CreateSlider({
+                Name = "Демо слайдер",
+                Range = { 0, 100 },
+                Increment = 1,
+                CurrentValue = 50,
+                Callback = function(v) end,
+            }, "demo_slider")
+
+            sec2:CreateDropdown({
+                Name = "Фрукты (с поиском)",
+                Options = { "Яблоко", "Банан", "Вишня", "Драконий фрукт", "Ежевика", "Киви", "Лимон", "Манго", "Персик" },
+                CurrentOption = "Яблоко",
+                Callback = function(v)
+                    Nebula:Notify({ Title = "Выбрано", Content = tostring(v), Type = "info", Duration = 1.5 })
+                end,
+            }, "demo_dropdown")
+
+            sec2:CreateDropdown({
+                Name = "Мультивыбор",
+                Options = { "Alpha", "Beta", "Gamma", "Delta" },
+                MultipleOptions = true,
+                CurrentOption = { "Alpha" },
+                Callback = function(v) end,
+            }, "demo_multi")
+
+            sec2:CreateInput({
+                Name = "Текстовое поле",
+                PlaceholderText = "Введи текст...",
+                Callback = function(text) end,
+            }, "demo_input")
+
+            sec2:CreateKeybind({
+                Name = "Демо бинд",
+                CurrentKeybind = "Q",
+                Callback = function(state)
+                    if state then
+                        Nebula:Notify({ Title = "Бинд", Content = "Q нажат", Type = "info", Duration = 1 })
+                    end
+                end,
+            })
+
+            sec2:CreateColorPicker({
+                Name = "Цвет (HSV + HEX)",
+                Color = Color3.fromRGB(150, 170, 255),
+                Callback = function(c) end,
+            }, "demo_color")
+
+            local Utils = DemoWindow:CreateTab({ Name = "⚙  Утилиты" })
+            local secN = Utils:CreateSection("Уведомления")
+            secN:CreateButton({ Name = "Info",    Callback = function() Nebula:Notify({ Title = "Info",    Content = "Обычное уведомление", Type = "info" }) end })
+            secN:CreateButton({ Name = "Success", Callback = function() Nebula:Notify({ Title = "Успех",   Content = "Всё работает!", Type = "success" }) end })
+            secN:CreateButton({ Name = "Warning", Callback = function() Nebula:Notify({ Title = "Внимание", Content = "Что-то не так", Type = "warning" }) end })
+            secN:CreateButton({ Name = "Error",   Callback = function() Nebula:Notify({ Title = "Ошибка",  Content = "Что-то сломалось", Type = "error" }) end })
+
+            DemoWindow:CreateThemeTab()
+
+            Nebula:Notify({
+                Title = "Nebula v" .. Nebula.Version .. " загружен",
+                Content = "Ctrl+K — команды · RightShift — скрыть · Esc — закрыть палитру",
+                Type = "success",
+                Duration = 6,
+            })
+        end)
         if not ok then
-            warn("[Nebula] Ошибка:", err)
+            warn("[Nebula] Ошибка демо:", err)
         end
     end)
 end
