@@ -1,0 +1,48 @@
+local Nebula = loadstring(game:HttpGet("ССЫЛКА_НА_ТВОЙ_NebulaFrame.lua"))()
+
+local Window = Nebula:CreateWindow({
+    Name = "Forsaken Surge",
+    Subtitle = "v13.0 · Nebula Frame Edition",
+    ConfigFolder = "ForsakenSurge",
+})
+
+-- Главный таб
+local MainTab = Window:CreateTab({ Name = "Main", Pinned = true })
+MainTab:CreateSection("Движение")
+MainTab:CreateToggle({
+    Name = "Turbo Mode",
+    Description = "Скорость x10",
+    CurrentValue = false,
+    Callback = function(v) print("Turbo:", v) end,
+})
+MainTab:CreateSlider({
+    Name = "Walk Speed",
+    Range = { 16, 300 },
+    Increment = 1,
+    CurrentValue = 16,
+    Callback = function(v) 
+        local h = game.Players.LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if h then h.WalkSpeed = v end
+    end,
+})
+
+-- Таб телепорта
+local TPTab = Window:CreateTab({ Name = "Teleport" })
+TPTab:CreateSection("Smart TP")
+TPTab:CreateButton({
+    Name = "Телепорт в дальнюю точку",
+    Callback = function()
+        Nebula:Notify({ Title = "TP", Content = "Телепорт выполнен", Type = "success" })
+    end,
+})
+
+-- Таб темы (автоматически создаст пресеты)
+Window:CreateThemeTab()
+
+-- Уведомление
+Nebula:Notify({
+    Title = "Добро пожаловать!",
+    Content = "Nebula Frame загружен. Ctrl+K — палитра, RightShift — скрыть UI.",
+    Type = "success",
+    Duration = 5,
+})
