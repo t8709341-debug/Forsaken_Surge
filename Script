@@ -5,7 +5,7 @@ local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-S
 -- ==========================================
 local Window = Luna:CreateWindow({
     Name = "Forsaken Surge",
-    Subtitle = "v10.0 | VELOCITY + TURBO + WALL WALK + ESP PRO",
+    Subtitle = "v11.0 | WALL WALK + TURBO + FLY + NOCLIP + ESP PRO + WAYPOINTS",
     LogoID = nil,
     LoadingEnabled = true,
     LoadingTitle = "Forsaken Surge",
@@ -27,6 +27,7 @@ local Workspace = game:GetService("Workspace")
 local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
 local Debris = game:GetService("Debris")
+local Lighting = game:GetService("Lighting")
 local Camera = Workspace.CurrentCamera
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -97,7 +98,6 @@ local DefaultSettings = {
     ITEMS_COLOR = "Gold",
     SHOW_TEXT = true,
     
-    -- ESP ADVANCED
     ESP_UPDATE_INTERVAL = 0.1,
     ESP_MAX_DISTANCE = 500,
     ESP_MIN_DISTANCE = 10,
@@ -117,10 +117,7 @@ local DefaultSettings = {
     ESP_TRACER_ENABLED = false,
     ESP_TRACER_COLOR = "White",
     ESP_TRACER_TRANSPARENCY = 0.5,
-    ESP_HEALTH_ENABLED = false,
-    ESP_HEALTH_COLOR = "Green",
     
-    -- ESP COLOR CUSTOMIZATION
     KILLERS_COLOR_CUSTOM = false,
     KILLERS_COLOR_R = 255,
     KILLERS_COLOR_G = 0,
@@ -150,6 +147,12 @@ local DefaultSettings = {
     TURBO_SPEED_MAX = 400,
     FLY_SPEED_MAX = 400,
     FLY_MAX_SPEED_MAX = 800,
+    
+    -- FULLBRIGHT
+    FULLBRIGHT_ENABLED = false,
+    FULLBRIGHT_BRIGHTNESS = 3,
+    FULLBRIGHT_CLOCKTIME = 12,
+    FULLBRIGHT_REMOVE_FOG = true,
 }
 
 function LoadSettings()
@@ -175,7 +178,7 @@ end
 local settings = LoadSettings()
 
 -- ==========================================
--- ФУНКЦИЯ ДЛЯ ПОЛУЧЕНИЯ МАКСИМАЛЬНЫХ ЗНАЧЕНИЙ
+-- MAX VALUES
 -- ==========================================
 local function getMaxValue(key, defaultMax)
     if settings.UNLIMITED_MODE then
@@ -210,6 +213,8 @@ local isSprinting = false
 local isOnCeiling = false
 local ceilingTime = 0
 local flyVelocity = Vector3.new(0, 0, 0)
+local fullbrightActive = false
+local savedLighting = nil
 
 local rayParams = RaycastParams.new()
 rayParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -259,9 +264,8 @@ local function disableAllModes(except)
 end
 
 -- ==========================================
--- ESP SYSTEM (EXPANDED)
+-- ESP SYSTEM
 -- ==========================================
-
 local ColorPresets = {
     ["White"] = Color3.fromRGB(255,255,255),
     ["Teal"] = Color3.fromRGB(3,252,157),
@@ -305,8 +309,6 @@ local function getColorFromSettings(colorType)
         return ColorPresets[settings.ESP_BOX_COLOR] or ColorPresets.White
     elseif colorType == "Tracer" then
         return ColorPresets[settings.ESP_TRACER_COLOR] or ColorPresets.White
-    elseif colorType == "Health" then
-        return ColorPresets[settings.ESP_HEALTH_COLOR] or ColorPresets.Green
     end
     return Color3.new(1,1,1)
 end
@@ -322,26 +324,17 @@ local espTracers = {}
 local espTracked = {}
 
 local function clearAllESP()
-    for _, hl in ipairs(espHighlights) do
-        pcall(function() hl:Destroy() end)
-    end
+    for _, hl in ipairs(espHighlights) do pcall(function() hl:Destroy() end) end
     espHighlights = {}
-    for _, bg in ipairs(espBillboards) do
-        pcall(function() bg:Destroy() end)
-    end
+    for _, bg in ipairs(espBillboards) do pcall(function() bg:Destroy() end) end
     espBillboards = {}
-    for _, box in ipairs(espBoxes) do
-        pcall(function() box:Destroy() end)
-    end
+    for _, box in ipairs(espBoxes) do pcall(function() box:Destroy() end) end
     espBoxes = {}
-    for _, tr in ipairs(espTracers) do
-        pcall(function() tr:Destroy() end)
-    end
+    for _, tr in ipairs(espTracers) do pcall(function() tr:Destroy() end) end
     espTracers = {}
     espTracked = {}
 end
 
--- Создание/обновление Highlight
 local function UpdateHighlight(ItemInstance, TargetRoot, Settings)
     Settings = type(Settings) == "table" and Settings or {
         MaxDistance = settings.ESP_MAX_DISTANCE,
@@ -386,7 +379,6 @@ local function UpdateHighlight(ItemInstance, TargetRoot, Settings)
     end
 end
 
--- Создание/обновление текста
 local function UpdateText(ItemInstance, TargetRoot, Settings)
     Settings = type(Settings) == "table" and Settings or {
         MinDistance = settings.ESP_TEXT_MIN_DISTANCE,
@@ -454,11 +446,8 @@ local function UpdateText(ItemInstance, TargetRoot, Settings)
     end
 end
 
--- Создание/обновление Box ESP
 local function UpdateBox(ItemInstance, TargetRoot, Settings)
-    Settings = type(Settings) == "table" and Settings or {
-        Color = Color3.new(1,1,1)
-    }
+    Settings = type(Settings) == "table" and Settings or { Color = Color3.new(1,1,1) }
     
     local entry = espTracked[ItemInstance]
     local Box = entry and entry.box
@@ -487,11 +476,8 @@ local function UpdateBox(ItemInstance, TargetRoot, Settings)
     end
 end
 
--- Создание/обновление Tracer (линия от низа экрана к цели)
 local function UpdateTracer(ItemInstance, TargetRoot, Settings)
-    Settings = type(Settings) == "table" and Settings or {
-        Color = Color3.new(1,1,1)
-    }
+    Settings = type(Settings) == "table" and Settings or { Color = Color3.new(1,1,1) }
     
     local entry = espTracked[ItemInstance]
     local Tracer = entry and entry.tracer
@@ -520,7 +506,6 @@ local function UpdateTracer(ItemInstance, TargetRoot, Settings)
     end
 end
 
--- Удаление ESP для объекта
 local function RemoveESP(ItemInstance)
     local entry = espTracked[ItemInstance]
     if entry then
@@ -532,7 +517,6 @@ local function RemoveESP(ItemInstance)
     end
 end
 
--- ESP Update Loop (с настраиваемым интервалом)
 task.spawn(function()
     while true do
         task.wait(settings.ESP_UPDATE_INTERVAL)
@@ -565,8 +549,6 @@ task.spawn(function()
                             UpdateHighlight(char, TargetRoot, {MaxDistance = settings.ESP_MAX_DISTANCE, MinDistance = settings.ESP_MIN_DISTANCE, Color = color})
                             if settings.SHOW_TEXT then
                                 UpdateText(char, TargetRoot, {MinDistance = settings.ESP_TEXT_MIN_DISTANCE, Text = plr.Name, Color = color})
-                            else
-                                RemoveESP(char)
                             end
                             if settings.ESP_BOX_ENABLED then
                                 UpdateBox(char, TargetRoot, {Color = getColorFromSettings("Box")})
@@ -580,8 +562,6 @@ task.spawn(function()
                             UpdateHighlight(char, TargetRoot, {MaxDistance = settings.ESP_MAX_DISTANCE, MinDistance = settings.ESP_MIN_DISTANCE, Color = color})
                             if settings.SHOW_TEXT then
                                 UpdateText(char, TargetRoot, {MinDistance = settings.ESP_TEXT_MIN_DISTANCE, Text = plr.Name, Color = color})
-                            else
-                                RemoveESP(char)
                             end
                             if settings.ESP_BOX_ENABLED then
                                 UpdateBox(char, TargetRoot, {Color = getColorFromSettings("Box")})
@@ -641,7 +621,6 @@ task.spawn(function()
                 end
             end
             
-            -- Очистка мёртвых ESP
             for inst, _ in pairs(espTracked) do
                 if not alive[inst] or not inst.Parent then
                     RemoveESP(inst)
@@ -659,7 +638,6 @@ end)
 -- ==========================================
 -- HELPER FUNCTIONS
 -- ==========================================
-
 local function projectToPlane(v, n)
     return v - n * v:Dot(n)
 end
@@ -687,13 +665,15 @@ end
 
 local function showNotification(title, text)
     if not settings.NOTIFICATIONS_ENABLED then return end
+    pcall(function()
+        Luna:Notify({ Title = title, Description = text, Duration = 3 })
+    end)
     print(string.format("[%s] %s", title, text))
 end
 
 -- ==========================================
 -- WALL WALK
 -- ==========================================
-
 local function toggleClimb()
     if flying or noClipActive or turboActive then
         disableAllModes("climb")
@@ -713,7 +693,7 @@ local function toggleClimb()
         gravityDir = -upDir
         isOnCeiling = false
         ceilingTime = 0
-        showNotification("🕷️ Ходьба", "Включена")
+        showNotification("🕷️ Wall Walk", "Включена")
     else
         humanoid.AutoRotate = true
         humanoid.PlatformStand = false
@@ -726,7 +706,7 @@ local function toggleClimb()
         if hrp then
             hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + facing)
         end
-        showNotification("🕷️ Ходьба", "Выключена")
+        showNotification("🕷️ Wall Walk", "Выключена")
     end
 end
 
@@ -749,7 +729,7 @@ local function toggleFly()
         humanoid.PlatformStand = true
         if hrp then hrp.AssemblyLinearVelocity = Vector3.zero end
         flyVelocity = Vector3.zero
-        showNotification("✈️ Полёт", "Активирован")
+        showNotification("✈️ Fly", "Активирован")
     else
         humanoid.AutoRotate = true
         humanoid.PlatformStand = false
@@ -757,7 +737,7 @@ local function toggleFly()
         flyVelocity = Vector3.zero
         gravityDir = Vector3.new(0, -1, 0)
         upDir = Vector3.new(0, 1, 0)
-        showNotification("✈️ Полёт", "Деактивирован")
+        showNotification("✈️ Fly", "Деактивирован")
     end
 end
 
@@ -791,7 +771,7 @@ local function toggleNoClip()
         
         hrp.AssemblyLinearVelocity = Vector3.zero
         hrp.AssemblyAngularVelocity = Vector3.zero
-        showNotification("🌀 Ноуклип", "Активирован")
+        showNotification("🌀 No Clip", "Активирован")
     else
         for _, part in ipairs(character:GetDescendants()) do
             if part:IsA("BasePart") and part.Name ~= "NoclipDetector" then
@@ -800,7 +780,7 @@ local function toggleNoClip()
         end
         gravityDir = Vector3.new(0, -1, 0)
         upDir = Vector3.new(0, 1, 0)
-        showNotification("🌀 Ноуклип", "Деактивирован")
+        showNotification("🌀 No Clip", "Деактивирован")
     end
 end
 
@@ -823,10 +803,10 @@ local function toggleTurbo()
         humanoid.AutoRotate = true
         humanoid.PlatformStand = false
         humanoid.WalkSpeed = 16
-        showNotification("⚡ Турбо", "Активирован")
+        showNotification("⚡ Turbo", "Активирован")
     else
         if hrp then hrp.AssemblyLinearVelocity = Vector3.zero end
-        showNotification("⚡ Турбо", "Деактивирован")
+        showNotification("⚡ Turbo", "Деактивирован")
     end
 end
 
@@ -883,20 +863,16 @@ local function removeKillerWalls()
     
     for _, path in ipairs(paths) do
         local current = Workspace
-        local success = true
         local parts = {}
-        
         for part in string.gmatch(path, "[^%.]+") do
             table.insert(parts, part)
         end
         
+        local success = true
         for _, partName in ipairs(parts) do
             if current then
                 current = current:FindFirstChild(partName)
-                if not current then
-                    success = false
-                    break
-                end
+                if not current then success = false break end
             else
                 success = false
                 break
@@ -925,6 +901,238 @@ task.spawn(function()
 end)
 
 -- ==========================================
+-- WAYPOINT SYSTEM 📍
+-- ==========================================
+local waypoints = {}
+local MAX_WAYPOINTS = 8
+local WaypointFolder = MyDataFolder .. "/Waypoints"
+if not isfolder(WaypointFolder) then
+    makefolder(WaypointFolder)
+end
+
+local function saveWaypoints()
+    local data = {}
+    for i, wp in ipairs(waypoints) do
+        data[i] = {
+            Name = wp.Name,
+            Position = {wp.Position.X, wp.Position.Y, wp.Position.Z}
+        }
+    end
+    pcall(function()
+        writefile(WaypointFolder .. "/wp_" .. tostring(game.PlaceId) .. ".json", HttpService:JSONEncode(data))
+    end)
+end
+
+local function loadWaypoints()
+    local path = WaypointFolder .. "/wp_" .. tostring(game.PlaceId) .. ".json"
+    if isfile(path) then
+        local ok, data = pcall(HttpService.JSONDecode, HttpService, readfile(path))
+        if ok and type(data) == "table" then
+            waypoints = {}
+            for _, wp in ipairs(data) do
+                if wp.Position and #wp.Position == 3 then
+                    table.insert(waypoints, {
+                        Name = wp.Name or "WP",
+                        Position = Vector3.new(wp.Position[1], wp.Position[2], wp.Position[3])
+                    })
+                end
+            end
+        end
+    end
+end
+
+loadWaypoints()
+
+local waypointBeacons = {}
+
+local function createBeacon(position, name, color)
+    local part = Instance.new("Part")
+    part.Name = "ForsakenSurge_WP"
+    part.Shape = Enum.PartType.Ball
+    part.Size = Vector3.new(2, 2, 2)
+    part.Position = position
+    part.Anchored = true
+    part.CanCollide = false
+    part.CanQuery = false
+    part.CanTouch = false
+    part.Material = Enum.Material.Neon
+    part.Color = color or Color3.fromRGB(255, 100, 255)
+    part.Transparency = 0.3
+    part.Parent = Workspace
+    
+    local bg = Instance.new("BillboardGui")
+    bg.Size = UDim2.new(0, 150, 0, 40)
+    bg.StudsOffset = Vector3.new(0, 2.5, 0)
+    bg.AlwaysOnTop = true
+    bg.Parent = part
+    
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.fromScale(1, 1)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = "📍 " .. name
+    lbl.TextColor3 = color or Color3.fromRGB(255, 100, 255)
+    lbl.TextStrokeTransparency = 0
+    lbl.TextScaled = true
+    lbl.Font = Enum.Font.GothamBold
+    lbl.Parent = bg
+    
+    task.spawn(function()
+        local t0 = tick()
+        while part.Parent do
+            local t = tick() - t0
+            part.CFrame = CFrame.new(position + Vector3.new(0, math.sin(t * 2) * 0.5, 0))
+            part.Orientation = Vector3.new(0, t * 90, 0)
+            task.wait()
+        end
+    end)
+    
+    return part
+end
+
+local function refreshBeacons()
+    for _, b in ipairs(waypointBeacons) do
+        pcall(function() b:Destroy() end)
+    end
+    waypointBeacons = {}
+    for i, wp in ipairs(waypoints) do
+        local hue = (i - 1) / math.max(MAX_WAYPOINTS, 1)
+        local color = Color3.fromHSV(hue, 0.8, 1)
+        table.insert(waypointBeacons, createBeacon(wp.Position, wp.Name, color))
+    end
+end
+
+local function addWaypoint(name)
+    if not hrp then
+        updateCharacterReferences()
+        if not hrp then return end
+    end
+    if #waypoints >= MAX_WAYPOINTS then
+        showNotification("📍 Waypoint", "Максимум " .. MAX_WAYPOINTS .. " точек!")
+        return
+    end
+    table.insert(waypoints, {
+        Name = name or ("WP" .. (#waypoints + 1)),
+        Position = hrp.Position
+    })
+    saveWaypoints()
+    refreshBeacons()
+    showNotification("📍 Waypoint", "Сохранён: " .. (name or ("WP" .. #waypoints)))
+end
+
+local function removeWaypoint(index)
+    if waypoints[index] then
+        table.remove(waypoints, index)
+        saveWaypoints()
+        refreshBeacons()
+        showNotification("📍 Waypoint", "Удалён #" .. index)
+    end
+end
+
+local function teleportToWaypoint(index)
+    if not waypoints[index] then return end
+    if not hrp then
+        updateCharacterReferences()
+        if not hrp then return end
+    end
+    local wp = waypoints[index]
+    hrp.CFrame = CFrame.new(wp.Position + Vector3.new(0, 3, 0))
+    hrp.AssemblyLinearVelocity = Vector3.zero
+    showNotification("📍 Waypoint", "ТП → " .. wp.Name)
+end
+
+local function teleportToPlayer(targetName)
+    local target
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player and plr.Name:lower():find(targetName:lower(), 1, true) then
+            target = plr
+            break
+        end
+    end
+    if not target then
+        showNotification("📍 TP", "Игрок не найден: " .. targetName)
+        return
+    end
+    if not target.Character or not target.Character:FindFirstChild("HumanoidRootPart") then
+        showNotification("📍 TP", "У игрока нет персонажа")
+        return
+    end
+    if not hrp then return end
+    
+    local targetPos = target.Character.HumanoidRootPart.Position
+    hrp.CFrame = CFrame.new(targetPos + Vector3.new(0, 3, 0))
+    hrp.AssemblyLinearVelocity = Vector3.zero
+    showNotification("📍 TP", "ТП → " .. target.Name)
+end
+
+refreshBeacons()
+
+-- ==========================================
+-- FULLBRIGHT ☀️
+-- ==========================================
+local function enableFullbright()
+    savedLighting = {
+        Ambient = Lighting.Ambient,
+        OutdoorAmbient = Lighting.OutdoorAmbient,
+        Brightness = Lighting.Brightness,
+        ClockTime = Lighting.ClockTime,
+        FogEnd = Lighting.FogEnd,
+        FogStart = Lighting.FogStart,
+        GlobalShadows = Lighting.GlobalShadows,
+        EnvironmentDiffuseScale = Lighting.EnvironmentDiffuseScale,
+        EnvironmentSpecularScale = Lighting.EnvironmentSpecularScale,
+        ExposureCompensation = Lighting.ExposureCompensation,
+        ColorShift_Top = Lighting.ColorShift_Top,
+        ColorShift_Bottom = Lighting.ColorShift_Bottom,
+    }
+    
+    Lighting.Ambient = Color3.fromRGB(255, 255, 255)
+    Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+    Lighting.Brightness = settings.FULLBRIGHT_BRIGHTNESS
+    Lighting.ClockTime = settings.FULLBRIGHT_CLOCKTIME
+    Lighting.GlobalShadows = false
+    Lighting.EnvironmentDiffuseScale = 0
+    Lighting.EnvironmentSpecularScale = 0
+    Lighting.ExposureCompensation = 1
+    Lighting.ColorShift_Top = Color3.new(0,0,0)
+    Lighting.ColorShift_Bottom = Color3.new(0,0,0)
+    
+    if settings.FULLBRIGHT_REMOVE_FOG then
+        Lighting.FogEnd = 100000
+        Lighting.FogStart = 100000
+    end
+    
+    for _, child in ipairs(Lighting:GetChildren()) do
+        if child:IsA("Atmosphere") 
+        or child:IsA("BloomEffect") 
+        or child:IsA("BlurEffect")
+        or child:IsA("ColorCorrectionEffect")
+        or child:IsA("SunRaysEffect")
+        or child:IsA("DepthOfFieldEffect") then
+            pcall(function() child.Enabled = false end)
+        end
+    end
+end
+
+local function disableFullbright()
+    if savedLighting then
+        for k, v in pairs(savedLighting) do
+            pcall(function() Lighting[k] = v end)
+        end
+    end
+end
+
+local function toggleFullbright()
+    fullbrightActive = not fullbrightActive
+    if fullbrightActive then
+        enableFullbright()
+        showNotification("☀️ Fullbright", "Включён")
+    else
+        disableFullbright()
+        showNotification("☀️ Fullbright", "Выключен")
+    end
+end
+
+-- ==========================================
 -- INPUT HANDLING
 -- ==========================================
 UserInputService.InputBegan:Connect(function(input, gp)
@@ -935,6 +1143,10 @@ UserInputService.InputBegan:Connect(function(input, gp)
     if input.KeyCode == Enum.KeyCode.V then toggleFly() end
     if input.KeyCode == Enum.KeyCode.B then toggleNoClip() end
     if input.KeyCode == Enum.KeyCode.Z then toggleTurbo() end
+    if input.KeyCode == Enum.KeyCode.F then toggleFullbright() end
+    if input.KeyCode == Enum.KeyCode.P then addWaypoint("WP" .. (#waypoints + 1)) end
+    if input.KeyCode == Enum.KeyCode.L then removeWaypoint(#waypoints) end
+    if input.KeyCode == Enum.KeyCode.T then teleportToWaypoint(1) end
     if input.KeyCode == Enum.KeyCode.LeftShift then isSprinting = true end
 end)
 
@@ -947,7 +1159,6 @@ end)
 -- ==========================================
 -- LUNA INTERFACE
 -- ==========================================
-
 Window:CreateHomeTab({
     SupportedExecutors = {"Synapse X", "Krnl", "ScriptWare", "Fluxus", "Oxygen U"},
     DiscordInvite = "forsakensurge",
@@ -973,7 +1184,7 @@ WallWalkTab:CreateToggle({
     Callback = function(Value)
         settings.UNLIMITED_MODE = Value
         SaveSettings(settings)
-        showNotification("⚡ Безграничный режим", Value and "Включен! Все лимиты увеличены" or "Выключен")
+        showNotification("⚡ Unlimited", Value and "Включен!" or "Выключен")
     end
 })
 
@@ -1087,9 +1298,7 @@ WallWalkTab:CreateToggle({
     end
 })
 
--- ==========================================
--- ESP TAB (EXPANDED)
--- ==========================================
+-- ESP TAB
 local ESPTab = Window:CreateTab({
     Name = "ESP",
     Icon = "visibility",
@@ -1099,7 +1308,7 @@ local ESPTab = Window:CreateTab({
 
 ESPTab:CreateParagraph({
     Title = "ADVANCED ESP PRO",
-    Text = "Полная настройка подсветки, интервалов и стилей"
+    Text = "Полная настройка подсветки"
 })
 
 ESPTab:CreateToggle({
@@ -1137,7 +1346,7 @@ ESPTab:CreateSlider({
 })
 
 ESPTab:CreateSlider({
-    Name = "Минимальная дистанция (полная яркость)",
+    Name = "Минимальная дистанция",
     Range = {1, 100},
     Increment = 1,
     CurrentValue = settings.ESP_MIN_DISTANCE,
@@ -1157,7 +1366,7 @@ ESPTab:CreateToggle({
 })
 
 ESPTab:CreateSlider({
-    Name = "Минимальная яркость (альфа)",
+    Name = "Минимальная яркость",
     Range = {0.0, 1.0},
     Increment = 0.05,
     CurrentValue = settings.ESP_FADE_MIN_ALPHA,
@@ -1170,7 +1379,7 @@ ESPTab:CreateSlider({
 ESPTab:CreateLabel({ Text = "🎨 ПРОЗРАЧНОСТЬ", Style = 1 })
 
 ESPTab:CreateSlider({
-    Name = "Прозрачность заливки (Fill)",
+    Name = "Прозрачность заливки",
     Range = {0.0, 1.0},
     Increment = 0.05,
     CurrentValue = settings.ESP_FILL_TRANSPARENCY,
@@ -1181,7 +1390,7 @@ ESPTab:CreateSlider({
 })
 
 ESPTab:CreateSlider({
-    Name = "Прозрачность контура (Outline)",
+    Name = "Прозрачность контура",
     Range = {0.0, 1.0},
     Increment = 0.05,
     CurrentValue = settings.ESP_OUTLINE_TRANSPARENCY,
@@ -1213,30 +1422,8 @@ ESPTab:CreateSlider({
     end
 })
 
-ESPTab:CreateSlider({
-    Name = "Мин. дистанция текста",
-    Range = {1, 100},
-    Increment = 1,
-    CurrentValue = settings.ESP_TEXT_MIN_DISTANCE,
-    Callback = function(Value)
-        settings.ESP_TEXT_MIN_DISTANCE = Value
-        SaveSettings(settings)
-    end
-})
-
-ESPTab:CreateSlider({
-    Name = "Макс. дистанция текста",
-    Range = {100, 5000},
-    Increment = 50,
-    CurrentValue = settings.ESP_TEXT_MAX_DISTANCE,
-    Callback = function(Value)
-        settings.ESP_TEXT_MAX_DISTANCE = Value
-        SaveSettings(settings)
-    end
-})
-
 ESPTab:CreateToggle({
-    Name = "Показывать дистанцию в тексте",
+    Name = "Показывать дистанцию",
     CurrentValue = settings.ESP_SHOW_DISTANCE_TEXT,
     Callback = function(Value)
         settings.ESP_SHOW_DISTANCE_TEXT = Value
@@ -1244,7 +1431,7 @@ ESPTab:CreateToggle({
     end
 })
 
-ESPTab:CreateLabel({ Text = "📦 BOX ESP", Style = 1 })
+ESPTab:CreateLabel({ Text = "📦 BOX / 📏 TRACER", Style = 1 })
 
 ESPTab:CreateToggle({
     Name = "Включить Box ESP",
@@ -1255,30 +1442,6 @@ ESPTab:CreateToggle({
     end
 })
 
-ESPTab:CreateDropdown({
-    Name = "Цвет Box",
-    Options = {"White", "Red", "Green", "Blue", "Cyan", "Gold", "Purple", "Orange", "Pink", "Lime", "Magenta", "Yellow"},
-    CurrentOption = {settings.ESP_BOX_COLOR or "White"},
-    MultipleOptions = false,
-    Callback = function(Options)
-        settings.ESP_BOX_COLOR = Options
-        SaveSettings(settings)
-    end
-})
-
-ESPTab:CreateSlider({
-    Name = "Прозрачность Box",
-    Range = {0.0, 1.0},
-    Increment = 0.05,
-    CurrentValue = settings.ESP_BOX_TRANSPARENCY,
-    Callback = function(Value)
-        settings.ESP_BOX_TRANSPARENCY = Value
-        SaveSettings(settings)
-    end
-})
-
-ESPTab:CreateLabel({ Text = "📏 TRACER", Style = 1 })
-
 ESPTab:CreateToggle({
     Name = "Включить Tracer",
     CurrentValue = settings.ESP_TRACER_ENABLED,
@@ -1288,32 +1451,10 @@ ESPTab:CreateToggle({
     end
 })
 
-ESPTab:CreateDropdown({
-    Name = "Цвет Tracer",
-    Options = {"White", "Red", "Green", "Blue", "Cyan", "Gold", "Purple", "Orange", "Pink", "Lime", "Magenta", "Yellow"},
-    CurrentOption = {settings.ESP_TRACER_COLOR or "White"},
-    MultipleOptions = false,
-    Callback = function(Options)
-        settings.ESP_TRACER_COLOR = Options
-        SaveSettings(settings)
-    end
-})
-
-ESPTab:CreateSlider({
-    Name = "Прозрачность Tracer",
-    Range = {0.0, 1.0},
-    Increment = 0.05,
-    CurrentValue = settings.ESP_TRACER_TRANSPARENCY,
-    Callback = function(Value)
-        settings.ESP_TRACER_TRANSPARENCY = Value
-        SaveSettings(settings)
-    end
-})
-
 ESPTab:CreateLabel({ Text = "🎯 ФИЛЬТРЫ", Style = 1 })
 
 ESPTab:CreateToggle({
-    Name = "Проверять команду (Team Check)",
+    Name = "Team Check",
     CurrentValue = settings.ESP_TEAM_CHECK,
     Callback = function(Value)
         settings.ESP_TEAM_CHECK = Value
@@ -1344,48 +1485,6 @@ ESPTab:CreateDropdown({
 })
 
 ESPTab:CreateToggle({
-    Name = "Killers Custom Color",
-    CurrentValue = settings.KILLERS_COLOR_CUSTOM,
-    Callback = function(Value)
-        settings.KILLERS_COLOR_CUSTOM = Value
-        SaveSettings(settings)
-    end
-})
-
-ESPTab:CreateSlider({
-    Name = "Killers R",
-    Range = {0, 255},
-    Increment = 1,
-    CurrentValue = settings.KILLERS_COLOR_R,
-    Callback = function(Value)
-        settings.KILLERS_COLOR_R = Value
-        SaveSettings(settings)
-    end
-})
-
-ESPTab:CreateSlider({
-    Name = "Killers G",
-    Range = {0, 255},
-    Increment = 1,
-    CurrentValue = settings.KILLERS_COLOR_G,
-    Callback = function(Value)
-        settings.KILLERS_COLOR_G = Value
-        SaveSettings(settings)
-    end
-})
-
-ESPTab:CreateSlider({
-    Name = "Killers B",
-    Range = {0, 255},
-    Increment = 1,
-    CurrentValue = settings.KILLERS_COLOR_B,
-    Callback = function(Value)
-        settings.KILLERS_COLOR_B = Value
-        SaveSettings(settings)
-    end
-})
-
-ESPTab:CreateToggle({
     Name = "Survivors ESP",
     CurrentValue = settings.SURVIVORS_ESP,
     Callback = function(Value)
@@ -1396,53 +1495,11 @@ ESPTab:CreateToggle({
 
 ESPTab:CreateDropdown({
     Name = "Survivors Color",
-    Options = {"Green", "Orange", "Purple", "Gold", "White", "Cyan", "Lime", "Teal"},
+    Options = {"Green", "Cyan", "Blue", "Lime", "Teal", "White", "Yellow"},
     CurrentOption = {settings.SURVIVORS_COLOR or "Green"},
     MultipleOptions = false,
     Callback = function(Options)
         settings.SURVIVORS_COLOR = Options
-        SaveSettings(settings)
-    end
-})
-
-ESPTab:CreateToggle({
-    Name = "Survivors Custom Color",
-    CurrentValue = settings.SURVIVORS_COLOR_CUSTOM,
-    Callback = function(Value)
-        settings.SURVIVORS_COLOR_CUSTOM = Value
-        SaveSettings(settings)
-    end
-})
-
-ESPTab:CreateSlider({
-    Name = "Survivors R",
-    Range = {0, 255},
-    Increment = 1,
-    CurrentValue = settings.SURVIVORS_COLOR_R,
-    Callback = function(Value)
-        settings.SURVIVORS_COLOR_R = Value
-        SaveSettings(settings)
-    end
-})
-
-ESPTab:CreateSlider({
-    Name = "Survivors G",
-    Range = {0, 255},
-    Increment = 1,
-    CurrentValue = settings.SURVIVORS_COLOR_G,
-    Callback = function(Value)
-        settings.SURVIVORS_COLOR_G = Value
-        SaveSettings(settings)
-    end
-})
-
-ESPTab:CreateSlider({
-    Name = "Survivors B",
-    Range = {0, 255},
-    Increment = 1,
-    CurrentValue = settings.SURVIVORS_COLOR_B,
-    Callback = function(Value)
-        settings.SURVIVORS_COLOR_B = Value
         SaveSettings(settings)
     end
 })
@@ -1458,59 +1515,6 @@ ESPTab:CreateToggle({
     end
 })
 
-ESPTab:CreateDropdown({
-    Name = "Generators Color",
-    Options = {"Cyan", "Blue", "Green", "Orange", "Purple", "Gold", "Teal", "White"},
-    CurrentOption = {settings.GENERATORS_COLOR or "Cyan"},
-    MultipleOptions = false,
-    Callback = function(Options)
-        settings.GENERATORS_COLOR = Options
-        SaveSettings(settings)
-    end
-})
-
-ESPTab:CreateToggle({
-    Name = "Generators Custom Color",
-    CurrentValue = settings.GENERATORS_COLOR_CUSTOM,
-    Callback = function(Value)
-        settings.GENERATORS_COLOR_CUSTOM = Value
-        SaveSettings(settings)
-    end
-})
-
-ESPTab:CreateSlider({
-    Name = "Generators R",
-    Range = {0, 255},
-    Increment = 1,
-    CurrentValue = settings.GENERATORS_COLOR_R,
-    Callback = function(Value)
-        settings.GENERATORS_COLOR_R = Value
-        SaveSettings(settings)
-    end
-})
-
-ESPTab:CreateSlider({
-    Name = "Generators G",
-    Range = {0, 255},
-    Increment = 1,
-    CurrentValue = settings.GENERATORS_COLOR_G,
-    Callback = function(Value)
-        settings.GENERATORS_COLOR_G = Value
-        SaveSettings(settings)
-    end
-})
-
-ESPTab:CreateSlider({
-    Name = "Generators B",
-    Range = {0, 255},
-    Increment = 1,
-    CurrentValue = settings.GENERATORS_COLOR_B,
-    Callback = function(Value)
-        settings.GENERATORS_COLOR_B = Value
-        SaveSettings(settings)
-    end
-})
-
 ESPTab:CreateToggle({
     Name = "Items ESP",
     CurrentValue = settings.ITEMS_ESP,
@@ -1519,61 +1523,6 @@ ESPTab:CreateToggle({
         SaveSettings(settings)
     end
 })
-
-ESPTab:CreateDropdown({
-    Name = "Items Color",
-    Options = {"Gold", "Cyan", "Purple", "White", "Teal", "Orange", "Pink", "Yellow"},
-    CurrentOption = {settings.ITEMS_COLOR or "Gold"},
-    MultipleOptions = false,
-    Callback = function(Options)
-        settings.ITEMS_COLOR = Options
-        SaveSettings(settings)
-    end
-})
-
-ESPTab:CreateToggle({
-    Name = "Items Custom Color",
-    CurrentValue = settings.ITEMS_COLOR_CUSTOM,
-    Callback = function(Value)
-        settings.ITEMS_COLOR_CUSTOM = Value
-        SaveSettings(settings)
-    end
-})
-
-ESPTab:CreateSlider({
-    Name = "Items R",
-    Range = {0, 255},
-    Increment = 1,
-    CurrentValue = settings.ITEMS_COLOR_R,
-    Callback = function(Value)
-        settings.ITEMS_COLOR_R = Value
-        SaveSettings(settings)
-    end
-})
-
-ESPTab:CreateSlider({
-    Name = "Items G",
-    Range = {0, 255},
-    Increment = 1,
-    CurrentValue = settings.ITEMS_COLOR_G,
-    Callback = function(Value)
-        settings.ITEMS_COLOR_G = Value
-        SaveSettings(settings)
-    end
-})
-
-ESPTab:CreateSlider({
-    Name = "Items B",
-    Range = {0, 255},
-    Increment = 1,
-    CurrentValue = settings.ITEMS_COLOR_B,
-    Callback = function(Value)
-        settings.ITEMS_COLOR_B = Value
-        SaveSettings(settings)
-    end
-})
-
-ESPTab:CreateLabel({ Text = "🔧 ГЛУБИНА ОТРИСОВКИ", Style = 1 })
 
 ESPTab:CreateDropdown({
     Name = "Режим глубины Highlight",
@@ -1596,20 +1545,15 @@ local TurboTab = Window:CreateTab({
 
 TurboTab:CreateParagraph({
     Title = "TURBO",
-    Text = "Press Z to activate"
+    Text = "Хоткей: Z"
 })
 
 TurboTab:CreateToggle({
     Name = "Activate Turbo",
-    CurrentValue = settings.TURBO_ACTIVE,
+    CurrentValue = false,
     Callback = function(Value)
-        settings.TURBO_ACTIVE = Value
-        SaveSettings(settings)
-        if Value then
-            if not turboActive then toggleTurbo() end
-        else
-            if turboActive then toggleTurbo() end
-        end
+        if Value and not turboActive then toggleTurbo()
+        elseif not Value and turboActive then toggleTurbo() end
     end
 })
 
@@ -1629,6 +1573,7 @@ TurboTab:CreateButton({
     Callback = function()
         settings.TURBO_MODE = "Velocity"
         SaveSettings(settings)
+        showNotification("⚡ Turbo", "Mode: Velocity")
     end
 })
 
@@ -1637,6 +1582,7 @@ TurboTab:CreateButton({
     Callback = function()
         settings.TURBO_MODE = "Teleport"
         SaveSettings(settings)
+        showNotification("⚡ Turbo", "Mode: Teleport")
     end
 })
 
@@ -1645,6 +1591,7 @@ TurboTab:CreateButton({
     Callback = function()
         settings.TURBO_MODE = "Combo"
         SaveSettings(settings)
+        showNotification("⚡ Turbo", "Mode: Combo")
     end
 })
 
@@ -1658,18 +1605,15 @@ local NoClipTab = Window:CreateTab({
 
 NoClipTab:CreateParagraph({
     Title = "NO CLIP",
-    Text = "Press B to activate"
+    Text = "Хоткей: B"
 })
 
 NoClipTab:CreateToggle({
     Name = "Activate No Clip",
     CurrentValue = false,
     Callback = function(Value)
-        if Value then
-            if not noClipActive then toggleNoClip() end
-        else
-            if noClipActive then toggleNoClip() end
-        end
+        if Value and not noClipActive then toggleNoClip()
+        elseif not Value and noClipActive then toggleNoClip() end
     end
 })
 
@@ -1683,22 +1627,15 @@ local FlyTab = Window:CreateTab({
 
 FlyTab:CreateParagraph({
     Title = "FLIGHT MODE",
-    Text = "Press V to toggle"
+    Text = "Хоткей: V"
 })
 
 FlyTab:CreateToggle({
     Name = "Enable Flight",
     CurrentValue = false,
     Callback = function(Value)
-        if not hrp or not humanoid then
-            updateCharacterReferences()
-            if not hrp or not humanoid then return end
-        end
-        if Value and not flying then
-            toggleFly()
-        elseif not Value and flying then
-            toggleFly()
-        end
+        if Value and not flying then toggleFly()
+        elseif not Value and flying then toggleFly() end
     end
 })
 
@@ -1733,6 +1670,153 @@ FlyTab:CreateToggle({
     end
 })
 
+-- WAYPOINTS TAB
+local WaypointTab = Window:CreateTab({
+    Name = "Waypoints",
+    Icon = "place",
+    ImageSource = "Material",
+    ShowTitle = true
+})
+
+WaypointTab:CreateParagraph({
+    Title = "📍 WAYPOINT SYSTEM",
+    Text = "P — сохранить точку\nL — удалить последнюю\nT — ТП к #1"
+})
+
+WaypointTab:CreateInput({
+    Name = "Название точки",
+    CurrentValue = "",
+    PlaceholderText = "Введи имя...",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(Text)
+        _G.__wpName = Text
+    end
+})
+
+WaypointTab:CreateButton({
+    Name = "➕ Сохранить текущую позицию",
+    Callback = function()
+        addWaypoint(_G.__wpName and _G.__wpName ~= "" and _G.__wpName or nil)
+    end
+})
+
+WaypointTab:CreateButton({
+    Name = "🧹 Удалить все точки",
+    Callback = function()
+        for i = #waypoints, 1, -1 do
+            table.remove(waypoints, i)
+        end
+        saveWaypoints()
+        refreshBeacons()
+        showNotification("📍 Waypoint", "Все точки удалены")
+    end
+})
+
+WaypointTab:CreateLabel({ Text = "ТЕЛЕПОРТ К ТОЧКЕ", Style = 1 })
+
+for i = 1, MAX_WAYPOINTS do
+    WaypointTab:CreateButton({
+        Name = "📍 ТП → #" .. i,
+        Callback = function()
+            teleportToWaypoint(i)
+        end
+    })
+end
+
+WaypointTab:CreateLabel({ Text = "ТЕЛЕПОРТ К ИГРОКУ", Style = 1 })
+
+WaypointTab:CreateInput({
+    Name = "Ник игрока",
+    CurrentValue = "",
+    PlaceholderText = "Например: Player1",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(Text)
+        _G.__tpPlayerName = Text
+    end
+})
+
+WaypointTab:CreateButton({
+    Name = "🚀 ТП к игроку",
+    Callback = function()
+        if _G.__tpPlayerName and _G.__tpPlayerName ~= "" then
+            teleportToPlayer(_G.__tpPlayerName)
+        else
+            showNotification("📍 TP", "Введи ник игрока")
+        end
+    end
+})
+
+-- FULLBRIGHT TAB
+local FullbrightTab = Window:CreateTab({
+    Name = "Fullbright",
+    Icon = "wb_sunny",
+    ImageSource = "Material",
+    ShowTitle = true
+})
+
+FullbrightTab:CreateParagraph({
+    Title = "☀️ FULLBRIGHT",
+    Text = "Хоткей: F (работает локально)"
+})
+
+FullbrightTab:CreateToggle({
+    Name = "Enable Fullbright",
+    CurrentValue = false,
+    Callback = function(Value)
+        if Value ~= fullbrightActive then
+            toggleFullbright()
+        end
+        settings.FULLBRIGHT_ENABLED = Value
+        SaveSettings(settings)
+    end
+})
+
+FullbrightTab:CreateSlider({
+    Name = "Brightness",
+    Range = {0, 10},
+    Increment = 0.5,
+    CurrentValue = settings.FULLBRIGHT_BRIGHTNESS,
+    Callback = function(Value)
+        settings.FULLBRIGHT_BRIGHTNESS = Value
+        SaveSettings(settings)
+        if fullbrightActive then
+            Lighting.Brightness = Value
+        end
+    end
+})
+
+FullbrightTab:CreateSlider({
+    Name = "ClockTime (время суток)",
+    Range = {0, 24},
+    Increment = 0.5,
+    CurrentValue = settings.FULLBRIGHT_CLOCKTIME,
+    Callback = function(Value)
+        settings.FULLBRIGHT_CLOCKTIME = Value
+        SaveSettings(settings)
+        if fullbrightActive then
+            Lighting.ClockTime = Value
+        end
+    end
+})
+
+FullbrightTab:CreateToggle({
+    Name = "Убирать туман",
+    CurrentValue = settings.FULLBRIGHT_REMOVE_FOG,
+    Callback = function(Value)
+        settings.FULLBRIGHT_REMOVE_FOG = Value
+        SaveSettings(settings)
+        if fullbrightActive then
+            if Value then
+                Lighting.FogEnd = 100000
+                Lighting.FogStart = 100000
+            else
+                Lighting.FogEnd = savedLighting and savedLighting.FogEnd or 1000
+                Lighting.FogStart = savedLighting and savedLighting.FogStart or 0
+            end
+        end
+    end
+})
+
 -- SETTINGS TAB
 local SettingsTab = Window:CreateTab({
     Name = "Settings",
@@ -1762,7 +1846,7 @@ SettingsTab:CreateToggle({
 
 SettingsTab:CreateParagraph({
     Title = "CONTROLS",
-    Text = "C - Wall Walk\nV - Fly\nB - No Clip\nZ - Turbo\nShift - Sprint"
+    Text = "C - Wall Walk\nV - Fly\nB - No Clip\nZ - Turbo\nF - Fullbright\nP - Save Waypoint\nL - Delete Waypoint\nT - TP to Waypoint #1\nShift - Sprint"
 })
 
 SettingsTab:CreateButton({
@@ -1773,6 +1857,7 @@ SettingsTab:CreateButton({
         end
         SaveSettings(settings)
         clearAllESP()
+        showNotification("⚙️ Settings", "Сброшено")
     end
 })
 
@@ -1780,6 +1865,7 @@ SettingsTab:CreateButton({
     Name = "Clear ESP Cache",
     Callback = function()
         clearAllESP()
+        showNotification("👁️ ESP", "Кеш очищен")
     end
 })
 
@@ -1816,7 +1902,7 @@ RunService.Heartbeat:Connect(function(dt)
         return
     end
     
-    -- AUTO RESET ON FALL
+    -- AUTO RESET
     if settings.AUTO_RESET_ON_FALL and climbing and hrp then
         if hrp.Position.Y < settings.RESET_HEIGHT then
             climbing = false
@@ -1980,31 +2066,24 @@ end)
 -- INITIALIZATION
 -- ==========================================
 print("═══════════════════════════════════════════════════════")
-print("🕷️ Forsaken Surge v10.0 - ESP PRO EDITION")
+print("🕷️ Forsaken Surge v11.0")
 print("═══════════════════════════════════════════════════════")
-print("✅ Wall Walk (ходьба по стенам)")
-print("✅ Fly (полёт)")
-print("✅ No Clip (ноуклип)")
-print("✅ Turbo (турбо)")
-print("✅ ESP PRO (расширенные настройки подсветки)")
-print("   ├─ Интервал обновления")
-print("   ├─ Макс/мин дистанция")
-print("   ├─ Прозрачность заливки/контура")
-print("   ├─ Box ESP")
-print("   ├─ Tracer")
-print("   ├─ Custom RGB цвета")
-print("   ├─ Размер текста")
-print("   └─ Затухание по дистанции")
-print("✅ Killer Walls Remover")
-print("✅ UNLIMITED MODE")
-print("✅ EXCLUSIVE MODE")
+print("✅ Wall Walk | ✅ Fly | ✅ No Clip | ✅ Turbo")
+print("✅ ESP PRO | ✅ Waypoints | ✅ Fullbright")
+print("✅ Killer Walls Remover | ✅ Unlimited Mode")
 print("═══════════════════════════════════════════════════════")
 print("🔑 C - Wall Walk | V - Fly | B - No Clip | Z - Turbo")
-print("⚡ Включи безграничный режим в настройках Wall Walk!")
+print("🔑 F - Fullbright | P - Save WP | L - Del WP | T - TP WP#1")
 print("═══════════════════════════════════════════════════════")
 
 task.wait(0.5)
+
 if settings.REMOVE_KILLER_WALLS then
     task.wait(1)
     pcall(removeKillerWalls)
+end
+
+if settings.FULLBRIGHT_ENABLED then
+    enableFullbright()
+    fullbrightActive = true
 end
