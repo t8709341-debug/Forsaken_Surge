@@ -5,7 +5,7 @@ local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-S
 -- ==========================================
 local Window = Luna:CreateWindow({
     Name = "Forsaken Surge",
-    Subtitle = "v11.0",
+    Subtitle = "v12.0",
     LogoID = nil,
     LoadingEnabled = true,
     LoadingTitle = "Forsaken Surge",
@@ -33,7 +33,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local player = Players.LocalPlayer
 
--- ===== CHARACTER VARIABLES =====
 local character = nil
 local humanoid = nil
 local hrp = nil
@@ -50,6 +49,15 @@ local function updateCharacterReferences()
 end
 
 updateCharacterReferences()
+
+-- ===== ANTI-AFK =====
+pcall(function()
+    local VirtualUser = game:GetService("VirtualUser")
+    player.Idled:Connect(function()
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new())
+    end)
+end)
 
 -- ===== SAVE SYSTEM =====
 local MyDataFolder = "ForsakenSurgeData"
@@ -76,17 +84,17 @@ local DefaultSettings = {
     AUTO_RESET_ON_FALL = true,
     RESET_HEIGHT = -100,
     NOTIFICATIONS_ENABLED = true,
-    
+
     REMOVE_KILLER_WALLS = false,
-    
+
     FLY_SPEED = 50,
     FLY_ACCELERATION = 10,
     FLY_MAX_SPEED = 150,
     FLY_SMOOTHNESS = 8,
     FLY_AUTO_UP = false,
     FLY_HOVER = false,
-    
-    -- ===== ESP SETTINGS =====
+
+    -- ESP
     ESP_ENABLED = true,
     KILLERS_ESP = true,
     KILLERS_COLOR = "Red",
@@ -97,7 +105,7 @@ local DefaultSettings = {
     ITEMS_ESP = true,
     ITEMS_COLOR = "Gold",
     SHOW_TEXT = true,
-    
+
     ESP_UPDATE_INTERVAL = 0.1,
     ESP_MAX_DISTANCE = 500,
     ESP_MIN_DISTANCE = 10,
@@ -117,7 +125,7 @@ local DefaultSettings = {
     ESP_TRACER_ENABLED = false,
     ESP_TRACER_COLOR = "White",
     ESP_TRACER_TRANSPARENCY = 0.5,
-    
+
     KILLERS_COLOR_CUSTOM = false,
     KILLERS_COLOR_R = 255,
     KILLERS_COLOR_G = 0,
@@ -134,11 +142,11 @@ local DefaultSettings = {
     ITEMS_COLOR_R = 255,
     ITEMS_COLOR_G = 215,
     ITEMS_COLOR_B = 0,
-    
+
     TURBO_ACTIVE = false,
     TURBO_SPEED = 30,
     TURBO_MODE = "Velocity",
-    
+
     UNLIMITED_MODE = false,
     WALK_SPEED_MAX = 50,
     SPRINT_MULTIPLIER_MAX = 3.0,
@@ -147,12 +155,47 @@ local DefaultSettings = {
     TURBO_SPEED_MAX = 400,
     FLY_SPEED_MAX = 400,
     FLY_MAX_SPEED_MAX = 800,
-    
-    -- FULLBRIGHT
+
     FULLBRIGHT_ENABLED = false,
     FULLBRIGHT_BRIGHTNESS = 3,
     FULLBRIGHT_CLOCKTIME = 12,
     FULLBRIGHT_REMOVE_FOG = true,
+
+    -- NEW: Chams
+    CHAMS_ENABLED = false,
+    CHAMS_THROUGH_WALLS = true,
+    CHAMS_COLOR_R = 255,
+    CHAMS_COLOR_G = 0,
+    CHAMS_COLOR_B = 255,
+
+    -- NEW: Skeleton
+    SKELETON_ENABLED = false,
+    SKELETON_COLOR_R = 0,
+    SKELETON_COLOR_G = 255,
+    SKELETON_COLOR_B = 128,
+    SKELETON_THICKNESS = 1.5,
+
+    -- NEW: Speed Hack
+    SPEEDHACK_ENABLED = false,
+    SPEEDHACK_BASE = 40,
+    SPEEDHACK_JITTER_PERCENT = 0.12,
+    SPEEDHACK_JITTER_INTERVAL = 0.35,
+
+    -- NEW: Alert
+    ALERT_ENABLED = true,
+    ALERT_RADIUS = 60,
+    ALERT_SOUND_ENABLED = true,
+
+    -- Keybinds
+    KEY_WALLWALK = "C",
+    KEY_FLY = "V",
+    KEY_NOCLIP = "B",
+    KEY_TURBO = "Z",
+    KEY_SPEEDHACK = "X",
+    KEY_FULLBRIGHT = "F",
+    KEY_WP_SAVE = "P",
+    KEY_WP_DEL = "L",
+    KEY_WP_TP = "T",
 }
 
 function LoadSettings()
@@ -177,9 +220,6 @@ end
 
 local settings = LoadSettings()
 
--- ==========================================
--- MAX VALUES
--- ==========================================
 local function getMaxValue(key, defaultMax)
     if settings.UNLIMITED_MODE then
         local maxMap = {
@@ -203,6 +243,7 @@ local climbing = false
 local flying = false
 local noClipActive = false
 local turboActive = false
+local speedHackActive = false
 local gravityDir = Vector3.new(0, -1, 0)
 local upDir = Vector3.new(0, 1, 0)
 local fallSpeed = 0
@@ -220,9 +261,6 @@ local rayParams = RaycastParams.new()
 rayParams.FilterType = Enum.RaycastFilterType.Exclude
 rayParams.RespectCanCollide = true
 
--- ==========================================
--- EXCLUSIVE MODE
--- ==========================================
 local function disableAllModes(except)
     if except ~= "climb" and climbing then
         climbing = false
@@ -237,7 +275,6 @@ local function disableAllModes(except)
         isOnCeiling = false
         ceilingTime = 0
     end
-    
     if except ~= "fly" and flying then
         flying = false
         if humanoid then
@@ -247,7 +284,6 @@ local function disableAllModes(except)
         flyVelocity = Vector3.zero
         if hrp then hrp.AssemblyLinearVelocity = Vector3.zero end
     end
-    
     if except ~= "noclip" and noClipActive then
         noClipActive = false
         for _, part in ipairs(character and character:GetDescendants() or {}) do
@@ -256,15 +292,18 @@ local function disableAllModes(except)
             end
         end
     end
-    
     if except ~= "turbo" and turboActive then
         turboActive = false
         if hrp then hrp.AssemblyLinearVelocity = Vector3.zero end
     end
+    if except ~= "speed" and speedHackActive then
+        speedHackActive = false
+        if humanoid then humanoid.WalkSpeed = 16 end
+    end
 end
 
 -- ==========================================
--- ESP SYSTEM
+-- ESP
 -- ==========================================
 local ColorPresets = {
     ["White"] = Color3.fromRGB(255,255,255),
@@ -313,15 +352,11 @@ local function getColorFromSettings(colorType)
     return Color3.new(1,1,1)
 end
 
-local espFolder = Instance.new("Folder")
-espFolder.Name = "ForsakenSurgeESP"
-espFolder.Parent = player:WaitForChild("PlayerGui")
-
 local espHighlights = {}
 local espBillboards = {}
 local espBoxes = {}
 local espTracers = {}
-local espTracked = {}
+local espTracked = setmetatable({}, {__mode = "k"})
 
 local function clearAllESP()
     for _, hl in ipairs(espHighlights) do pcall(function() hl:Destroy() end) end
@@ -332,7 +367,7 @@ local function clearAllESP()
     espBoxes = {}
     for _, tr in ipairs(espTracers) do pcall(function() tr:Destroy() end) end
     espTracers = {}
-    espTracked = {}
+    espTracked = setmetatable({}, {__mode = "k"})
 end
 
 local function UpdateHighlight(ItemInstance, TargetRoot, Settings)
@@ -341,31 +376,29 @@ local function UpdateHighlight(ItemInstance, TargetRoot, Settings)
         MinDistance = settings.ESP_MIN_DISTANCE,
         Color = Color3.new(1,1,1)
     }
-    
     local entry = espTracked[ItemInstance]
     local Highlight = entry and entry.highlight
-    
     if not Highlight or not Highlight.Parent then
         Highlight = Instance.new("Highlight")
         Highlight.Name = HttpService:GenerateGUID(false):sub(1,7)
         Highlight.Archivable = false
         Highlight:SetAttribute("Dynamic", true)
         Highlight.Parent = ItemInstance
-        Highlight.Adornee = ItemInstance
+        if ItemInstance:IsA("Tool") then
+            Highlight.Adornee = ItemInstance:FindFirstChildWhichIsA("BasePart") or ItemInstance
+        else
+            Highlight.Adornee = ItemInstance
+        end
         Highlight.DepthMode = Enum.HighlightDepthMode[settings.ESP_HIGHLIGHT_DEPTH_MODE] or Enum.HighlightDepthMode.AlwaysOnTop
         table.insert(espHighlights, Highlight)
-        
         if not espTracked[ItemInstance] then espTracked[ItemInstance] = {} end
         espTracked[ItemInstance].highlight = Highlight
     end
-    
     local baseFillTransparency = 1 - settings.ESP_FILL_TRANSPARENCY
     local baseOutlineTransparency = 1 - settings.ESP_OUTLINE_TRANSPARENCY
-    
     local H, S, V = Settings.Color:ToHSV()
     Highlight.FillColor = Color3.fromHSV(H, S, V * 0.8)
     Highlight.OutlineColor = Color3.fromHSV(H, S, V * 1.1)
-    
     if settings.ESP_RENDER_DISTANCE_FADE and TargetRoot and TargetRoot.Parent then
         local dist = (Camera.CFrame.Position - TargetRoot.Position).Magnitude
         local minD = Settings.MinDistance or settings.ESP_MIN_DISTANCE
@@ -385,14 +418,11 @@ local function UpdateText(ItemInstance, TargetRoot, Settings)
         Color = Color3.new(1,1,1),
         Text = "Unknown"
     }
-    
     local entry = espTracked[ItemInstance]
     local BillboardGui = entry and entry.billboard
-    
     if not BillboardGui or not BillboardGui.Parent then
         BillboardGui = Instance.new("BillboardGui")
         local TextLabel = Instance.new("TextLabel")
-        
         BillboardGui.Name = HttpService:GenerateGUID(false):sub(1,7)
         BillboardGui.Archivable = false
         BillboardGui.Size = ItemInstance:IsA("Tool") and UDim2.new(1.5, 30, 0.75, 30) or UDim2.new(1.5,60,0.75,25)
@@ -402,7 +432,6 @@ local function UpdateText(ItemInstance, TargetRoot, Settings)
         BillboardGui.Adornee = TargetRoot
         BillboardGui:SetAttribute("Dynamic", true)
         table.insert(espBillboards, BillboardGui)
-        
         TextLabel.AnchorPoint = Vector2.new(0.5, 0.5)
         TextLabel.Position = UDim2.fromScale(0.5, 0.5)
         TextLabel.Size = UDim2.fromScale(1, 1)
@@ -412,13 +441,10 @@ local function UpdateText(ItemInstance, TargetRoot, Settings)
         TextLabel.TextStrokeTransparency = 0
         TextLabel.TextStrokeColor3 = Color3.new(0,0,0)
         TextLabel.Parent = BillboardGui
-        
         BillboardGui.Parent = TargetRoot
-        
         if not espTracked[ItemInstance] then espTracked[ItemInstance] = {} end
         espTracked[ItemInstance].billboard = BillboardGui
     end
-    
     local TextLabel = BillboardGui:FindFirstChildOfClass("TextLabel")
     if TextLabel then
         local displayText = Settings.Text or "Unknown"
@@ -430,11 +456,10 @@ local function UpdateText(ItemInstance, TargetRoot, Settings)
         TextLabel.TextSize = settings.ESP_TEXT_SIZE
         local H, S, V = Settings.Color:ToHSV()
         TextLabel.TextColor3 = Color3.fromHSV(H, S, V * 1.1)
-        
         if TargetRoot and TargetRoot.Parent then
             local dist = (Camera.CFrame.Position - TargetRoot.Position).Magnitude
             local minD = Settings.MinDistance or settings.ESP_TEXT_MIN_DISTANCE
-            local maxD = settings.ESP_TEXT_MAX_DISTANCE
+            local maxD = Settings.ESP_TEXT_MAX_DISTANCE
             if dist > minD and dist < maxD then
                 TextLabel.TextTransparency = 0
                 TextLabel.TextStrokeTransparency = 0
@@ -448,10 +473,8 @@ end
 
 local function UpdateBox(ItemInstance, TargetRoot, Settings)
     Settings = type(Settings) == "table" and Settings or { Color = Color3.new(1,1,1) }
-    
     local entry = espTracked[ItemInstance]
     local Box = entry and entry.box
-    
     if not Box or not Box.Parent then
         Box = Instance.new("BoxHandleAdornment")
         Box.Name = HttpService:GenerateGUID(false):sub(1,7)
@@ -464,11 +487,9 @@ local function UpdateBox(ItemInstance, TargetRoot, Settings)
         Box.Color3 = Settings.Color
         Box.Parent = TargetRoot
         table.insert(espBoxes, Box)
-        
         if not espTracked[ItemInstance] then espTracked[ItemInstance] = {} end
         espTracked[ItemInstance].box = Box
     end
-    
     if Box and TargetRoot then
         Box.Size = TargetRoot:IsA("BasePart") and TargetRoot.Size or Vector3.new(2,2,2)
         Box.Color3 = Settings.Color
@@ -478,10 +499,8 @@ end
 
 local function UpdateTracer(ItemInstance, TargetRoot, Settings)
     Settings = type(Settings) == "table" and Settings or { Color = Color3.new(1,1,1) }
-    
     local entry = espTracked[ItemInstance]
     local Tracer = entry and entry.tracer
-    
     if not Tracer or not Tracer.Parent then
         Tracer = Instance.new("LineHandleAdornment")
         Tracer.Name = HttpService:GenerateGUID(false):sub(1,7)
@@ -495,11 +514,9 @@ local function UpdateTracer(ItemInstance, TargetRoot, Settings)
         Tracer.Length = 0
         Tracer.Parent = TargetRoot
         table.insert(espTracers, Tracer)
-        
         if not espTracked[ItemInstance] then espTracked[ItemInstance] = {} end
         espTracked[ItemInstance].tracer = Tracer
     end
-    
     if Tracer and TargetRoot then
         Tracer.Color3 = Settings.Color
         Tracer.Transparency = settings.ESP_TRACER_TRANSPARENCY
@@ -517,6 +534,88 @@ local function RemoveESP(ItemInstance)
     end
 end
 
+-- ==========================================
+-- ESP CACHE (event-driven)
+-- ==========================================
+local espCache = {
+    killers = {},
+    survivors = {},
+    generators = {},
+    items = {}
+}
+
+local function classifyInstance(inst)
+    if not inst or not inst.Parent then return nil end
+    if inst:IsA("Tool") then return "items" end
+    if inst:IsA("Model") then
+        local n = inst.Name:lower()
+        if n:find("generator") or n:find("gen") or inst:GetAttribute("Generator") then
+            return "generators"
+        end
+        if inst:FindFirstChildOfClass("Humanoid") then
+            local plr = Players:GetPlayerFromCharacter(inst)
+            if plr and plr ~= player then
+                local team = plr.Team
+                if settings.ESP_TEAM_CHECK and team then
+                    local tn = team.Name:lower()
+                    if tn:find("killer") or tn:find("monster") or tn:find("enemy") then
+                        return "killers"
+                    end
+                end
+                return "survivors"
+            end
+        end
+    end
+    return nil
+end
+
+local function refreshCacheFor(inst)
+    local cat = classifyInstance(inst)
+    if not cat then return end
+    local bucket = espCache[cat]
+    for i = 1, #bucket do
+        if bucket[i] == inst then return end
+    end
+    table.insert(bucket, inst)
+end
+
+local function removeFromCache(inst)
+    for _, bucket in pairs(espCache) do
+        for i = #bucket, 1, -1 do
+            if bucket[i] == inst then
+                table.remove(bucket, i)
+            end
+        end
+    end
+end
+
+for _, inst in ipairs(Workspace:GetDescendants()) do
+    refreshCacheFor(inst)
+end
+
+Workspace.DescendantAdded:Connect(function(inst)
+    task.defer(refreshCacheFor, inst)
+end)
+
+Workspace.DescendantRemoving:Connect(function(inst)
+    removeFromCache(inst)
+    RemoveESP(inst)
+end)
+
+Players.PlayerAdded:Connect(function(plr)
+    plr.CharacterAdded:Connect(function(char)
+        task.wait(0.3)
+        refreshCacheFor(char)
+    end)
+end)
+
+Players.PlayerRemoving:Connect(function(plr)
+    if plr.Character then
+        removeFromCache(plr.Character)
+        RemoveESP(plr.Character)
+    end
+end)
+
 task.spawn(function()
     while true do
         task.wait(settings.ESP_UPDATE_INTERVAL)
@@ -525,102 +624,109 @@ task.spawn(function()
                 clearAllESP()
                 return
             end
-            
             local alive = {}
-            
-            -- Player ESP
-            for _, plr in ipairs(Players:GetPlayers()) do
-                if plr == player then continue end
-                local char = plr.Character
-                if char and char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0 then
-                    local TargetRoot = char:FindFirstChild("HumanoidRootPart")
-                    if TargetRoot then
-                        local isKiller = false
-                        local team = plr.Team
-                        if settings.ESP_TEAM_CHECK and team then
-                            local teamName = team.Name:lower()
-                            if teamName:find("killer") or teamName:find("monster") or teamName:find("enemy") then
-                                isKiller = true
-                            end
-                        end
-                        
-                        if isKiller and settings.KILLERS_ESP then
+
+            if settings.KILLERS_ESP then
+                for i = #espCache.killers, 1, -1 do
+                    local char = espCache.killers[i]
+                    if not char.Parent or not char:FindFirstChild("Humanoid") or char.Humanoid.Health <= 0 then
+                        table.remove(espCache.killers, i)
+                        RemoveESP(char)
+                    else
+                        local root = char:FindFirstChild("HumanoidRootPart")
+                        if root then
+                            local plr = Players:GetPlayerFromCharacter(char)
                             local color = getColorFromSettings("Killers")
-                            UpdateHighlight(char, TargetRoot, {MaxDistance = settings.ESP_MAX_DISTANCE, MinDistance = settings.ESP_MIN_DISTANCE, Color = color})
+                            UpdateHighlight(char, root, {MaxDistance = settings.ESP_MAX_DISTANCE, MinDistance = settings.ESP_MIN_DISTANCE, Color = color})
                             if settings.SHOW_TEXT then
-                                UpdateText(char, TargetRoot, {MinDistance = settings.ESP_TEXT_MIN_DISTANCE, Text = plr.Name, Color = color})
+                                UpdateText(char, root, {MinDistance = settings.ESP_TEXT_MIN_DISTANCE, Text = plr and plr.Name or char.Name, Color = color})
                             end
                             if settings.ESP_BOX_ENABLED then
-                                UpdateBox(char, TargetRoot, {Color = getColorFromSettings("Box")})
+                                UpdateBox(char, root, {Color = getColorFromSettings("Box")})
                             end
                             if settings.ESP_TRACER_ENABLED then
-                                UpdateTracer(char, TargetRoot, {Color = getColorFromSettings("Tracer")})
+                                UpdateTracer(char, root, {Color = getColorFromSettings("Tracer")})
                             end
                             alive[char] = true
-                        elseif not isKiller and settings.SURVIVORS_ESP then
+                        end
+                    end
+                end
+            end
+
+            if settings.SURVIVORS_ESP then
+                for i = #espCache.survivors, 1, -1 do
+                    local char = espCache.survivors[i]
+                    if not char.Parent or not char:FindFirstChild("Humanoid") or char.Humanoid.Health <= 0 then
+                        table.remove(espCache.survivors, i)
+                        RemoveESP(char)
+                    else
+                        local root = char:FindFirstChild("HumanoidRootPart")
+                        if root then
+                            local plr = Players:GetPlayerFromCharacter(char)
                             local color = getColorFromSettings("Survivors")
-                            UpdateHighlight(char, TargetRoot, {MaxDistance = settings.ESP_MAX_DISTANCE, MinDistance = settings.ESP_MIN_DISTANCE, Color = color})
+                            UpdateHighlight(char, root, {MaxDistance = settings.ESP_MAX_DISTANCE, MinDistance = settings.ESP_MIN_DISTANCE, Color = color})
                             if settings.SHOW_TEXT then
-                                UpdateText(char, TargetRoot, {MinDistance = settings.ESP_TEXT_MIN_DISTANCE, Text = plr.Name, Color = color})
+                                UpdateText(char, root, {MinDistance = settings.ESP_TEXT_MIN_DISTANCE, Text = plr and plr.Name or char.Name, Color = color})
                             end
                             if settings.ESP_BOX_ENABLED then
-                                UpdateBox(char, TargetRoot, {Color = getColorFromSettings("Box")})
+                                UpdateBox(char, root, {Color = getColorFromSettings("Box")})
                             end
                             if settings.ESP_TRACER_ENABLED then
-                                UpdateTracer(char, TargetRoot, {Color = getColorFromSettings("Tracer")})
+                                UpdateTracer(char, root, {Color = getColorFromSettings("Tracer")})
                             end
                             alive[char] = true
-                        else
-                            RemoveESP(char)
                         end
                     end
                 end
             end
-            
-            -- Generators ESP
+
             if settings.GENERATORS_ESP then
-                for _, obj in ipairs(Workspace:GetDescendants()) do
-                    if obj:IsA("Model") and obj.Parent then
-                        local name = string.lower(obj.Name)
-                        if string.find(name, "generator") or string.find(name, "gen") or obj:GetAttribute("Generator") then
-                            local progress = obj:FindFirstChild("Progress")
-                            if progress and progress.Value >= 100 then
-                                RemoveESP(obj)
-                            else
-                                local TargetRoot = obj:FindFirstChild("Main") or obj:FindFirstChild("HumanoidRootPart") or obj
-                                local color = getColorFromSettings("Generators")
-                                UpdateHighlight(obj, TargetRoot, {MaxDistance = settings.ESP_MAX_DISTANCE, MinDistance = settings.ESP_MIN_DISTANCE, Color = color})
-                                if settings.SHOW_TEXT then
-                                    UpdateText(obj, TargetRoot, {MinDistance = settings.ESP_TEXT_MIN_DISTANCE, Text = obj.Name, Color = color})
-                                end
-                                if settings.ESP_BOX_ENABLED then
-                                    UpdateBox(obj, TargetRoot, {Color = getColorFromSettings("Box")})
-                                end
-                                alive[obj] = true
+                for i = #espCache.generators, 1, -1 do
+                    local obj = espCache.generators[i]
+                    if not obj.Parent then
+                        table.remove(espCache.generators, i)
+                        RemoveESP(obj)
+                    else
+                        local progress = obj:FindFirstChild("Progress")
+                        if progress and progress.Value >= 100 then
+                            RemoveESP(obj)
+                        else
+                            local root = obj:FindFirstChild("Main") or obj:FindFirstChild("HumanoidRootPart") or obj.PrimaryPart or obj
+                            local color = getColorFromSettings("Generators")
+                            UpdateHighlight(obj, root, {MaxDistance = settings.ESP_MAX_DISTANCE, MinDistance = settings.ESP_MIN_DISTANCE, Color = color})
+                            if settings.SHOW_TEXT then
+                                UpdateText(obj, root, {MinDistance = settings.ESP_TEXT_MIN_DISTANCE, Text = obj.Name, Color = color})
                             end
+                            if settings.ESP_BOX_ENABLED then
+                                UpdateBox(obj, root, {Color = getColorFromSettings("Box")})
+                            end
+                            alive[obj] = true
                         end
                     end
                 end
             end
-            
-            -- Items ESP
+
             if settings.ITEMS_ESP then
-                for _, obj in ipairs(Workspace:GetDescendants()) do
-                    if obj:IsA("Tool") and obj.Parent then
-                        local TargetRoot = obj:FindFirstChildWhichIsA("BasePart") or obj
+                for i = #espCache.items, 1, -1 do
+                    local obj = espCache.items[i]
+                    if not obj.Parent then
+                        table.remove(espCache.items, i)
+                        RemoveESP(obj)
+                    else
+                        local root = obj:FindFirstChildWhichIsA("BasePart") or obj
                         local color = getColorFromSettings("Items")
-                        UpdateHighlight(obj, TargetRoot, {MaxDistance = settings.ESP_MAX_DISTANCE, MinDistance = settings.ESP_MIN_DISTANCE, Color = color})
+                        UpdateHighlight(obj, root, {MaxDistance = settings.ESP_MAX_DISTANCE, MinDistance = settings.ESP_MIN_DISTANCE, Color = color})
                         if settings.SHOW_TEXT then
-                            UpdateText(obj, TargetRoot, {MinDistance = settings.ESP_TEXT_MIN_DISTANCE, Text = obj.Name, Color = color})
+                            UpdateText(obj, root, {MinDistance = settings.ESP_TEXT_MIN_DISTANCE, Text = obj.Name, Color = color})
                         end
                         if settings.ESP_BOX_ENABLED then
-                            UpdateBox(obj, TargetRoot, {Color = getColorFromSettings("Box")})
+                            UpdateBox(obj, root, {Color = getColorFromSettings("Box")})
                         end
                         alive[obj] = true
                     end
                 end
             end
-            
+
             for inst, _ in pairs(espTracked) do
                 if not alive[inst] or not inst.Parent then
                     RemoveESP(inst)
@@ -636,7 +742,7 @@ player.CharacterAdded:Connect(function(char)
 end)
 
 -- ==========================================
--- HELPER FUNCTIONS
+-- HELPERS
 -- ==========================================
 local function projectToPlane(v, n)
     return v - n * v:Dot(n)
@@ -658,6 +764,11 @@ local function slerp(a, b, t)
     local au, bu = a.Unit, b.Unit
     local dot = math.clamp(au:Dot(bu), -1, 1)
     if dot > 0.9999 then return bu end
+    if dot < -0.9999 then
+        local axis = math.abs(au.X) < 0.9 and Vector3.new(1,0,0) or Vector3.new(0,1,0)
+        local perp = au:Cross(axis).Unit
+        return (au * math.cos(math.pi * t) + perp * math.sin(math.pi * t)).Unit
+    end
     local angle = math.acos(dot)
     local sin = math.sin(angle)
     return (au * math.sin((1 - t) * angle) + bu * math.sin(t * angle)) / sin
@@ -672,17 +783,266 @@ local function showNotification(title, text)
 end
 
 -- ==========================================
+-- 🎨 CHAMS ESP
+-- ==========================================
+local chamsTracked = setmetatable({}, {__mode = "k"})
+local chamsEnabled = settings.CHAMS_ENABLED
+local chamsThroughWalls = settings.CHAMS_THROUGH_WALLS
+local chamsColor = Color3.fromRGB(settings.CHAMS_COLOR_R, settings.CHAMS_COLOR_G, settings.CHAMS_COLOR_B)
+
+local function applyChams(char)
+    if not char or not char.Parent then return end
+    local hl = chamsTracked[char]
+    if hl and hl.Parent then
+        hl.FillColor = chamsColor
+        hl.OutlineColor = chamsColor
+        hl.DepthMode = chamsThroughWalls and Enum.HighlightDepthMode.AlwaysOnTop or Enum.HighlightDepthMode.Occluded
+        return
+    end
+    hl = Instance.new("Highlight")
+    hl.Name = "FS_Chams"
+    hl.Adornee = char
+    hl.Parent = char
+    hl.FillColor = chamsColor
+    hl.FillTransparency = 0
+    hl.OutlineColor = chamsColor
+    hl.OutlineTransparency = 0
+    hl.DepthMode = chamsThroughWalls and Enum.HighlightDepthMode.AlwaysOnTop or Enum.HighlightDepthMode.Occluded
+    chamsTracked[char] = hl
+end
+
+local function clearChams()
+    for char, hl in pairs(chamsTracked) do
+        pcall(function() hl:Destroy() end)
+    end
+    chamsTracked = setmetatable({}, {__mode = "k"})
+end
+
+local function refreshChams()
+    clearChams()
+    if not chamsEnabled then return end
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player and plr.Character and plr.Character:FindFirstChild("Humanoid") then
+            if plr.Character.Humanoid.Health > 0 then
+                applyChams(plr.Character)
+            end
+        end
+    end
+end
+
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        if chamsEnabled then
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if plr ~= player and plr.Character then
+                    local h = plr.Character:FindFirstChild("Humanoid")
+                    if h and h.Health > 0 then
+                        applyChams(plr.Character)
+                    else
+                        local hl = chamsTracked[plr.Character]
+                        if hl then hl:Destroy() chamsTracked[plr.Character] = nil end
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- ==========================================
+-- 🦴 SKELETON ESP
+-- ==========================================
+local skeletonEnabled = settings.SKELETON_ENABLED
+local skeletonColor = Color3.fromRGB(settings.SKELETON_COLOR_R, settings.SKELETON_COLOR_G, settings.SKELETON_COLOR_B)
+local skeletonThickness = settings.SKELETON_THICKNESS
+local skeletonData = setmetatable({}, {__mode = "k"})
+
+local function attachSkeleton(char)
+    if not char or not char.Parent then return end
+    if skeletonData[char] and next(skeletonData[char]) then
+        for _, line in pairs(skeletonData[char]) do
+            line.Color3 = skeletonColor
+            line.Thickness = skeletonThickness
+        end
+        return
+    end
+    skeletonData[char] = {}
+    local function scan()
+        if not char.Parent then return end
+        for _, motor in ipairs(char:GetDescendants()) do
+            if motor:IsA("Motor6D") and motor.Part0 and motor.Part1 then
+                if skeletonData[char] and not skeletonData[char][motor] then
+                    local line = Instance.new("LineHandleAdornment")
+                    line.Name = "FS_Bone"
+                    line.Adornee = motor.Part0
+                    line.AlwaysOnTop = true
+                    line.ZIndex = 5
+                    line.Thickness = skeletonThickness
+                    line.Color3 = skeletonColor
+                    line.Length = 0
+                    line.Parent = motor.Part0
+                    skeletonData[char][motor] = line
+                end
+            end
+        end
+    end
+    scan()
+    task.delay(1, scan)
+end
+
+local function clearSkeleton(char)
+    if not skeletonData[char] then return end
+    for motor, line in pairs(skeletonData[char]) do
+        pcall(function() line:Destroy() end)
+    end
+    skeletonData[char] = nil
+end
+
+local function clearAllSkeletons()
+    for char, _ in pairs(skeletonData) do
+        clearSkeleton(char)
+    end
+    skeletonData = setmetatable({}, {__mode = "k"})
+end
+
+task.spawn(function()
+    while true do
+        RunService.RenderStepped:Wait()
+        if skeletonEnabled then
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if plr == player then continue end
+                local char = plr.Character
+                if char and char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0 then
+                    if not skeletonData[char] then attachSkeleton(char) end
+                    for motor, line in pairs(skeletonData[char] or {}) do
+                        local p0 = motor.Part0
+                        local p1 = motor.Part1
+                        if p0 and p1 and p0.Parent and p1.Parent then
+                            line.Adornee = p0
+                            local delta = p1.Position - p0.Position
+                            line.Length = delta.Magnitude
+                            if delta.Magnitude > 0.001 then
+                                local cf = CFrame.lookAt(p0.Position, p1.Position)
+                                line.CFrame = cf * CFrame.new(0, 0, -delta.Magnitude / 2)
+                            end
+                            line.Visible = true
+                        else
+                            line.Visible = false
+                        end
+                    end
+                else
+                    if char then clearSkeleton(char) end
+                end
+            end
+        end
+    end
+end)
+
+Players.PlayerAdded:Connect(function(plr)
+    plr.CharacterAdded:Connect(function(char)
+        task.wait(0.5)
+        if skeletonEnabled then attachSkeleton(char) end
+    end)
+end)
+
+-- ==========================================
+-- 🚨 KILLER ALERT
+-- ==========================================
+local alertGui = Instance.new("ScreenGui")
+alertGui.Name = "FS_KillerAlert"
+alertGui.IgnoreGuiInset = true
+alertGui.ResetOnSpawn = false
+alertGui.Parent = player:WaitForChild("PlayerGui")
+
+local vignette = Instance.new("Frame")
+vignette.Size = UDim2.fromScale(1, 1)
+vignette.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+vignette.BackgroundTransparency = 1
+vignette.BorderSizePixel = 0
+vignette.ZIndex = 999
+vignette.Parent = alertGui
+
+local alertLabel = Instance.new("TextLabel")
+alertLabel.Size = UDim2.new(0, 400, 0, 60)
+alertLabel.Position = UDim2.new(0.5, -200, 0.1, 0)
+alertLabel.BackgroundTransparency = 1
+alertLabel.Text = "⚠️ KILLER NEARBY"
+alertLabel.TextColor3 = Color3.fromRGB(255, 40, 40)
+alertLabel.TextStrokeTransparency = 0
+alertLabel.TextScaled = true
+alertLabel.Font = Enum.Font.GothamBlack
+alertLabel.TextTransparency = 1
+alertLabel.Parent = alertGui
+
+local alertLastPlayed = 0
+local alertCooldown = 3
+
+local function getKillerChars()
+    local killers = {}
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr == player then continue end
+        local team = plr.Team
+        if team then
+            local tn = team.Name:lower()
+            if tn:find("killer") or tn:find("monster") or tn:find("enemy") then
+                if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+                    table.insert(killers, plr.Character)
+                end
+            end
+        end
+    end
+    return killers
+end
+
+task.spawn(function()
+    while true do
+        task.wait(0.1)
+        if settings.ALERT_ENABLED and hrp then
+            local closest = math.huge
+            for _, char in ipairs(getKillerChars()) do
+                local root = char:FindFirstChild("HumanoidRootPart")
+                if root then
+                    local d = (root.Position - hrp.Position).Magnitude
+                    if d < closest then closest = d end
+                end
+            end
+            if closest < settings.ALERT_RADIUS then
+                local intensity = 1 - (closest / settings.ALERT_RADIUS)
+                vignette.BackgroundTransparency = 1 - intensity * 0.35
+                alertLabel.TextTransparency = 1 - intensity
+                alertLabel.Text = string.format("⚠️ KILLER %.0fm", closest)
+                local now = tick()
+                if settings.ALERT_SOUND_ENABLED and closest < settings.ALERT_RADIUS * 0.5 and now - alertLastPlayed > alertCooldown then
+                    alertLastPlayed = now
+                    local s = Instance.new("Sound")
+                    s.SoundId = "rbxassetid://9120386436"
+                    s.Volume = 2
+                    s.Parent = Workspace
+                    s:Play()
+                    Debris:AddItem(s, 3)
+                end
+            else
+                vignette.BackgroundTransparency = 1
+                alertLabel.TextTransparency = 1
+            end
+        else
+            vignette.BackgroundTransparency = 1
+            alertLabel.TextTransparency = 1
+        end
+    end
+end)
+
+-- ==========================================
 -- WALL WALK
 -- ==========================================
 local function toggleClimb()
-    if flying or noClipActive or turboActive then
+    if flying or noClipActive or turboActive or speedHackActive then
         disableAllModes("climb")
     end
     if not hrp or not humanoid then
         updateCharacterReferences()
         if not hrp or not humanoid then return end
     end
-    
     climbing = not climbing
     if climbing then
         disableAllModes("climb")
@@ -714,14 +1074,13 @@ end
 -- FLY
 -- ==========================================
 local function toggleFly()
-    if climbing or noClipActive or turboActive then
+    if climbing or noClipActive or turboActive or speedHackActive then
         disableAllModes("fly")
     end
     if not hrp or not humanoid then
         updateCharacterReferences()
         if not hrp or not humanoid then return end
     end
-    
     flying = not flying
     if flying then
         disableAllModes("fly")
@@ -745,30 +1104,25 @@ end
 -- NO CLIP
 -- ==========================================
 local function toggleNoClip()
-    if climbing or flying or turboActive then
+    if climbing or flying or turboActive or speedHackActive then
         disableAllModes("noclip")
     end
     if not hrp or not humanoid then
         updateCharacterReferences()
         if not hrp or not humanoid then return end
     end
-    
     noClipActive = not noClipActive
-    
     if noClipActive then
         disableAllModes("noclip")
         humanoid.AutoRotate = true
         humanoid.PlatformStand = false
-        
         local detector = character:FindFirstChild("NoclipDetector")
         if detector then detector:Destroy() end
-        
         for _, part in ipairs(character:GetDescendants()) do
             if part:IsA("BasePart") then
                 part.CanCollide = false
             end
         end
-        
         hrp.AssemblyLinearVelocity = Vector3.zero
         hrp.AssemblyAngularVelocity = Vector3.zero
         showNotification("🌀 No Clip", "Активирован")
@@ -788,16 +1142,14 @@ end
 -- TURBO
 -- ==========================================
 local function toggleTurbo()
-    if climbing or flying or noClipActive then
+    if climbing or flying or noClipActive or speedHackActive then
         disableAllModes("turbo")
     end
     if not hrp or not humanoid then
         updateCharacterReferences()
         if not hrp or not humanoid then return end
     end
-    
     turboActive = not turboActive
-    
     if turboActive then
         disableAllModes("turbo")
         humanoid.AutoRotate = true
@@ -810,30 +1162,22 @@ local function toggleTurbo()
     end
 end
 
--- ==========================================
--- TURBO LOOP
--- ==========================================
 task.spawn(function()
     while true do
         task.wait()
         if turboActive and hrp and humanoid then
             local camLook = Camera.CFrame.LookVector
             local camRight = Camera.CFrame.RightVector
-            
             camLook = Vector3.new(camLook.X, 0, camLook.Z).Unit
             camRight = Vector3.new(camRight.X, 0, camRight.Z).Unit
-            
             local moveDir = Vector3.zero
-            
             if pressed[Enum.KeyCode.W] then moveDir = moveDir + camLook end
             if pressed[Enum.KeyCode.S] then moveDir = moveDir - camLook end
             if pressed[Enum.KeyCode.A] then moveDir = moveDir - camRight end
             if pressed[Enum.KeyCode.D] then moveDir = moveDir + camRight end
-            
             if moveDir.Magnitude > 0 then moveDir = moveDir.Unit end
-            
             local speed = settings.TURBO_SPEED
-            local mode = settings.TURBO_MODE            
+            local mode = settings.TURBO_MODE
             if mode == "Velocity" then
                 hrp.AssemblyLinearVelocity = moveDir * speed
                 hrp.AssemblyAngularVelocity = Vector3.zero
@@ -851,34 +1195,95 @@ task.spawn(function()
 end)
 
 -- ==========================================
+-- 🏃 SPEED HACK (Anti-Detect)
+-- ==========================================
+local speedTarget = 0
+local speedCurrent = 0
+local speedLastJitter = 0
+local speedJitterSeed = tick()
+local SPEED_SMOOTH = 12
+local SPEED_HUMANOID_CAP = 30
+
+local function toggleSpeedHack()
+    if not hrp or not humanoid then
+        updateCharacterReferences()
+        if not hrp or not humanoid then return end
+    end
+    speedHackActive = not speedHackActive
+    if speedHackActive then
+        disableAllModes("speed")
+        speedJitterSeed = tick()
+        speedLastJitter = 0
+        showNotification("🏃 Speed Hack", "Активирован (Anti-Detect)")
+    else
+        if hrp then hrp.AssemblyLinearVelocity = Vector3.zero end
+        if humanoid then humanoid.WalkSpeed = 16 end
+        showNotification("🏃 Speed Hack", "Деактивирован")
+    end
+end
+
+task.spawn(function()
+    while true do
+        local dt = task.wait()
+        if speedHackActive and hrp and humanoid then
+            local cam = Camera.CFrame
+            local look = Vector3.new(cam.LookVector.X, 0, cam.LookVector.Z)
+            local right = Vector3.new(cam.RightVector.X, 0, cam.RightVector.Z)
+            if look.Magnitude > 0.001 then look = look.Unit end
+            if right.Magnitude > 0.001 then right = right.Unit end
+            local move = Vector3.zero
+            if pressed[Enum.KeyCode.W] then move = move + look end
+            if pressed[Enum.KeyCode.S] then move = move - look end
+            if pressed[Enum.KeyCode.A] then move = move - right end
+            if pressed[Enum.KeyCode.D] then move = move + right end
+            if move.Magnitude > 0 then move = move.Unit end
+            local now = tick()
+            if now - speedLastJitter > settings.SPEEDHACK_JITTER_INTERVAL then
+                speedLastJitter = now
+                speedJitterSeed = now
+                local base = settings.SPEEDHACK_BASE
+                local jit = (math.noise(now * 7.3, speedJitterSeed) or 0) * settings.SPEEDHACK_JITTER_PERCENT
+                speedTarget = base * (1 + jit)
+            end
+            speedCurrent = speedCurrent + (speedTarget - speedCurrent) * math.min(1, dt * SPEED_SMOOTH)
+            if move.Magnitude > 0.01 then
+                hrp.AssemblyLinearVelocity = move * speedCurrent
+                humanoid.WalkSpeed = math.min(SPEED_HUMANOID_CAP, speedCurrent * 0.35)
+            else
+                humanoid.WalkSpeed = humanoid.WalkSpeed + (16 - humanoid.WalkSpeed) * math.min(1, dt * 4)
+            end
+        end
+    end
+end)
+
+-- ==========================================
 -- KILLER WALLS REMOVER
 -- ==========================================
 local function removeKillerWalls()
     if not settings.REMOVE_KILLER_WALLS then return end
-    
     local paths = {
         "Map.Ingame.Map.MapBoundaries.KillerDoors",
         "Map.Ingame.Map.MapBoundaries.KillerOnly",
     }
-    
     for _, path in ipairs(paths) do
         local current = Workspace
         local parts = {}
         for part in string.gmatch(path, "[^%.]+") do
             table.insert(parts, part)
         end
-        
         local success = true
         for _, partName in ipairs(parts) do
             if current then
                 current = current:FindFirstChild(partName)
-                if not current then success = false break end
+                if not current then
+                    success = false
+                    break
+                end
             else
                 success = false
                 break
             end
         end
-        
         if success and current then
             for _, child in ipairs(current:GetChildren()) do
                 pcall(function()
@@ -901,7 +1306,7 @@ task.spawn(function()
 end)
 
 -- ==========================================
--- WAYPOINT SYSTEM 📍
+-- WAYPOINTS
 -- ==========================================
 local waypoints = {}
 local MAX_WAYPOINTS = 8
@@ -913,10 +1318,7 @@ end
 local function saveWaypoints()
     local data = {}
     for i, wp in ipairs(waypoints) do
-        data[i] = {
-            Name = wp.Name,
-            Position = {wp.Position.X, wp.Position.Y, wp.Position.Z}
-        }
+        data[i] = { Name = wp.Name, Position = {wp.Position.X, wp.Position.Y, wp.Position.Z} }
     end
     pcall(function()
         writefile(WaypointFolder .. "/wp_" .. tostring(game.PlaceId) .. ".json", HttpService:JSONEncode(data))
@@ -959,13 +1361,11 @@ local function createBeacon(position, name, color)
     part.Color = color or Color3.fromRGB(255, 100, 255)
     part.Transparency = 0.3
     part.Parent = Workspace
-    
     local bg = Instance.new("BillboardGui")
     bg.Size = UDim2.new(0, 150, 0, 40)
     bg.StudsOffset = Vector3.new(0, 2.5, 0)
     bg.AlwaysOnTop = true
     bg.Parent = part
-    
     local lbl = Instance.new("TextLabel")
     lbl.Size = UDim2.fromScale(1, 1)
     lbl.BackgroundTransparency = 1
@@ -975,7 +1375,6 @@ local function createBeacon(position, name, color)
     lbl.TextScaled = true
     lbl.Font = Enum.Font.GothamBold
     lbl.Parent = bg
-    
     task.spawn(function()
         local t0 = tick()
         while part.Parent do
@@ -985,7 +1384,6 @@ local function createBeacon(position, name, color)
             task.wait()
         end
     end)
-    
     return part
 end
 
@@ -1057,7 +1455,6 @@ local function teleportToPlayer(targetName)
         return
     end
     if not hrp then return end
-    
     local targetPos = target.Character.HumanoidRootPart.Position
     hrp.CFrame = CFrame.new(targetPos + Vector3.new(0, 3, 0))
     hrp.AssemblyLinearVelocity = Vector3.zero
@@ -1067,7 +1464,7 @@ end
 refreshBeacons()
 
 -- ==========================================
--- FULLBRIGHT ☀️
+-- FULLBRIGHT
 -- ==========================================
 local function enableFullbright()
     savedLighting = {
@@ -1084,7 +1481,6 @@ local function enableFullbright()
         ColorShift_Top = Lighting.ColorShift_Top,
         ColorShift_Bottom = Lighting.ColorShift_Bottom,
     }
-    
     Lighting.Ambient = Color3.fromRGB(255, 255, 255)
     Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
     Lighting.Brightness = settings.FULLBRIGHT_BRIGHTNESS
@@ -1095,15 +1491,13 @@ local function enableFullbright()
     Lighting.ExposureCompensation = 1
     Lighting.ColorShift_Top = Color3.new(0,0,0)
     Lighting.ColorShift_Bottom = Color3.new(0,0,0)
-    
     if settings.FULLBRIGHT_REMOVE_FOG then
         Lighting.FogEnd = 100000
         Lighting.FogStart = 100000
     end
-    
     for _, child in ipairs(Lighting:GetChildren()) do
-        if child:IsA("Atmosphere") 
-        or child:IsA("BloomEffect") 
+        if child:IsA("Atmosphere")
+        or child:IsA("BloomEffect")
         or child:IsA("BlurEffect")
         or child:IsA("ColorCorrectionEffect")
         or child:IsA("SunRaysEffect")
@@ -1133,17 +1527,46 @@ local function toggleFullbright()
 end
 
 -- ==========================================
--- INPUT HANDLING
+-- KEYBIND SYSTEM
 -- ==========================================
+local keyActions = {
+    KEY_WALLWALK   = toggleClimb,
+    KEY_FLY        = toggleFly,
+    KEY_NOCLIP     = toggleNoClip,
+    KEY_TURBO      = toggleTurbo,
+    KEY_SPEEDHACK  = toggleSpeedHack,
+    KEY_FULLBRIGHT = toggleFullbright,
+}
+
+local keyData = {
+    KEY_WALLWALK   = {label = "Wall Walk",  key = Enum.KeyCode.C},
+    KEY_FLY        = {label = "Fly",        key = Enum.KeyCode.V},
+    KEY_NOCLIP     = {label = "No Clip",    key = Enum.KeyCode.B},
+    KEY_TURBO      = {label = "Turbo",      key = Enum.KeyCode.Z},
+    KEY_SPEEDHACK  = {label = "Speed Hack", key = Enum.KeyCode.X},
+    KEY_FULLBRIGHT = {label = "Fullbright", key = Enum.KeyCode.F},
+}
+
+-- восстановление из settings
+for id, data in pairs(keyData) do
+    local stored = settings[id]
+    if stored then
+        pcall(function() data.key = Enum.KeyCode[stored] end)
+    end
+end
+
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
     pressed[input.KeyCode] = true
-    
-    if input.KeyCode == Enum.KeyCode.C then toggleClimb() end
-    if input.KeyCode == Enum.KeyCode.V then toggleFly() end
-    if input.KeyCode == Enum.KeyCode.B then toggleNoClip() end
-    if input.KeyCode == Enum.KeyCode.Z then toggleTurbo() end
-    if input.KeyCode == Enum.KeyCode.F then toggleFullbright() end
+
+    for id, data in pairs(keyData) do
+        if input.KeyCode == data.key then
+            local action = keyActions[id]
+            if action then action() end
+            return
+        end
+    end
+
     if input.KeyCode == Enum.KeyCode.P then addWaypoint("WP" .. (#waypoints + 1)) end
     if input.KeyCode == Enum.KeyCode.L then removeWaypoint(#waypoints) end
     if input.KeyCode == Enum.KeyCode.T then teleportToWaypoint(1) end
@@ -1175,7 +1598,7 @@ local WallWalkTab = Window:CreateTab({
 
 WallWalkTab:CreateParagraph({
     Title = "🕷️ SURFACE WALK PRO",
-    Text = "Нажми C для включения ходьбы по стенам"
+    Text = "Хоткей настраивается в Settings"
 })
 
 WallWalkTab:CreateToggle({
@@ -1195,10 +1618,7 @@ WallWalkTab:CreateSlider({
     Range = {1, getMaxValue("WALK_SPEED", 50)},
     Increment = 1,
     CurrentValue = settings.WALK_SPEED,
-    Callback = function(Value)
-        settings.WALK_SPEED = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.WALK_SPEED = Value SaveSettings(settings) end
 })
 
 WallWalkTab:CreateSlider({
@@ -1206,10 +1626,7 @@ WallWalkTab:CreateSlider({
     Range = {1.0, getMaxValue("SPRINT_MULTIPLIER", 3.0)},
     Increment = 0.1,
     CurrentValue = settings.SPRINT_MULTIPLIER,
-    Callback = function(Value)
-        settings.SPRINT_MULTIPLIER = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.SPRINT_MULTIPLIER = Value SaveSettings(settings) end
 })
 
 WallWalkTab:CreateSlider({
@@ -1217,10 +1634,7 @@ WallWalkTab:CreateSlider({
     Range = {1, getMaxValue("GRAVITY", 60)},
     Increment = 1,
     CurrentValue = settings.GRAVITY,
-    Callback = function(Value)
-        settings.GRAVITY = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.GRAVITY = Value SaveSettings(settings) end
 })
 
 WallWalkTab:CreateLabel({ Text = "ДАЛЬНОСТЬ", Style = 1 })
@@ -1230,10 +1644,7 @@ WallWalkTab:CreateSlider({
     Range = {1, getMaxValue("WALL_RANGE", 10)},
     Increment = 0.5,
     CurrentValue = settings.WALL_RANGE,
-    Callback = function(Value)
-        settings.WALL_RANGE = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.WALL_RANGE = Value SaveSettings(settings) end
 })
 
 WallWalkTab:CreateSlider({
@@ -1241,10 +1652,7 @@ WallWalkTab:CreateSlider({
     Range = {1, 15},
     Increment = 1,
     CurrentValue = settings.ALIGN_SPEED,
-    Callback = function(Value)
-        settings.ALIGN_SPEED = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.ALIGN_SPEED = Value SaveSettings(settings) end
 })
 
 WallWalkTab:CreateLabel({ Text = "ПОТОЛОК", Style = 1 })
@@ -1252,10 +1660,7 @@ WallWalkTab:CreateLabel({ Text = "ПОТОЛОК", Style = 1 })
 WallWalkTab:CreateToggle({
     Name = "Фиксация на потолке",
     CurrentValue = settings.CEILING_GRIP,
-    Callback = function(Value)
-        settings.CEILING_GRIP = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.CEILING_GRIP = Value SaveSettings(settings) end
 })
 
 WallWalkTab:CreateSlider({
@@ -1263,10 +1668,7 @@ WallWalkTab:CreateSlider({
     Range = {1, 20},
     Increment = 0.5,
     CurrentValue = settings.CEILING_GRIP_FORCE,
-    Callback = function(Value)
-        settings.CEILING_GRIP_FORCE = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.CEILING_GRIP_FORCE = Value SaveSettings(settings) end
 })
 
 WallWalkTab:CreateSlider({
@@ -1274,28 +1676,19 @@ WallWalkTab:CreateSlider({
     Range = {1, 10},
     Increment = 0.5,
     CurrentValue = settings.CEILING_MAX_TIME,
-    Callback = function(Value)
-        settings.CEILING_MAX_TIME = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.CEILING_MAX_TIME = Value SaveSettings(settings) end
 })
 
 WallWalkTab:CreateToggle({
     Name = "Прилипание к поверхности",
     CurrentValue = settings.STICK_TO_SURFACE,
-    Callback = function(Value)
-        settings.STICK_TO_SURFACE = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.STICK_TO_SURFACE = Value SaveSettings(settings) end
 })
 
 WallWalkTab:CreateToggle({
     Name = "Авто-сброс при падении",
     CurrentValue = settings.AUTO_RESET_ON_FALL,
-    Callback = function(Value)
-        settings.AUTO_RESET_ON_FALL = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.AUTO_RESET_ON_FALL = Value SaveSettings(settings) end
 })
 
 -- ESP TAB
@@ -1306,10 +1699,7 @@ local ESPTab = Window:CreateTab({
     ShowTitle = true
 })
 
-ESPTab:CreateParagraph({
-    Title = "ADVANCED ESP PRO",
-    Text = "Полная настройка подсветки"
-})
+ESPTab:CreateParagraph({ Title = "ADVANCED ESP PRO", Text = "Полная настройка подсветки" })
 
 ESPTab:CreateToggle({
     Name = "Enable ESP",
@@ -1328,10 +1718,7 @@ ESPTab:CreateSlider({
     Range = {0.01, 1.0},
     Increment = 0.01,
     CurrentValue = settings.ESP_UPDATE_INTERVAL,
-    Callback = function(Value)
-        settings.ESP_UPDATE_INTERVAL = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.ESP_UPDATE_INTERVAL = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateSlider({
@@ -1339,10 +1726,7 @@ ESPTab:CreateSlider({
     Range = {50, 2000},
     Increment = 10,
     CurrentValue = settings.ESP_MAX_DISTANCE,
-    Callback = function(Value)
-        settings.ESP_MAX_DISTANCE = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.ESP_MAX_DISTANCE = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateSlider({
@@ -1350,19 +1734,13 @@ ESPTab:CreateSlider({
     Range = {1, 100},
     Increment = 1,
     CurrentValue = settings.ESP_MIN_DISTANCE,
-    Callback = function(Value)
-        settings.ESP_MIN_DISTANCE = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.ESP_MIN_DISTANCE = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateToggle({
     Name = "Затухание по дистанции",
     CurrentValue = settings.ESP_RENDER_DISTANCE_FADE,
-    Callback = function(Value)
-        settings.ESP_RENDER_DISTANCE_FADE = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.ESP_RENDER_DISTANCE_FADE = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateSlider({
@@ -1370,10 +1748,7 @@ ESPTab:CreateSlider({
     Range = {0.0, 1.0},
     Increment = 0.05,
     CurrentValue = settings.ESP_FADE_MIN_ALPHA,
-    Callback = function(Value)
-        settings.ESP_FADE_MIN_ALPHA = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.ESP_FADE_MIN_ALPHA = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateLabel({ Text = "🎨 ПРОЗРАЧНОСТЬ", Style = 1 })
@@ -1383,10 +1758,7 @@ ESPTab:CreateSlider({
     Range = {0.0, 1.0},
     Increment = 0.05,
     CurrentValue = settings.ESP_FILL_TRANSPARENCY,
-    Callback = function(Value)
-        settings.ESP_FILL_TRANSPARENCY = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.ESP_FILL_TRANSPARENCY = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateSlider({
@@ -1394,10 +1766,7 @@ ESPTab:CreateSlider({
     Range = {0.0, 1.0},
     Increment = 0.05,
     CurrentValue = settings.ESP_OUTLINE_TRANSPARENCY,
-    Callback = function(Value)
-        settings.ESP_OUTLINE_TRANSPARENCY = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.ESP_OUTLINE_TRANSPARENCY = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateLabel({ Text = "📝 ТЕКСТ", Style = 1 })
@@ -1405,10 +1774,7 @@ ESPTab:CreateLabel({ Text = "📝 ТЕКСТ", Style = 1 })
 ESPTab:CreateToggle({
     Name = "Показывать имена",
     CurrentValue = settings.SHOW_TEXT,
-    Callback = function(Value)
-        settings.SHOW_TEXT = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.SHOW_TEXT = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateSlider({
@@ -1416,19 +1782,13 @@ ESPTab:CreateSlider({
     Range = {8, 48},
     Increment = 1,
     CurrentValue = settings.ESP_TEXT_SIZE,
-    Callback = function(Value)
-        settings.ESP_TEXT_SIZE = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.ESP_TEXT_SIZE = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateToggle({
     Name = "Показывать дистанцию",
     CurrentValue = settings.ESP_SHOW_DISTANCE_TEXT,
-    Callback = function(Value)
-        settings.ESP_SHOW_DISTANCE_TEXT = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.ESP_SHOW_DISTANCE_TEXT = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateLabel({ Text = "📦 BOX / 📏 TRACER", Style = 1 })
@@ -1436,19 +1796,13 @@ ESPTab:CreateLabel({ Text = "📦 BOX / 📏 TRACER", Style = 1 })
 ESPTab:CreateToggle({
     Name = "Включить Box ESP",
     CurrentValue = settings.ESP_BOX_ENABLED,
-    Callback = function(Value)
-        settings.ESP_BOX_ENABLED = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.ESP_BOX_ENABLED = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateToggle({
     Name = "Включить Tracer",
     CurrentValue = settings.ESP_TRACER_ENABLED,
-    Callback = function(Value)
-        settings.ESP_TRACER_ENABLED = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.ESP_TRACER_ENABLED = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateLabel({ Text = "🎯 ФИЛЬТРЫ", Style = 1 })
@@ -1456,10 +1810,7 @@ ESPTab:CreateLabel({ Text = "🎯 ФИЛЬТРЫ", Style = 1 })
 ESPTab:CreateToggle({
     Name = "Team Check",
     CurrentValue = settings.ESP_TEAM_CHECK,
-    Callback = function(Value)
-        settings.ESP_TEAM_CHECK = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.ESP_TEAM_CHECK = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateLabel({ Text = "👥 ИГРОКИ", Style = 1 })
@@ -1467,10 +1818,7 @@ ESPTab:CreateLabel({ Text = "👥 ИГРОКИ", Style = 1 })
 ESPTab:CreateToggle({
     Name = "Killers ESP",
     CurrentValue = settings.KILLERS_ESP,
-    Callback = function(Value)
-        settings.KILLERS_ESP = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.KILLERS_ESP = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateDropdown({
@@ -1478,19 +1826,13 @@ ESPTab:CreateDropdown({
     Options = {"Red", "Orange", "Purple", "Gold", "White", "Pink", "Magenta", "Yellow"},
     CurrentOption = {settings.KILLERS_COLOR or "Red"},
     MultipleOptions = false,
-    Callback = function(Options)
-        settings.KILLERS_COLOR = Options
-        SaveSettings(settings)
-    end
+    Callback = function(Options) settings.KILLERS_COLOR = Options SaveSettings(settings) end
 })
 
 ESPTab:CreateToggle({
     Name = "Survivors ESP",
     CurrentValue = settings.SURVIVORS_ESP,
-    Callback = function(Value)
-        settings.SURVIVORS_ESP = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.SURVIVORS_ESP = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateDropdown({
@@ -1498,10 +1840,7 @@ ESPTab:CreateDropdown({
     Options = {"Green", "Cyan", "Blue", "Lime", "Teal", "White", "Yellow"},
     CurrentOption = {settings.SURVIVORS_COLOR or "Green"},
     MultipleOptions = false,
-    Callback = function(Options)
-        settings.SURVIVORS_COLOR = Options
-        SaveSettings(settings)
-    end
+    Callback = function(Options) settings.SURVIVORS_COLOR = Options SaveSettings(settings) end
 })
 
 ESPTab:CreateLabel({ Text = "🏭 ОБЪЕКТЫ", Style = 1 })
@@ -1509,19 +1848,13 @@ ESPTab:CreateLabel({ Text = "🏭 ОБЪЕКТЫ", Style = 1 })
 ESPTab:CreateToggle({
     Name = "Generators ESP",
     CurrentValue = settings.GENERATORS_ESP,
-    Callback = function(Value)
-        settings.GENERATORS_ESP = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.GENERATORS_ESP = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateToggle({
     Name = "Items ESP",
     CurrentValue = settings.ITEMS_ESP,
-    Callback = function(Value)
-        settings.ITEMS_ESP = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.ITEMS_ESP = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateDropdown({
@@ -1529,24 +1862,122 @@ ESPTab:CreateDropdown({
     Options = {"AlwaysOnTop", "Occluded"},
     CurrentOption = {settings.ESP_HIGHLIGHT_DEPTH_MODE or "AlwaysOnTop"},
     MultipleOptions = false,
-    Callback = function(Options)
-        settings.ESP_HIGHLIGHT_DEPTH_MODE = Options
+    Callback = function(Options) settings.ESP_HIGHLIGHT_DEPTH_MODE = Options SaveSettings(settings) end
+})
+
+-- ===== CHAMS / SKELETON SUB-TAB =====
+local ChamsTab = Window:CreateTab({
+    Name = "Chams+Skeleton",
+    Icon = "accessibility_new",
+    ImageSource = "Material",
+    ShowTitle = true
+})
+
+ChamsTab:CreateParagraph({
+    Title = "🎨 CHAMS",
+    Text = "Плотная заливка модели противника"
+})
+
+ChamsTab:CreateToggle({
+    Name = "Enable Chams",
+    CurrentValue = settings.CHAMS_ENABLED,
+    Callback = function(Value)
+        chamsEnabled = Value
+        settings.CHAMS_ENABLED = Value
         SaveSettings(settings)
+        if Value then refreshChams() else clearChams() end
+    end
+})
+
+ChamsTab:CreateToggle({
+    Name = "Chams — через стены",
+    CurrentValue = settings.CHAMS_THROUGH_WALLS,
+    Callback = function(Value)
+        chamsThroughWalls = Value
+        settings.CHAMS_THROUGH_WALLS = Value
+        SaveSettings(settings)
+        for _, hl in pairs(chamsTracked) do
+            hl.DepthMode = Value and Enum.HighlightDepthMode.AlwaysOnTop or Enum.HighlightDepthMode.Occluded
+        end
+    end
+})
+
+ChamsTab:CreateInput({
+    Name = "Chams цвет (R,G,B)",
+    CurrentValue = tostring(settings.CHAMS_COLOR_R) .. "," .. tostring(settings.CHAMS_COLOR_G) .. "," .. tostring(settings.CHAMS_COLOR_B),
+    PlaceholderText = "255,0,255",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(Text)
+        local r, g, b = Text:match("(%d+)%s*,%s*(%d+)%s*,%s*(%d+)")
+        if r then
+            r, g, b = tonumber(r), tonumber(g), tonumber(b)
+            chamsColor = Color3.fromRGB(r, g, b)
+            settings.CHAMS_COLOR_R, settings.CHAMS_COLOR_G, settings.CHAMS_COLOR_B = r, g, b
+            SaveSettings(settings)
+            for _, hl in pairs(chamsTracked) do
+                hl.FillColor = chamsColor
+                hl.OutlineColor = chamsColor
+            end
+        end
+    end
+})
+
+ChamsTab:CreateLabel({ Text = "🦴 SKELETON ESP", Style = 1 })
+
+ChamsTab:CreateToggle({
+    Name = "Enable Skeleton ESP",
+    CurrentValue = settings.SKELETON_ENABLED,
+    Callback = function(Value)
+        skeletonEnabled = Value
+        settings.SKELETON_ENABLED = Value
+        SaveSettings(settings)
+        if not Value then clearAllSkeletons() end
+    end
+})
+
+ChamsTab:CreateSlider({
+    Name = "Толщина костей",
+    Range = {0.5, 5.0},
+    Increment = 0.1,
+    CurrentValue = settings.SKELETON_THICKNESS,
+    Callback = function(Value)
+        skeletonThickness = Value
+        settings.SKELETON_THICKNESS = Value
+        SaveSettings(settings)
+        for _, data in pairs(skeletonData) do
+            for _, line in pairs(data) do line.Thickness = Value end
+        end
+    end
+})
+
+ChamsTab:CreateInput({
+    Name = "Skeleton цвет (R,G,B)",
+    CurrentValue = tostring(settings.SKELETON_COLOR_R) .. "," .. tostring(settings.SKELETON_COLOR_G) .. "," .. tostring(settings.SKELETON_COLOR_B),
+    PlaceholderText = "0,255,128",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(Text)
+        local r, g, b = Text:match("(%d+)%s*,%s*(%d+)%s*,%s*(%d+)")
+        if r then
+            r, g, b = tonumber(r), tonumber(g), tonumber(b)
+            skeletonColor = Color3.fromRGB(r, g, b)
+            settings.SKELETON_COLOR_R, settings.SKELETON_COLOR_G, settings.SKELETON_COLOR_B = r, g, b
+            SaveSettings(settings)
+            for _, data in pairs(skeletonData) do
+                for _, line in pairs(data) do line.Color3 = skeletonColor end
+            end
+        end
     end
 })
 
 -- TURBO TAB
 local TurboTab = Window:CreateTab({
-    Name = "Turbo",
+    Name = "Turbo/Speed",
     Icon = "speed",
     ImageSource = "Material",
     ShowTitle = true
 })
 
-TurboTab:CreateParagraph({
-    Title = "TURBO",
-    Text = "Хоткей: Z"
-})
+TurboTab:CreateParagraph({ Title = "TURBO", Text = "Хоткей: Z (настраивается)" })
 
 TurboTab:CreateToggle({
     Name = "Activate Turbo",
@@ -1562,10 +1993,7 @@ TurboTab:CreateSlider({
     Range = {5, getMaxValue("TURBO_SPEED", 100)},
     Increment = 5,
     CurrentValue = settings.TURBO_SPEED,
-    Callback = function(Value)
-        settings.TURBO_SPEED = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.TURBO_SPEED = Value SaveSettings(settings) end
 })
 
 TurboTab:CreateButton({
@@ -1595,6 +2023,45 @@ TurboTab:CreateButton({
     end
 })
 
+TurboTab:CreateLabel({ Text = "🏃 SPEED HACK (Anti-Detect)", Style = 1 })
+
+TurboTab:CreateParagraph({
+    Title = "Speed Hack",
+    Text = "Использует AssemblyLinearVelocity + джиттер.\nWalkSpeed остаётся низким для обхода детекта."
+})
+
+TurboTab:CreateToggle({
+    Name = "Activate Speed Hack",
+    CurrentValue = false,
+    Callback = function(Value)
+        if Value ~= speedHackActive then toggleSpeedHack() end
+    end
+})
+
+TurboTab:CreateSlider({
+    Name = "Speed Hack — базовая скорость",
+    Range = {20, getMaxValue("TURBO_SPEED", 200)},
+    Increment = 5,
+    CurrentValue = settings.SPEEDHACK_BASE,
+    Callback = function(Value) settings.SPEEDHACK_BASE = Value SaveSettings(settings) end
+})
+
+TurboTab:CreateSlider({
+    Name = "Speed Hack — джиттер (%)",
+    Range = {0.0, 0.4},
+    Increment = 0.01,
+    CurrentValue = settings.SPEEDHACK_JITTER_PERCENT,
+    Callback = function(Value) settings.SPEEDHACK_JITTER_PERCENT = Value SaveSettings(settings) end
+})
+
+TurboTab:CreateSlider({
+    Name = "Speed Hack — интервал джиттера (сек)",
+    Range = {0.05, 1.0},
+    Increment = 0.05,
+    CurrentValue = settings.SPEEDHACK_JITTER_INTERVAL,
+    Callback = function(Value) settings.SPEEDHACK_JITTER_INTERVAL = Value SaveSettings(settings) end
+})
+
 -- NO CLIP TAB
 local NoClipTab = Window:CreateTab({
     Name = "No Clip",
@@ -1603,10 +2070,7 @@ local NoClipTab = Window:CreateTab({
     ShowTitle = true
 })
 
-NoClipTab:CreateParagraph({
-    Title = "NO CLIP",
-    Text = "Хоткей: B"
-})
+NoClipTab:CreateParagraph({ Title = "NO CLIP", Text = "Хоткей: B (настраивается)" })
 
 NoClipTab:CreateToggle({
     Name = "Activate No Clip",
@@ -1625,10 +2089,7 @@ local FlyTab = Window:CreateTab({
     ShowTitle = true
 })
 
-FlyTab:CreateParagraph({
-    Title = "FLIGHT MODE",
-    Text = "Хоткей: V"
-})
+FlyTab:CreateParagraph({ Title = "FLIGHT MODE", Text = "Хоткей: V (настраивается)" })
 
 FlyTab:CreateToggle({
     Name = "Enable Flight",
@@ -1644,10 +2105,7 @@ FlyTab:CreateSlider({
     Range = {10, getMaxValue("FLY_SPEED", 100)},
     Increment = 1,
     CurrentValue = settings.FLY_SPEED,
-    Callback = function(Value)
-        settings.FLY_SPEED = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.FLY_SPEED = Value SaveSettings(settings) end
 })
 
 FlyTab:CreateSlider({
@@ -1655,19 +2113,13 @@ FlyTab:CreateSlider({
     Range = {50, getMaxValue("FLY_MAX_SPEED", 300)},
     Increment = 5,
     CurrentValue = settings.FLY_MAX_SPEED,
-    Callback = function(Value)
-        settings.FLY_MAX_SPEED = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.FLY_MAX_SPEED = Value SaveSettings(settings) end
 })
 
 FlyTab:CreateToggle({
     Name = "Hover",
     CurrentValue = settings.FLY_HOVER,
-    Callback = function(Value)
-        settings.FLY_HOVER = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.FLY_HOVER = Value SaveSettings(settings) end
 })
 
 -- WAYPOINTS TAB
@@ -1680,7 +2132,7 @@ local WaypointTab = Window:CreateTab({
 
 WaypointTab:CreateParagraph({
     Title = "📍 WAYPOINT SYSTEM",
-    Text = "P — сохранить точку\nL — удалить последнюю\nT — ТП к #1"
+    Text = "P — сохранить | L — удалить последнюю | T — ТП к #1"
 })
 
 WaypointTab:CreateInput({
@@ -1688,9 +2140,7 @@ WaypointTab:CreateInput({
     CurrentValue = "",
     PlaceholderText = "Введи имя...",
     RemoveTextAfterFocusLost = false,
-    Callback = function(Text)
-        _G.__wpName = Text
-    end
+    Callback = function(Text) _G.__wpName = Text end
 })
 
 WaypointTab:CreateButton({
@@ -1703,9 +2153,7 @@ WaypointTab:CreateButton({
 WaypointTab:CreateButton({
     Name = "🧹 Удалить все точки",
     Callback = function()
-        for i = #waypoints, 1, -1 do
-            table.remove(waypoints, i)
-        end
+        for i = #waypoints, 1, -1 do table.remove(waypoints, i) end
         saveWaypoints()
         refreshBeacons()
         showNotification("📍 Waypoint", "Все точки удалены")
@@ -1717,9 +2165,7 @@ WaypointTab:CreateLabel({ Text = "ТЕЛЕПОРТ К ТОЧКЕ", Style = 1 })
 for i = 1, MAX_WAYPOINTS do
     WaypointTab:CreateButton({
         Name = "📍 ТП → #" .. i,
-        Callback = function()
-            teleportToWaypoint(i)
-        end
+        Callback = function() teleportToWaypoint(i) end
     })
 end
 
@@ -1730,9 +2176,7 @@ WaypointTab:CreateInput({
     CurrentValue = "",
     PlaceholderText = "Например: Player1",
     RemoveTextAfterFocusLost = false,
-    Callback = function(Text)
-        _G.__tpPlayerName = Text
-    end
+    Callback = function(Text) _G.__tpPlayerName = Text end
 })
 
 WaypointTab:CreateButton({
@@ -1754,18 +2198,13 @@ local FullbrightTab = Window:CreateTab({
     ShowTitle = true
 })
 
-FullbrightTab:CreateParagraph({
-    Title = "☀️ FULLBRIGHT",
-    Text = "Хоткей: F (работает локально)"
-})
+FullbrightTab:CreateParagraph({ Title = "☀️ FULLBRIGHT", Text = "Хоткей: F (настраивается)" })
 
 FullbrightTab:CreateToggle({
     Name = "Enable Fullbright",
     CurrentValue = false,
     Callback = function(Value)
-        if Value ~= fullbrightActive then
-            toggleFullbright()
-        end
+        if Value ~= fullbrightActive then toggleFullbright() end
         settings.FULLBRIGHT_ENABLED = Value
         SaveSettings(settings)
     end
@@ -1779,9 +2218,7 @@ FullbrightTab:CreateSlider({
     Callback = function(Value)
         settings.FULLBRIGHT_BRIGHTNESS = Value
         SaveSettings(settings)
-        if fullbrightActive then
-            Lighting.Brightness = Value
-        end
+        if fullbrightActive then Lighting.Brightness = Value end
     end
 })
 
@@ -1793,9 +2230,7 @@ FullbrightTab:CreateSlider({
     Callback = function(Value)
         settings.FULLBRIGHT_CLOCKTIME = Value
         SaveSettings(settings)
-        if fullbrightActive then
-            Lighting.ClockTime = Value
-        end
+        if fullbrightActive then Lighting.ClockTime = Value end
     end
 })
 
@@ -1814,6 +2249,48 @@ FullbrightTab:CreateToggle({
                 Lighting.FogStart = savedLighting and savedLighting.FogStart or 0
             end
         end
+    end
+})
+
+-- ALERT TAB
+local AlertTab = Window:CreateTab({
+    Name = "Killer Alert",
+    Icon = "warning",
+    ImageSource = "Material",
+    ShowTitle = true
+})
+
+AlertTab:CreateParagraph({
+    Title = "🚨 KILLER ALERT",
+    Text = "Красная вспышка + звук при приближении киллера"
+})
+
+AlertTab:CreateToggle({
+    Name = "Enable Alert",
+    CurrentValue = settings.ALERT_ENABLED,
+    Callback = function(Value)
+        settings.ALERT_ENABLED = Value
+        SaveSettings(settings)
+    end
+})
+
+AlertTab:CreateSlider({
+    Name = "Радиус тревоги",
+    Range = {10, 200},
+    Increment = 5,
+    CurrentValue = settings.ALERT_RADIUS,
+    Callback = function(Value)
+        settings.ALERT_RADIUS = Value
+        SaveSettings(settings)
+    end
+})
+
+AlertTab:CreateToggle({
+    Name = "Звук тревоги",
+    CurrentValue = settings.ALERT_SOUND_ENABLED,
+    Callback = function(Value)
+        settings.ALERT_SOUND_ENABLED = Value
+        SaveSettings(settings)
     end
 })
 
@@ -1846,7 +2323,7 @@ SettingsTab:CreateToggle({
 
 SettingsTab:CreateParagraph({
     Title = "CONTROLS",
-    Text = "C - Wall Walk\nV - Fly\nB - No Clip\nZ - Turbo\nF - Fullbright\nP - Save Waypoint\nL - Delete Waypoint\nT - TP to Waypoint #1\nShift - Sprint"
+    Text = "C - Wall Walk\nV - Fly\nB - No Clip\nZ - Turbo\nX - Speed Hack\nF - Fullbright\nP - Save Waypoint\nL - Delete Waypoint\nT - TP to Waypoint #1\nShift - Sprint"
 })
 
 SettingsTab:CreateButton({
@@ -1877,7 +2354,7 @@ RunService.Heartbeat:Connect(function(dt)
         updateCharacterReferences()
         if not hrp or not humanoid then return end
     end
-    
+
     -- NO CLIP MODE
     if noClipActive and hrp and humanoid then
         for _, part in ipairs(character:GetDescendants()) do
@@ -1885,24 +2362,19 @@ RunService.Heartbeat:Connect(function(dt)
                 part.CanCollide = false
             end
         end
-        
         local camCFrame = Camera.CFrame
         local fwd = (pressed[Enum.KeyCode.W] and 1 or 0) - (pressed[Enum.KeyCode.S] and 1 or 0)
         local str = (pressed[Enum.KeyCode.D] and 1 or 0) - (pressed[Enum.KeyCode.A] and 1 or 0)
         local up = (pressed[Enum.KeyCode.Space] and 1 or 0) - (pressed[Enum.KeyCode.LeftControl] and 1 or 0)
-        
         local moveDir = camCFrame.LookVector * fwd + camCFrame.RightVector * str + Vector3.new(0, 1, 0) * up
         if moveDir.Magnitude > 0 then moveDir = moveDir.Unit end
-        
         local speed = settings.WALK_SPEED
         if isSprinting then speed = settings.WALK_SPEED * settings.SPRINT_MULTIPLIER * 2 end
-        
         hrp.AssemblyLinearVelocity = moveDir * speed
         hrp.AssemblyAngularVelocity = Vector3.zero
         return
     end
-    
-    -- AUTO RESET
+
     if settings.AUTO_RESET_ON_FALL and climbing and hrp then
         if hrp.Position.Y < settings.RESET_HEIGHT then
             climbing = false
@@ -1919,41 +2391,35 @@ RunService.Heartbeat:Connect(function(dt)
             return
         end
     end
-    
+
     -- FLY MODE
     if flying and hrp and humanoid then
         local camCFrame = Camera.CFrame
         local camForward = camCFrame.LookVector
         local camRight = camCFrame.RightVector
         local camUp = camCFrame.UpVector
-        
         local fwd = (pressed[Enum.KeyCode.W] and 1 or 0) - (pressed[Enum.KeyCode.S] and 1 or 0)
         local str = (pressed[Enum.KeyCode.D] and 1 or 0) - (pressed[Enum.KeyCode.A] and 1 or 0)
         local up = (pressed[Enum.KeyCode.Space] and 1 or 0) - (pressed[Enum.KeyCode.LeftControl] and 1 or 0)
-        
         local moveDir = camForward * fwd + camRight * str + camUp * up
         if moveDir.Magnitude > 0 then moveDir = moveDir.Unit end
-        
         local targetVel = moveDir * settings.FLY_SPEED
         if settings.FLY_HOVER and moveDir.Magnitude < 0.1 then targetVel = Vector3.zero end
-        
         flyVelocity = flyVelocity:Lerp(targetVel, math.min(1, dt * settings.FLY_ACCELERATION))
         if flyVelocity.Magnitude > settings.FLY_MAX_SPEED then
             flyVelocity = flyVelocity.Unit * settings.FLY_MAX_SPEED
         end
-        
         hrp.AssemblyLinearVelocity = flyVelocity
-        
         if moveDir.Magnitude > 0.1 then
             local targetCF = CFrame.lookAt(hrp.Position, hrp.Position + moveDir, camUp)
             hrp.CFrame = hrp.CFrame:Lerp(targetCF, math.min(1, dt * settings.FLY_SMOOTHNESS))
         end
         return
     end
-    
-    -- WALL WALK MODE
+
+    -- WALL WALK
     if not climbing or not hrp or not humanoid then return end
-    
+
     if isOnCeiling and settings.CEILING_GRIP then
         ceilingTime = ceilingTime + dt
         if ceilingTime > settings.CEILING_MAX_TIME then
@@ -1971,10 +2437,10 @@ RunService.Heartbeat:Connect(function(dt)
     else
         ceilingTime = 0
     end
-    
+
     local pos = hrp.Position
     local camCFrame = Camera.CFrame
-    
+
     local camForward = projectToPlane(camCFrame.LookVector, upDir)
     if camForward.Magnitude > 0.001 then
         camForward = camForward.Unit
@@ -1982,23 +2448,23 @@ RunService.Heartbeat:Connect(function(dt)
         camForward = projectToPlane(-camCFrame.UpVector, upDir).Unit
     end
     local camRight = upDir:Cross(camForward).Unit
-    
+
     local fwd = (pressed[Enum.KeyCode.W] and 1 or 0) - (pressed[Enum.KeyCode.S] and 1 or 0)
     local str = (pressed[Enum.KeyCode.D] and 1 or 0) - (pressed[Enum.KeyCode.A] and 1 or 0)
-    
+
     local move = camForward * fwd + camRight * str
     if move.Magnitude > 0 then move = move.Unit end
-    
+
     local wallHit = move.Magnitude > 0 and Workspace:Raycast(pos, move * settings.WALL_RANGE, rayParams) or nil
     local supportNear = Workspace:Raycast(pos, gravityDir * 2, rayParams) ~= nil
     local supportFar = Workspace:Raycast(pos, gravityDir * 3.5, rayParams) ~= nil
-    
+
     if isGrounded then
         if not supportFar then isGrounded = false end
     else
         if supportNear then isGrounded = true end
     end
-    
+
     local targetGravity = gravityDir
     if isGrounded and wallHit and wallHit.Normal then
         targetGravity = -wallHit.Normal
@@ -2009,31 +2475,33 @@ RunService.Heartbeat:Connect(function(dt)
             targetGravity = Vector3.new(0, -1, 0)
         end
     end
-    
+
     gravityDir = slerp(gravityDir, targetGravity, math.min(1, dt * settings.GRAVITY_LERP_SPEED))
     upDir = -gravityDir
-    
-    isOnCeiling = false
-    if isGrounded and wallHit and wallHit.Normal then
-        if wallHit.Normal.Y < -0.5 then isOnCeiling = true end
+
+    -- Проверка потолка — всегда, независимо от движения
+    local ceilingCheck = Workspace:Raycast(pos, Vector3.new(0, settings.WALL_RANGE, 0), rayParams)
+    if isGrounded and ceilingCheck and ceilingCheck.Normal.Y < -0.5 then
+        isOnCeiling = true
+    elseif not isGrounded then
+        isOnCeiling = false
     end
-    
+
     local currentGravity = settings.GRAVITY
     local useGripForce = settings.FALL_OFFSET
     local currentSpeed = settings.WALK_SPEED
-    
     if isSprinting then
         currentSpeed = settings.WALK_SPEED * settings.SPRINT_MULTIPLIER
     end
-    
+
     if isOnCeiling and settings.CEILING_GRIP then
         currentGravity = 0
         useGripForce = settings.CEILING_GRIP_FORCE
         fallSpeed = 0
     end
-    
+
     local vel = projectToPlane(move * currentSpeed, gravityDir)
-    
+
     if isGrounded then
         fallSpeed = 0
         if settings.STICK_TO_SURFACE then
@@ -2046,19 +2514,17 @@ RunService.Heartbeat:Connect(function(dt)
         if fallSpeed > settings.FALL_LIMIT then fallSpeed = settings.FALL_LIMIT end
         vel = vel + gravityDir * fallSpeed
     end
-    
-    if not (isOnCeiling and settings.CEILING_GRIP) then
-        vel = vel + Vector3.new(0, Workspace.Gravity, 0) * dt
-    end
-    
+
+    -- УБРАНО: конфликт с Workspace.Gravity (был баг)
+
     local currentVel = hrp.AssemblyLinearVelocity
     local newVel = currentVel:Lerp(vel, math.min(1, dt * settings.SMOOTHNESS))
     hrp.AssemblyLinearVelocity = newVel
     hrp.AssemblyAngularVelocity = Vector3.zero
-    
+
     local desiredFacing = move.Magnitude > 0 and projectToPlane(move, gravityDir).Unit or facing
     facing = facing:Lerp(desiredFacing, math.min(1, dt * settings.ALIGN_SPEED))
-    
+
     hrp.CFrame = hrp.CFrame:Lerp(makeCFrame(pos, facing, upDir), math.min(1, dt * settings.ALIGN_SPEED))
 end)
 
@@ -2066,14 +2532,17 @@ end)
 -- INITIALIZATION
 -- ==========================================
 print("═══════════════════════════════════════════════════════")
-print("🕷️ Forsaken Surge v11.0")
+print("🕷️ Forsaken Surge v12.0")
 print("═══════════════════════════════════════════════════════")
 print("✅ Wall Walk | ✅ Fly | ✅ No Clip | ✅ Turbo")
-print("✅ ESP PRO | ✅ Waypoints | ✅ Fullbright")
-print("✅ Killer Walls Remover | ✅ Unlimited Mode")
+print("✅ Speed Hack (Anti-Detect)")
+print("✅ ESP PRO | ✅ Chams | ✅ Skeleton ESP")
+print("✅ Waypoints | ✅ Fullbright | ✅ Killer Alert")
+print("✅ Anti-AFK | ✅ Killer Walls Remover")
 print("═══════════════════════════════════════════════════════")
 print("🔑 C - Wall Walk | V - Fly | B - No Clip | Z - Turbo")
-print("🔑 F - Fullbright | P - Save WP | L - Del WP | T - TP WP#1")
+print("🔑 X - Speed Hack | F - Fullbright")
+print("🔑 P - Save WP | L - Del WP | T - TP WP#1")
 print("═══════════════════════════════════════════════════════")
 
 task.wait(0.5)
@@ -2086,4 +2555,13 @@ end
 if settings.FULLBRIGHT_ENABLED then
     enableFullbright()
     fullbrightActive = true
+end
+
+if settings.CHAMS_ENABLED then
+    chamsEnabled = true
+    refreshChams()
+end
+
+if settings.SKELETON_ENABLED then
+    skeletonEnabled = true
 end
