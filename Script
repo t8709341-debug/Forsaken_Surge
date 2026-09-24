@@ -5,7 +5,7 @@ local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-S
 -- ==========================================
 local Window = Luna:CreateWindow({
     Name = "Forsaken Surge",
-    Subtitle = "v12.0 | WALL WALK + TURBO + FLY + NOCLIP + ESP PRO + WAYPOINTS + CLICKTP + FREECAM + MACROS",
+    Subtitle = "v13.0 | HOTKEY PERMISSIONS + WALL WALK + TURBO + FLY + NOCLIP + ESP + CLICKTP + FREECAM",
     LogoID = nil,
     LoadingEnabled = true,
     LoadingTitle = "Forsaken Surge",
@@ -168,13 +168,20 @@ local DefaultSettings = {
     FREECAM_SENSITIVITY = 0.35,
     FREECAM_HIDE_CHAR = false,
 
-    -- ===== MACROS =====
-    MACRO_ENABLED = true,
-    MACRO_PLAY_HOTKEY = "F8",
-    MACRO_RECORD_HOTKEY = "F7",
-
     -- ===== WAYPOINT SWAP =====
     WP_SWAP_ENABLED = false,
+
+    -- ==========================================
+    -- 🔑 HOTKEY PERMISSIONS (разрешения на хоткеи)
+    -- ==========================================
+    HOTKEY_WALLWALK_ENABLED = true,
+    HOTKEY_FLY_ENABLED = true,
+    HOTKEY_NOCLIP_ENABLED = true,
+    HOTKEY_TURBO_ENABLED = true,
+    HOTKEY_FULLBRIGHT_ENABLED = true,
+    HOTKEY_FREECAM_ENABLED = true,
+    HOTKEY_CLICKTP_ENABLED = true,
+    HOTKEY_WAYPOINTS_ENABLED = true,
 }
 
 function LoadSettings()
@@ -238,7 +245,7 @@ local flyVelocity = Vector3.new(0, 0, 0)
 local fullbrightActive = false
 local savedLighting = nil
 
--- New states
+-- Freecam / ClickTP states
 local freecamActive = false
 local freecamCFrame = CFrame.new()
 local freecamPos = Vector3.new()
@@ -246,16 +253,19 @@ local freecamRot = CFrame.new()
 local freecamSavedCamType = nil
 local freecamSavedCamSubject = nil
 local freecamSavedCamCFrame = CFrame.new()
-
-local macroRecording = false
-local macroEvents = {}
-local macroRecordStart = 0
-local macros = {}
-local macroPlaying = false
+local clickTPActive = false
 
 local rayParams = RaycastParams.new()
 rayParams.FilterType = Enum.RaycastFilterType.Exclude
 rayParams.RespectCanCollide = true
+
+-- ==========================================
+-- 🔑 HOTKEY PERMISSION CHECK
+-- ==========================================
+-- Возвращает true, если хоткей разрешён в панели
+local function isHotkeyAllowed(permissionKey)
+    return settings[permissionKey] == true
+end
 
 -- ==========================================
 -- EXCLUSIVE MODE
@@ -1065,9 +1075,6 @@ local function removeWaypoint(index)
     end
 end
 
--- ==========================================
--- WAYPOINT TELEPORT WITH SWAP
--- ==========================================
 local function teleportToWaypoint(index)
     if not waypoints[index] then return end
     if not hrp then
@@ -1076,7 +1083,6 @@ local function teleportToWaypoint(index)
     end
     local wp = waypoints[index]
 
-    -- Swap mode: swap current pos with wp pos
     if settings.WP_SWAP_ENABLED then
         local oldPos = hrp.Position
         hrp.CFrame = CFrame.new(wp.Position + Vector3.new(0, 3, 0))
@@ -1084,7 +1090,7 @@ local function teleportToWaypoint(index)
         waypoints[index].Position = oldPos
         saveWaypoints()
         refreshBeacons()
-        showNotification("🔁 Waypoint SWAP", "ТП → " .. wp.Name .. " (точка теперь на старом месте)")
+        showNotification("🔁 Waypoint SWAP", "ТП → " .. wp.Name .. " (точка на старом месте)")
         return
     end
 
@@ -1188,7 +1194,6 @@ end
 -- ==========================================
 -- CLICK TP 🖱️
 -- ==========================================
-local clickTPActive = false
 local function toggleClickTP(state)
     if state ~= nil then
         clickTPActive = state
@@ -1210,7 +1215,6 @@ local function performClickTP()
     if not mouse then return end
 
     local unitRay = Camera:ScreenPointToRay(mouse.X, mouse.Y)
-    local ray = Ray.new(unitRay.Origin, unitRay.Direction * settings.CLICKTP_DISTANCE)
 
     local filter = RaycastParams.new()
     filter.FilterType = Enum.RaycastFilterType.Exclude
@@ -1233,7 +1237,6 @@ end
 -- FREECAM 🎥
 -- ==========================================
 local freecamConnection = nil
-local freecamVelocity = Vector3.zero
 
 local function startFreecam()
     if freecamActive then return end
@@ -1250,7 +1253,6 @@ local function startFreecam()
     Camera.CameraType = Enum.CameraType.Scriptable
     freecamPos = Camera.CFrame.Position
     freecamRot = Camera.CFrame
-    freecamVelocity = Vector3.zero
 
     if settings.FREECAM_HIDE_CHAR and character then
         for _, part in ipairs(character:GetDescendants()) do
@@ -1334,189 +1336,54 @@ local function toggleFreecam()
 end
 
 -- ==========================================
--- MACRO SYSTEM 🎬
+-- INPUT HANDLING (С ПРОВЕРКОЙ РАЗРЕШЕНИЙ)
 -- ==========================================
-local MacroFolder = MyDataFolder .. "/Macros"
-if not isfolder(MacroFolder) then
-    makefolder(MacroFolder)
-end
-
-local function saveMacros()
-    local data = {}
-    for name, events in pairs(macros) do
-        data[name] = events
-    end
-    pcall(function()
-        writefile(MacroFolder .. "/macros.json", HttpService:JSONEncode(data))
-    end)
-end
-
-local function loadMacros()
-    local path = MacroFolder .. "/macros.json"
-    if isfile(path) then
-        local ok, data = pcall(HttpService.JSONDecode, HttpService, readfile(path))
-        if ok and type(data) == "table" then
-            macros = data
-        end
-    end
-end
-
-loadMacros()
-
-local function startMacroRecord()
-    if macroRecording then return end
-    macroRecording = true
-    macroEvents = {}
-    macroRecordStart = tick()
-    showNotification("🎬 Macro", "Запись начата... нажми " .. settings.MACRO_RECORD_HOTKEY .. " для остановки")
-end
-
-local function stopMacroRecord(name)
-    if not macroRecording then return end
-    macroRecording = false
-    local macroName = name or ("Macro_" .. os.date("%H%M%S"))
-    if #macroEvents == 0 then
-        showNotification("🎬 Macro", "Запись пуста, отменено")
-        return
-    end
-    macros[macroName] = macroEvents
-    saveMacros()
-    showNotification("🎬 Macro", "Сохранён: " .. macroName .. " (" .. #macroEvents .. " событий)")
-end
-
-local function playMacro(name)
-    if macroPlaying then return end
-    local events = macros[name]
-    if not events then
-        showNotification("🎬 Macro", "Макрос не найден: " .. tostring(name))
-        return
-    end
-    macroPlaying = true
-    task.spawn(function()
-        local startTime = tick()
-        for _, ev in ipairs(events) do
-            local elapsed = tick() - startTime
-            local delay = ev.time - elapsed
-            if delay > 0 then
-                task.wait(delay)
-            end
-            if ev.type == "KeyDown" then
-                pcall(function()
-                    local keyCode = Enum.KeyCode[ev.key]
-                    if keyCode then
-                        UserInputService:SendKeyEvent(keyCode, true, false)
-                    end
-                end)
-            elseif ev.type == "KeyUp" then
-                pcall(function()
-                    local keyCode = Enum.KeyCode[ev.key]
-                    if keyCode then
-                        UserInputService:SendKeyEvent(keyCode, false, false)
-                    end
-                end)
-            elseif ev.type == "MouseButtonDown" then
-                pcall(function()
-                    local btn = Enum.UserInputType[ev.button]
-                    if btn then
-                        -- can't send mouse button directly via SendMouseEvent in all executors
-                    end
-                end)
-            end
-            task.wait()
-        end
-        macroPlaying = false
-        showNotification("🎬 Macro", "Воспроизведение завершено: " .. name)
-    end)
-end
-
--- ==========================================
--- INPUT HANDLING
--- ==========================================
-local function isHotkeyMatch(input, hotkeyStr)
-    if not hotkeyStr or hotkeyStr == "" then return false end
-    local ok, keyCode = pcall(function() return Enum.KeyCode[hotkeyStr] end)
-    if ok and keyCode then
-        return input.KeyCode == keyCode
-    end
-    return false
-end
-
--- Record input events
-UserInputService.InputBegan:Connect(function(input, gp)
-    if macroRecording and not gp then
-        local t = tick() - macroRecordStart
-        if input.UserInputType == Enum.UserInputType.Keyboard then
-            table.insert(macroEvents, {
-                time = t,
-                type = "KeyDown",
-                key = input.KeyCode.Name
-            })
-        elseif input.UserInputType == Enum.UserInputType.MouseButton1 then
-            table.insert(macroEvents, { time = t, type = "MouseButtonDown", button = "MouseButton1" })
-        elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
-            table.insert(macroEvents, { time = t, type = "MouseButtonDown", button = "MouseButton2" })
-        end
-    end
-end)
-
-UserInputService.InputEnded:Connect(function(input, gp)
-    if macroRecording and not gp then
-        local t = tick() - macroRecordStart
-        if input.UserInputType == Enum.UserInputType.Keyboard then
-            table.insert(macroEvents, {
-                time = t,
-                type = "KeyUp",
-                key = input.KeyCode.Name
-            })
-        end
-    end
-end)
-
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
     pressed[input.KeyCode] = true
 
-    -- Hotkeys
-    if input.KeyCode == Enum.KeyCode.C then toggleClimb() end
-    if input.KeyCode == Enum.KeyCode.V then toggleFly() end
-    if input.KeyCode == Enum.KeyCode.B then toggleNoClip() end
-    if input.KeyCode == Enum.KeyCode.Z then toggleTurbo() end
-    if input.KeyCode == Enum.KeyCode.F then toggleFullbright() end
-    if input.KeyCode == Enum.KeyCode.P then addWaypoint("WP" .. (#waypoints + 1)) end
-    if input.KeyCode == Enum.KeyCode.L then removeWaypoint(#waypoints) end
-    if input.KeyCode == Enum.KeyCode.T then teleportToWaypoint(1) end
-    if input.KeyCode == Enum.KeyCode.LeftShift then isSprinting = true end
-    if input.KeyCode == Enum.KeyCode.O then toggleFreecam() end
+    -- 🔒 Все хоткеи проверяют, разрешены ли они в панели.
+    -- Если разрешение выключено — клавиша полностью игнорируется.
 
-    -- Click TP hotkey
-    if input.KeyCode == Enum.KeyCode.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton1 then
-        if clickTPActive and not freecamActive then
+    if input.KeyCode == Enum.KeyCode.C and isHotkeyAllowed("HOTKEY_WALLWALK_ENABLED") then
+        toggleClimb()
+    end
+
+    if input.KeyCode == Enum.KeyCode.V and isHotkeyAllowed("HOTKEY_FLY_ENABLED") then
+        toggleFly()
+    end
+
+    if input.KeyCode == Enum.KeyCode.B and isHotkeyAllowed("HOTKEY_NOCLIP_ENABLED") then
+        toggleNoClip()
+    end
+
+    if input.KeyCode == Enum.KeyCode.Z and isHotkeyAllowed("HOTKEY_TURBO_ENABLED") then
+        toggleTurbo()
+    end
+
+    if input.KeyCode == Enum.KeyCode.F and isHotkeyAllowed("HOTKEY_FULLBRIGHT_ENABLED") then
+        toggleFullbright()
+    end
+
+    if input.KeyCode == Enum.KeyCode.G and isHotkeyAllowed("HOTKEY_FREECAM_ENABLED") then
+        toggleFreecam()
+    end
+
+    -- Click TP через ЛКМ
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if clickTPActive and settings.HOTKEY_CLICKTP_ENABLED and not freecamActive then
             performClickTP()
         end
     end
 
-    -- Macro hotkeys
-    if settings.MACRO_ENABLED then
-        if isHotkeyMatch(input, settings.MACRO_RECORD_HOTKEY) then
-            if macroRecording then
-                stopMacroRecord()
-            else
-                startMacroRecord()
-            end
-        end
-        if isHotkeyMatch(input, settings.MACRO_PLAY_HOTKEY) then
-            local firstMacroName = nil
-            for name, _ in pairs(macros) do
-                firstMacroName = name
-                break
-            end
-            if firstMacroName then
-                playMacro(firstMacroName)
-            else
-                showNotification("🎬 Macro", "Нет сохранённых макросов")
-            end
-        end
+    -- Waypoints hotkeys
+    if isHotkeyAllowed("HOTKEY_WAYPOINTS_ENABLED") then
+        if input.KeyCode == Enum.KeyCode.P then addWaypoint("WP" .. (#waypoints + 1)) end
+        if input.KeyCode == Enum.KeyCode.L then removeWaypoint(#waypoints) end
+        if input.KeyCode == Enum.KeyCode.T then teleportToWaypoint(1) end
     end
+
+    if input.KeyCode == Enum.KeyCode.LeftShift then isSprinting = true end
 end)
 
 UserInputService.InputEnded:Connect(function(input, gp)
@@ -1529,12 +1396,137 @@ end)
 -- LUNA INTERFACE
 -- ==========================================
 Window:CreateHomeTab({
-    SupportedExecutors = {"Synapse X", "Krnl", "ScriptWare", "Fluxus", "Oxygen U", "Xeno"},
+    SupportedExecutors = {"Synapse X", "Krnl", "ScriptWare", "Fluxus", "Oxygen U"},
     DiscordInvite = "forsakensurge",
     Icon = 2,
 })
 
+-- ==========================================
+-- 🔑 HOTKEY PERMISSIONS TAB
+-- ==========================================
+local HotkeysTab = Window:CreateTab({
+    Name = "Hotkeys",
+    Icon = "keyboard",
+    ImageSource = "Material",
+    ShowTitle = true
+})
+
+HotkeysTab:CreateParagraph({
+    Title = "🔑 HOTKEY PERMISSIONS",
+    Text = "Включи тумблер — и соответствующая клавиша начнёт работать.\nВыключи — клавиша будет полностью игнорироваться.\n\nТумблеры 'Enable ... Hotkey' — это РАЗРЕШЕНИЯ, а не состояние режима."
+})
+
+HotkeysTab:CreateToggle({
+    Name = "🕷️ Enable Wall Walk Hotkey (C)",
+    CurrentValue = settings.HOTKEY_WALLWALK_ENABLED,
+    Callback = function(Value)
+        settings.HOTKEY_WALLWALK_ENABLED = Value
+        SaveSettings(settings)
+        if not Value and climbing then
+            toggleClimb()
+            showNotification("🔒 Hotkey Lock", "Wall Walk принудительно выключен")
+        end
+    end
+})
+
+HotkeysTab:CreateToggle({
+    Name = "✈️ Enable Fly Hotkey (V)",
+    CurrentValue = settings.HOTKEY_FLY_ENABLED,
+    Callback = function(Value)
+        settings.HOTKEY_FLY_ENABLED = Value
+        SaveSettings(settings)
+        if not Value and flying then
+            toggleFly()
+            showNotification("🔒 Hotkey Lock", "Fly принудительно выключен")
+        end
+    end
+})
+
+HotkeysTab:CreateToggle({
+    Name = "🌀 Enable No Clip Hotkey (B)",
+    CurrentValue = settings.HOTKEY_NOCLIP_ENABLED,
+    Callback = function(Value)
+        settings.HOTKEY_NOCLIP_ENABLED = Value
+        SaveSettings(settings)
+        if not Value and noClipActive then
+            toggleNoClip()
+            showNotification("🔒 Hotkey Lock", "No Clip принудительно выключен")
+        end
+    end
+})
+
+HotkeysTab:CreateToggle({
+    Name = "⚡ Enable Turbo Hotkey (Z)",
+    CurrentValue = settings.HOTKEY_TURBO_ENABLED,
+    Callback = function(Value)
+        settings.HOTKEY_TURBO_ENABLED = Value
+        SaveSettings(settings)
+        if not Value and turboActive then
+            toggleTurbo()
+            showNotification("🔒 Hotkey Lock", "Turbo принудительно выключен")
+        end
+    end
+})
+
+HotkeysTab:CreateToggle({
+    Name = "☀️ Enable Fullbright Hotkey (F)",
+    CurrentValue = settings.HOTKEY_FULLBRIGHT_ENABLED,
+    Callback = function(Value)
+        settings.HOTKEY_FULLBRIGHT_ENABLED = Value
+        SaveSettings(settings)
+        if not Value and fullbrightActive then
+            toggleFullbright()
+            showNotification("🔒 Hotkey Lock", "Fullbright принудительно выключен")
+        end
+    end
+})
+
+HotkeysTab:CreateToggle({
+    Name = "🎥 Enable Freecam Hotkey (G)",
+    CurrentValue = settings.HOTKEY_FREECAM_ENABLED,
+    Callback = function(Value)
+        settings.HOTKEY_FREECAM_ENABLED = Value
+        SaveSettings(settings)
+        if not Value and freecamActive then
+            stopFreecam()
+            showNotification("🔒 Hotkey Lock", "Freecam принудительно выключен")
+        end
+    end
+})
+
+HotkeysTab:CreateToggle({
+    Name = "🖱️ Enable Click TP (ЛКМ)",
+    CurrentValue = settings.HOTKEY_CLICKTP_ENABLED,
+    Callback = function(Value)
+        settings.HOTKEY_CLICKTP_ENABLED = Value
+        SaveSettings(settings)
+        if not Value then
+            clickTPActive = false
+            settings.CLICKTP_ENABLED = false
+            SaveSettings(settings)
+            showNotification("🔒 Hotkey Lock", "Click TP принудительно выключен")
+        end
+    end
+})
+
+HotkeysTab:CreateToggle({
+    Name = "📍 Enable Waypoint Hotkeys (P/L/T)",
+    CurrentValue = settings.HOTKEY_WAYPOINTS_ENABLED,
+    Callback = function(Value)
+        settings.HOTKEY_WAYPOINTS_ENABLED = Value
+        SaveSettings(settings)
+        showNotification("🔑 Hotkeys", Value and "Waypoint-хоткеи разрешены" or "Waypoint-хоткеи заблокированы")
+    end
+})
+
+HotkeysTab:CreateParagraph({
+    Title = "ℹ️ КАК ЭТО РАБОТАЕТ",
+    Text = "Пример: выключи 'Enable Turbo Hotkey (Z)' — и сколько бы ты ни жал Z, Turbo не включится. Если Turbo был активен — он сразу отключится."
+})
+
+-- ==========================================
 -- WALL WALK TAB
+-- ==========================================
 local WallWalkTab = Window:CreateTab({
     Name = "Wall Walk",
     Icon = "directions_walk",
@@ -1544,7 +1536,7 @@ local WallWalkTab = Window:CreateTab({
 
 WallWalkTab:CreateParagraph({
     Title = "🕷️ SURFACE WALK PRO",
-    Text = "Нажми C для включения ходьбы по стенам"
+    Text = "Нажми C для включения (если хоткей разрешён в табе Hotkeys)"
 })
 
 WallWalkTab:CreateToggle({
@@ -1916,13 +1908,17 @@ local ClickTPTab = Window:CreateTab({
 
 ClickTPTab:CreateParagraph({
     Title = "🖱️ CLICK TELEPORT",
-    Text = "ЛКМ по поверхности — телепорт в точку. Работает, когда режим включён."
+    Text = "ЛКМ по поверхности — телепорт. Работает только если тумблер включён, и разрешено в табе Hotkeys."
 })
 
 ClickTPTab:CreateToggle({
     Name = "Enable Click TP",
     CurrentValue = settings.CLICKTP_ENABLED,
     Callback = function(Value)
+        if Value and not settings.HOTKEY_CLICKTP_ENABLED then
+            showNotification("🔒 Hotkey Lock", "Сначала разреши Click TP в табе Hotkeys!")
+            return
+        end
         toggleClickTP(Value)
     end
 })
@@ -1968,13 +1964,17 @@ local FreecamTab = Window:CreateTab({
 
 FreecamTab:CreateParagraph({
     Title = "🎥 FREECAM",
-    Text = "WASD — движение, Space/Ctrl — вверх/вниз, Shift — ускорение. Хоткей: O"
+    Text = "WASD — движение, Space/Ctrl — вверх/вниз, Shift — ускорение. Хоткей: G (если разрешён в Hotkeys)"
 })
 
 FreecamTab:CreateToggle({
     Name = "Enable Freecam",
     CurrentValue = settings.FREECAM_ENABLED,
     Callback = function(Value)
+        if Value and not settings.HOTKEY_FREECAM_ENABLED then
+            showNotification("🔒 Hotkey Lock", "Сначала разреши Freecam в табе Hotkeys!")
+            return
+        end
         if Value and not freecamActive then
             startFreecam()
         elseif not Value and freecamActive then
@@ -2012,7 +2012,6 @@ FreecamTab:CreateToggle({
         settings.FREECAM_HIDE_CHAR = Value
         SaveSettings(settings)
         if freecamActive then
-            -- refresh transparency
             if Value and character then
                 for _, part in ipairs(character:GetDescendants()) do
                     if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
@@ -2037,106 +2036,6 @@ FreecamTab:CreateToggle({
 })
 
 -- ==========================================
--- MACRO TAB
--- ==========================================
-local MacroTab = Window:CreateTab({
-    Name = "Macros",
-    Icon = "fiber_manual_record",
-    ImageSource = "Material",
-    ShowTitle = true
-})
-
-MacroTab:CreateParagraph({
-    Title = "🎬 MACRO SYSTEM",
-    Text = "Запись: " .. settings.MACRO_RECORD_HOTKEY .. " | Воспроизведение: " .. settings.MACRO_PLAY_HOTKEY .. " (первый макрос)"
-})
-
-MacroTab:CreateInput({
-    Name = "Имя макроса",
-    CurrentValue = "",
-    PlaceholderText = "Например: Farm",
-    RemoveTextAfterFocusLost = false,
-    Callback = function(Text)
-        _G.__macroName = Text
-    end
-})
-
-MacroTab:CreateButton({
-    Name = "⏺️ Начать запись",
-    Callback = function()
-        startMacroRecord()
-    end
-})
-
-MacroTab:CreateButton({
-    Name = "⏹️ Остановить и сохранить",
-    Callback = function()
-        stopMacroRecord(_G.__macroName)
-    end
-})
-
-MacroTab:CreateButton({
-    Name = "▶️ Воспроизвести (по имени)",
-    Callback = function()
-        if _G.__macroName and _G.__macroName ~= "" then
-            playMacro(_G.__macroName)
-        else
-            showNotification("🎬 Macro", "Введи имя макроса")
-        end
-    end
-})
-
-MacroTab:CreateLabel({ Text = "УПРАВЛЕНИЕ ХОТКЕЯМИ", Style = 1 })
-
-MacroTab:CreateInput({
-    Name = "Хоткей записи (например F7)",
-    CurrentValue = settings.MACRO_RECORD_HOTKEY,
-    PlaceholderText = "F7",
-    RemoveTextAfterFocusLost = true,
-    Callback = function(Text)
-        settings.MACRO_RECORD_HOTKEY = Text
-        SaveSettings(settings)
-    end
-})
-
-MacroTab:CreateInput({
-    Name = "Хоткей воспроизведения (например F8)",
-    CurrentValue = settings.MACRO_PLAY_HOTKEY,
-    PlaceholderText = "F8",
-    RemoveTextAfterFocusLost = true,
-    Callback = function(Text)
-        settings.MACRO_PLAY_HOTKEY = Text
-        SaveSettings(settings)
-    end
-})
-
-MacroTab:CreateLabel({ Text = "СПИСОК МАКРОСОВ", Style = 1 })
-
-MacroTab:CreateButton({
-    Name = "🔄 Обновить список",
-    Callback = function()
-        local names = {}
-        for name, _ in pairs(macros) do
-            table.insert(names, name)
-        end
-        if #names == 0 then
-            showNotification("🎬 Macro", "Нет макросов")
-        else
-            showNotification("🎬 Macro", "Найдено: " .. table.concat(names, ", "))
-        end
-    end
-})
-
-MacroTab:CreateButton({
-    Name = "🗑️ Удалить все макросы",
-    Callback = function()
-        macros = {}
-        saveMacros()
-        showNotification("🎬 Macro", "Все макросы удалены")
-    end
-})
-
--- ==========================================
 -- TURBO TAB
 -- ==========================================
 local TurboTab = Window:CreateTab({
@@ -2148,13 +2047,17 @@ local TurboTab = Window:CreateTab({
 
 TurboTab:CreateParagraph({
     Title = "TURBO",
-    Text = "Хоткей: Z"
+    Text = "Хоткей: Z (если разрешён в Hotkeys)"
 })
 
 TurboTab:CreateToggle({
     Name = "Activate Turbo",
     CurrentValue = false,
     Callback = function(Value)
+        if Value and not settings.HOTKEY_TURBO_ENABLED then
+            showNotification("🔒 Hotkey Lock", "Сначала разреши Turbo в табе Hotkeys!")
+            return
+        end
         if Value and not turboActive then toggleTurbo()
         elseif not Value and turboActive then toggleTurbo() end
     end
@@ -2208,13 +2111,17 @@ local NoClipTab = Window:CreateTab({
 
 NoClipTab:CreateParagraph({
     Title = "NO CLIP",
-    Text = "Хоткей: B"
+    Text = "Хоткей: B (если разрешён в Hotkeys)"
 })
 
 NoClipTab:CreateToggle({
     Name = "Activate No Clip",
     CurrentValue = false,
     Callback = function(Value)
+        if Value and not settings.HOTKEY_NOCLIP_ENABLED then
+            showNotification("🔒 Hotkey Lock", "Сначала разреши No Clip в табе Hotkeys!")
+            return
+        end
         if Value and not noClipActive then toggleNoClip()
         elseif not Value and noClipActive then toggleNoClip() end
     end
@@ -2230,13 +2137,17 @@ local FlyTab = Window:CreateTab({
 
 FlyTab:CreateParagraph({
     Title = "FLIGHT MODE",
-    Text = "Хоткей: V"
+    Text = "Хоткей: V (если разрешён в Hotkeys)"
 })
 
 FlyTab:CreateToggle({
     Name = "Enable Flight",
     CurrentValue = false,
     Callback = function(Value)
+        if Value and not settings.HOTKEY_FLY_ENABLED then
+            showNotification("🔒 Hotkey Lock", "Сначала разреши Fly в табе Hotkeys!")
+            return
+        end
         if Value and not flying then toggleFly()
         elseif not Value and flying then toggleFly() end
     end
@@ -2283,7 +2194,7 @@ local WaypointTab = Window:CreateTab({
 
 WaypointTab:CreateParagraph({
     Title = "📍 WAYPOINT SYSTEM",
-    Text = "P — сохранить точку\nL — удалить последнюю\nT — ТП к #1"
+    Text = "P — сохранить точку\nL — удалить последнюю\nT — ТП к #1\n(работают, если разрешены в Hotkeys)"
 })
 
 WaypointTab:CreateToggle({
@@ -2293,7 +2204,7 @@ WaypointTab:CreateToggle({
         settings.WP_SWAP_ENABLED = Value
         SaveSettings(settings)
         refreshBeacons()
-        showNotification("🔁 Waypoint", Value and "SWAP MODE включён — точка переместится на твоё старое место" or "SWAP MODE выключен")
+        showNotification("🔁 Waypoint", Value and "SWAP MODE включён" or "SWAP MODE выключен")
     end
 })
 
@@ -2370,13 +2281,17 @@ local FullbrightTab = Window:CreateTab({
 
 FullbrightTab:CreateParagraph({
     Title = "☀️ FULLBRIGHT",
-    Text = "Хоткей: F (работает локально)"
+    Text = "Хоткей: F (если разрешён в Hotkeys)"
 })
 
 FullbrightTab:CreateToggle({
     Name = "Enable Fullbright",
     CurrentValue = false,
     Callback = function(Value)
+        if Value and not settings.HOTKEY_FULLBRIGHT_ENABLED then
+            showNotification("🔒 Hotkey Lock", "Сначала разреши Fullbright в табе Hotkeys!")
+            return
+        end
         if Value ~= fullbrightActive then
             toggleFullbright()
         end
@@ -2460,7 +2375,7 @@ SettingsTab:CreateToggle({
 
 SettingsTab:CreateParagraph({
     Title = "CONTROLS",
-    Text = "C - Wall Walk\nV - Fly\nB - No Clip\nZ - Turbo\nF - Fullbright\nG - Freecam\nP - Save Waypoint\nL - Delete Waypoint\nT - TP to Waypoint #1\nShift - Sprint\nЛКМ - Click TP (если включён)\n" .. settings.MACRO_RECORD_HOTKEY .. " - Macro Record\n" .. settings.MACRO_PLAY_HOTKEY .. " - Macro Play"
+    Text = "C - Wall Walk\nV - Fly\nB - No Clip\nZ - Turbo\nF - Fullbright\nG - Freecam\nP - Save Waypoint\nL - Delete Waypoint\nT - TP to Waypoint #1\nShift - Sprint\nЛКМ - Click TP (если разрешён)\n\n⚠️ Хоткеи работают только если их тумблер включён в табе Hotkeys."
 })
 
 SettingsTab:CreateButton({
@@ -2680,18 +2595,18 @@ end)
 -- INITIALIZATION
 -- ==========================================
 print("═══════════════════════════════════════════════════════")
-print("🕷️ Forsaken Surge v12.0")
+print("🕷️ Forsaken Surge v13.0")
 print("═══════════════════════════════════════════════════════")
 print("✅ Wall Walk | ✅ Fly | ✅ No Clip | ✅ Turbo")
 print("✅ ESP PRO | ✅ Waypoints + SWAP | ✅ Fullbright")
 print("✅ Killer Walls Remover | ✅ Unlimited Mode")
-print("✅ Click TP | ✅ Freecam | ✅ Macro System")
+print("✅ Click TP | ✅ Freecam | 🔑 Hotkey Permissions")
 print("═══════════════════════════════════════════════════════")
 print("🔑 C - Wall Walk | V - Fly | B - No Clip | Z - Turbo")
 print("🔑 F - Fullbright | G - Freecam")
 print("🔑 P - Save WP | L - Del WP | T - TP WP#1")
-print("🔑 ЛКМ - Click TP (если включён)")
-print("🔑 " .. settings.MACRO_RECORD_HOTKEY .. " - Macro Record | " .. settings.MACRO_PLAY_HOTKEY .. " - Macro Play")
+print("🔑 ЛКМ - Click TP (если разрешён)")
+print("⚠️  Хоткеи работают только если их тумблер включён в табе Hotkeys!")
 print("═══════════════════════════════════════════════════════")
 
 task.wait(0.5)
