@@ -1,11 +1,11 @@
 local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-Softworks/Luna-Interface-Suite/refs/heads/main/source.lua", true))()
 
 -- ==========================================
--- WINDOW
+-- MAIN WINDOW
 -- ==========================================
 local Window = Luna:CreateWindow({
     Name = "Forsaken Surge",
-    Subtitle = "v17 | AIMBOT FIXED (Players + workspace.Players + NPC)",
+    Subtitle = "v15 | AIMBOT via workspace.Players.Killers/Survivors",
     LogoID = nil,
     LoadingEnabled = true,
     LoadingTitle = "Forsaken Surge",
@@ -33,11 +33,12 @@ local mouse  = player:GetMouse()
 -- CHARACTER REFS
 -- ==========================================
 local character, humanoid, hrp
+
 local function updateCharacterReferences()
     character = player.Character
     if character then
         humanoid = character:FindFirstChildOfClass("Humanoid")
-        hrp      = character:FindFirstChild("HumanoidRootPart") or character.PrimaryPart
+        hrp      = character:FindFirstChild("HumanoidRootPart")
     else
         humanoid, hrp = nil, nil
     end
@@ -53,7 +54,6 @@ if not isfolder(MyDataFolder) then makefolder(MyDataFolder) end
 local SaveFile = MyDataFolder .. "/Settings.json"
 
 local DefaultSettings = {
-    -- Wall Walk / Fly / Turbo / NoClip
     WALK_SPEED = 16, SPRINT_MULTIPLIER = 2.0, GRAVITY = 30, WALL_RANGE = 4.5,
     ALIGN_SPEED = 6, GRAVITY_LERP_SPEED = 5, STICK_TO_SURFACE = true,
     FALL_OFFSET = 3, FALL_LIMIT = 20, SMOOTHNESS = 15,
@@ -62,15 +62,10 @@ local DefaultSettings = {
     REMOVE_KILLER_WALLS = false,
     FLY_SPEED = 50, FLY_ACCELERATION = 10, FLY_MAX_SPEED = 150, FLY_SMOOTHNESS = 8,
     FLY_HOVER = false,
-    -- ESP
-    ESP_ENABLED = true,
-    KILLERS_ESP = true,   KILLERS_COLOR = "Red",
+    ESP_ENABLED = true, KILLERS_ESP = true, KILLERS_COLOR = "Red",
     SURVIVORS_ESP = true, SURVIVORS_COLOR = "Green",
-    NOFOLDER_ESP = true,  NOFOLDER_COLOR = "White",
-    NPC_ESP = true,       NPC_COLOR = "Magenta",
     GENERATORS_ESP = true, GENERATORS_COLOR = "Cyan",
-    ITEMS_ESP = true,    ITEMS_COLOR = "Gold",
-    SHOW_TEXT = true,
+    ITEMS_ESP = true, ITEMS_COLOR = "Gold", SHOW_TEXT = true,
     ESP_UPDATE_INTERVAL = 0.1, ESP_MAX_DISTANCE = 500, ESP_MIN_DISTANCE = 10,
     ESP_FILL_TRANSPARENCY = 0.5, ESP_OUTLINE_TRANSPARENCY = 0.3,
     ESP_TEXT_SIZE = 14, ESP_TEXT_MIN_DISTANCE = 25, ESP_TEXT_MAX_DISTANCE = 1200,
@@ -78,19 +73,14 @@ local DefaultSettings = {
     ESP_BOX_TRANSPARENCY = 0.7, ESP_HIGHLIGHT_DEPTH_MODE = "AlwaysOnTop",
     ESP_RENDER_DISTANCE_FADE = true, ESP_FADE_MIN_ALPHA = 0.35,
     ESP_TRACER_ENABLED = false, ESP_TRACER_COLOR = "White", ESP_TRACER_TRANSPARENCY = 0.5,
-    -- Turbo
     TURBO_ACTIVE = false, TURBO_SPEED = 30, TURBO_MODE = "Velocity",
     UNLIMITED_MODE = false,
-    -- Fullbright
     FULLBRIGHT_ENABLED = false, FULLBRIGHT_BRIGHTNESS = 3, FULLBRIGHT_CLOCKTIME = 12,
     FULLBRIGHT_REMOVE_FOG = true,
-    -- Click TP
     CLICKTP_ENABLED = false, CLICKTP_DISTANCE = 500, CLICKTP_OFFSET_Y = 3,
-    -- Freecam
     FREECAM_ENABLED = false, FREECAM_SPEED = 60, FREECAM_SPRINT_MULT = 3,
     FREECAM_HIDE_CHAR = false,
     WP_SWAP_ENABLED = false,
-    -- Hotkeys
     HOTKEY_WALLWALK_ENABLED = true, HOTKEY_FLY_ENABLED = true,
     HOTKEY_NOCLIP_ENABLED = true, HOTKEY_TURBO_ENABLED = true,
     HOTKEY_FULLBRIGHT_ENABLED = true, HOTKEY_FREECAM_ENABLED = true,
@@ -98,38 +88,33 @@ local DefaultSettings = {
     HOTKEY_AIMBOT_ENABLED = true,
     -- AIMBOT
     AIMBOT_ENABLED = false,
-    AIMBOT_MODE = "Both",              -- PVP | PVE | Both
+    AIMBOT_MODE = "PVP",
     AIMBOT_KEY = "E",
     AIMBOT_TOGGLE_MODE = false,
-    -- КОГО АТАКОВАТЬ
-    AIMBOT_TARGET_KILLERS   = true,    -- цели из workspace.Players.Killers
-    AIMBOT_TARGET_SURVIVORS = true,    -- цели из workspace.Players.Survivors
-    AIMBOT_TARGET_NOFOLDER  = true,    -- игроки без папки (plr.Character)
-    AIMBOT_TARGET_NPCS      = true,    -- NPC вне папок и вне игроков
-    AIMBOT_TEAM_CHECK       = false,   -- ⚠️ по умолчанию ВЫКЛ, чтобы ничего не блокировалось
-    AIMBOT_IGNORE_DEAD      = true,
-    AIMBOT_WALL_CHECK       = true,
-    -- FOV
+    AIMBOT_TARGET_KILLERS = true,
+    AIMBOT_TARGET_SURVIVORS = false,
+    AIMBOT_TEAM_CHECK = true,
+    AIMBOT_IGNORE_DEAD = true,
+    AIMBOT_WALL_CHECK = true,
     AIMBOT_FOV_ENABLED = true,
-    AIMBOT_FOV         = 300,
-    AIMBOT_SHOW_FOV    = true,
+    AIMBOT_FOV = 150,
+    AIMBOT_SHOW_FOV = true,
     AIMBOT_FOV_COLOR_R = 255, AIMBOT_FOV_COLOR_G = 255, AIMBOT_FOV_COLOR_B = 255,
-    -- Наведение
-    AIMBOT_SMOOTHNESS   = 0.25,
-    AIMBOT_MAX_DISTANCE = 1500,
+    AIMBOT_SMOOTHNESS = 0.25,
+    AIMBOT_MAX_DISTANCE = 1000,
     AIMBOT_MIN_DISTANCE = 0,
-    AIMBOT_LOCK_MODE    = "Closest",
-    AIMBOT_HITBOX       = "Head",
+    AIMBOT_LOCK_MODE = "Closest",
+    AIMBOT_HITBOX = "Head",
     AIMBOT_HITBOX_OFFSET_Y = 0,
-    AIMBOT_PREDICTION   = true,
+    AIMBOT_PREDICTION = true,
     AIMBOT_PREDICTION_X = 0.165, AIMBOT_PREDICTION_Y = 0.165, AIMBOT_PREDICTION_Z = 0.165,
-    AIMBOT_AUTO_SHOOT   = false,
+    AIMBOT_AUTO_SHOOT = false,
     AIMBOT_AUTO_SHOOT_DELAY = 0.1,
     AIMBOT_AUTO_SHOOT_ONLY_VISIBLE = true,
     AIMBOT_SHOW_TARGET = true,
     AIMBOT_TARGET_COLOR_R = 255, AIMBOT_TARGET_COLOR_G = 0, AIMBOT_TARGET_COLOR_B = 0,
-    AIMBOT_SCAN_INTERVAL = 0.08,
-    AIMBOT_PVE_RADIUS = 300,
+    AIMBOT_SCAN_INTERVAL = 0.1,
+    AIMBOT_PVE_RADIUS = 200,
     AIMBOT_MAX_NPC_CANDIDATES = 30,
     -- Maxes
     WALK_SPEED_MAX = 50, SPRINT_MULTIPLIER_MAX = 3.0, GRAVITY_MAX = 100,
@@ -190,6 +175,7 @@ aimbotRayFilter.RespectCanCollide = true
 -- HELPERS
 -- ==========================================
 local function projectToPlane(v, n) return v - n * v:Dot(n) end
+
 local function makeCFrame(pos, forward, up)
     local f = forward.Unit
     local r = f:Cross(up); if r.Magnitude < 1e-5 then r = Vector3.new(1,0,0) end
@@ -197,6 +183,7 @@ local function makeCFrame(pos, forward, up)
     local u = r:Cross(f).Unit
     return CFrame.new(pos.X,pos.Y,pos.Z, r.X,r.Y,r.Z, u.X,u.Y,u.Z, -f.X,-f.Y,-f.Z)
 end
+
 local function slerp(a, b, t)
     local au, bu = a.Unit, b.Unit
     local dot = math.clamp(au:Dot(bu), -1, 1)
@@ -204,6 +191,7 @@ local function slerp(a, b, t)
     local ang = math.acos(dot); local s = math.sin(ang)
     return (au * math.sin((1-t)*ang) + bu * math.sin(t*ang)) / s
 end
+
 local function showNotification(title, text)
     if not settings.NOTIFICATIONS_ENABLED then return end
     pcall(function() Luna:Notify({ Title = title, Description = text, Duration = 3 }) end)
@@ -211,10 +199,32 @@ local function showNotification(title, text)
 end
 
 -- ==========================================
--- ROLE DETECTION (только для ESP и «не бить мою папку»)
+-- ROLE DETECTION (только по папкам workspace.Players)
 -- ==========================================
 local function getWorkspacePlayersFolder()
     return Workspace:FindFirstChild("Players")
+end
+
+local function getPlayerFolderName(plr)
+    if not plr then return nil end
+    local wsPlayers = getWorkspacePlayersFolder()
+    if not wsPlayers then return nil end
+    local k = wsPlayers:FindFirstChild("Killers")
+    local s = wsPlayers:FindFirstChild("Survivors")
+    if k and k:FindFirstChild(plr.Name) then return "Killers" end
+    if s and s:FindFirstChild(plr.Name) then return "Survivors" end
+    return nil
+end
+
+local function getPlayerRole(plr)
+    local f = getPlayerFolderName(plr)
+    if f == "Killers"   then return "Killer"   end
+    if f == "Survivors" then return "Survivor" end
+    return "Unknown"
+end
+
+local function getLocalPlayerRole()
+    return getPlayerRole(player)
 end
 
 local function getWorkspaceModel(plr)
@@ -225,48 +235,10 @@ local function getWorkspaceModel(plr)
         local folder = wsPlayers:FindFirstChild(folderName)
         if folder then
             local m = folder:FindFirstChild(plr.Name)
-            if m then return m, folderName end
+            if m and m:IsA("Model") then return m, folderName end
         end
     end
     return nil
-end
-
-local function getPlayerRole(plr)
-    if not plr then return "Unknown" end
-    local _, folder = getWorkspaceModel(plr)
-    if folder == "Killers"   then return "Killer"   end
-    if folder == "Survivors" then return "Survivor" end
-    if plr.Character then return "NoFolder" end
-    return "Unknown"
-end
-
-local function getLocalPlayerRole()
-    return getPlayerRole(player)
-end
-
--- ==========================================
--- УНИВЕРСАЛЬНЫЙ ПОИСК HITBOX (работает с любой моделью)
--- ==========================================
-local function findRootPart(model)
-    if not model then return nil end
-    return model:FindFirstChild("HumanoidRootPart")
-        or model:FindFirstChild("UpperTorso")
-        or model:FindFirstChild("Torso")
-        or model:FindFirstChild("Head")
-        or model.PrimaryPart
-end
-
-local function getHitboxFast(model, hitboxName)
-    if not model then return nil end
-    if hitboxName == "Head" then
-        return model:FindFirstChild("Head") or findRootPart(model)
-    elseif hitboxName == "Torso" then
-        return model:FindFirstChild("Torso")
-            or model:FindFirstChild("UpperTorso")
-            or model:FindFirstChild("LowerTorso")
-            or findRootPart(model)
-    end
-    return findRootPart(model)
 end
 
 -- ==========================================
@@ -310,6 +282,19 @@ createFovCircle(); createTargetIndicator()
 -- ==========================================
 -- AIMBOT CORE
 -- ==========================================
+local function getHitboxFast(model, hitboxName)
+    if not model then return nil end
+    if hitboxName == "Head" then
+        return model:FindFirstChild("Head") or model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart
+    elseif hitboxName == "Torso" then
+        return model:FindFirstChild("Torso")
+            or model:FindFirstChild("UpperTorso")
+            or model:FindFirstChild("LowerTorso")
+            or model:FindFirstChild("HumanoidRootPart")
+    end
+    return model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart
+end
+
 local function isVisible(targetPart)
     if not settings.AIMBOT_WALL_CHECK then return true end
     if not targetPart or not targetPart.Parent then return false end
@@ -331,132 +316,36 @@ local function isVisible(targetPart)
     return true
 end
 
--- Строим список категорий моделей — БЕЗ блокировки "моя команда vs чужая" по умолчанию
-local function buildCandidates()
+local function scanWorkspacePlayers()
     local candidates = {}
+    local wsPlayers = getWorkspacePlayersFolder()
+    if not wsPlayers then return candidates end
     local myPos = Camera.CFrame.Position
     local myRole = getLocalPlayerRole()
-    local wsPlayers = getWorkspacePlayersFolder()
 
-    -- === 1) workspace.Players.Killers ===
-    if settings.AIMBOT_TARGET_KILLERS then
-        local skip = settings.AIMBOT_TEAM_CHECK and myRole == "Killer"
-        if not skip then
-            local folder = wsPlayers and wsPlayers:FindFirstChild("Killers")
-            if folder then
-                for _, model in ipairs(folder:GetChildren()) do
-                    if model:IsA("Model") then
-                        local hum  = model:FindFirstChildOfClass("Humanoid")
-                        local root = findRootPart(model)
-                        if hum and root then
-                            if not (settings.AIMBOT_IGNORE_DEAD and hum.Health <= 0) then
-                                local dist = (root.Position - myPos).Magnitude
-                                if dist <= settings.AIMBOT_MAX_DISTANCE and dist >= settings.AIMBOT_MIN_DISTANCE then
-                                    table.insert(candidates, {
-                                        model=model, root=root, hum=hum, dist=dist,
-                                        health=hum.Health, role="Killer",
-                                    })
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
+    local folders = {
+        { name = "Killers",   role = "Killer"   },
+        { name = "Survivors", role = "Survivor" },
+    }
 
-    -- === 2) workspace.Players.Survivors ===
-    if settings.AIMBOT_TARGET_SURVIVORS then
-        local skip = settings.AIMBOT_TEAM_CHECK and myRole == "Survivor"
-        if not skip then
-            local folder = wsPlayers and wsPlayers:FindFirstChild("Survivors")
-            if folder then
-                for _, model in ipairs(folder:GetChildren()) do
-                    if model:IsA("Model") then
-                        local hum  = model:FindFirstChildOfClass("Humanoid")
-                        local root = findRootPart(model)
-                        if hum and root then
-                            if not (settings.AIMBOT_IGNORE_DEAD and hum.Health <= 0) then
-                                local dist = (root.Position - myPos).Magnitude
-                                if dist <= settings.AIMBOT_MAX_DISTANCE and dist >= settings.AIMBOT_MIN_DISTANCE then
-                                    table.insert(candidates, {
-                                        model=model, root=root, hum=hum, dist=dist,
-                                        health=hum.Health, role="Survivor",
-                                    })
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
+    for _, info in ipairs(folders) do
+        if info.role == "Killer"   and not settings.AIMBOT_TARGET_KILLERS   then continue end
+        if info.role == "Survivor" and not settings.AIMBOT_TARGET_SURVIVORS then continue end
+        if settings.AIMBOT_TEAM_CHECK and myRole ~= "Unknown" and myRole == info.role then continue end
 
-    -- === 3) Игроки БЕЗ папки (plr.Character) ===
-    if settings.AIMBOT_TARGET_NOFOLDER then
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= player then
-                local hasFolder = getWorkspaceModel(plr) ~= nil
-                if not hasFolder and plr.Character then
-                    local char = plr.Character
-                    local hum  = char:FindFirstChildOfClass("Humanoid")
-                    local root = findRootPart(char)
-                    if hum and root then
-                        if not (settings.AIMBOT_IGNORE_DEAD and hum.Health <= 0) then
-                            local dist = (root.Position - myPos).Magnitude
-                            if dist <= settings.AIMBOT_MAX_DISTANCE and dist >= settings.AIMBOT_MIN_DISTANCE then
-                                table.insert(candidates, {
-                                    model=char, root=root, hum=hum, dist=dist,
-                                    health=hum.Health, role="NoFolder",
-                                })
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    -- === 4) NPC (всё с Humanoid вне папок и вне персонажей игроков) ===
-    if settings.AIMBOT_TARGET_NPCS then
-        local params = OverlapParams.new()
-        params.FilterType = Enum.RaycastFilterType.Exclude
-        params.FilterDescendantsInstances = { character }
-        params.MaxParts = 400
-        local parts = Workspace:GetPartBoundsInRadius(myPos, settings.AIMBOT_PVE_RADIUS, params)
-        local seen, count = {}, 0
-        for _, part in ipairs(parts) do
-            if count >= settings.AIMBOT_MAX_NPC_CANDIDATES then break end
-            local model = part:FindFirstAncestorOfClass("Model")
-            if model and not seen[model] then
-                seen[model] = true
-
-                -- пропуск моделей из папок
-                local inFolder = false
-                if wsPlayers then
-                    for _, folderName in ipairs({"Killers","Survivors"}) do
-                        local f = wsPlayers:FindFirstChild(folderName)
-                        if f and model:IsDescendantOf(f) then inFolder = true break end
-                    end
-                end
-
-                -- пропуск персонажей игроков
-                local isPlayerChar = false
-                for _, plr in ipairs(Players:GetPlayers()) do
-                    if plr.Character == model then isPlayerChar = true break end
-                end
-
-                if not inFolder and not isPlayerChar and model ~= character then
+        local folder = wsPlayers:FindFirstChild(info.name)
+        if folder then
+            for _, model in ipairs(folder:GetChildren()) do
+                if model:IsA("Model") then
                     local hum  = model:FindFirstChildOfClass("Humanoid")
-                    local root = findRootPart(model)
+                    local root = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart
                     if hum and root then
-                        if not (settings.AIMBOT_IGNORE_DEAD and hum.Health <= 0) then
+                        if not settings.AIMBOT_IGNORE_DEAD or hum.Health > 0 then
                             local dist = (root.Position - myPos).Magnitude
                             if dist <= settings.AIMBOT_MAX_DISTANCE and dist >= settings.AIMBOT_MIN_DISTANCE then
-                                count = count + 1
                                 table.insert(candidates, {
-                                    model=model, root=root, hum=hum, dist=dist,
-                                    health=hum.Health, role="NPC",
+                                    model = model, root = root, hum = hum,
+                                    dist  = dist,  health = hum.Health, role = info.role,
                                 })
                             end
                         end
@@ -465,8 +354,56 @@ local function buildCandidates()
             end
         end
     end
-
     return candidates
+end
+
+local function scanNpcs()
+    local candidates = {}
+    if not (settings.AIMBOT_MODE == "PVE" or settings.AIMBOT_MODE == "Both") then return candidates end
+    local myPos = Camera.CFrame.Position
+    local params = OverlapParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = { character }
+    params.MaxParts = 200
+    local parts = Workspace:GetPartBoundsInRadius(myPos, settings.AIMBOT_PVE_RADIUS, params)
+    local seen, count = {}, 0
+    local wsPlayers = getWorkspacePlayersFolder()
+    for _, part in ipairs(parts) do
+        if count >= settings.AIMBOT_MAX_NPC_CANDIDATES then break end
+        local model = part:FindFirstAncestorOfClass("Model")
+        if model and not seen[model] then
+            seen[model] = true
+            local skip = false
+            if wsPlayers then
+                for _, folderName in ipairs({"Killers","Survivors"}) do
+                    local f = wsPlayers:FindFirstChild(folderName)
+                    if f and model:IsDescendantOf(f) then skip = true break end
+                end
+            end
+            if not skip and model ~= character then
+                local hum  = model:FindFirstChildOfClass("Humanoid")
+                local root = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart
+                if hum and root and (not settings.AIMBOT_IGNORE_DEAD or hum.Health > 0) then
+                    local dist = (root.Position - myPos).Magnitude
+                    if dist <= settings.AIMBOT_MAX_DISTANCE and dist >= settings.AIMBOT_MIN_DISTANCE then
+                        count = count + 1
+                        table.insert(candidates, {
+                            model = model, root = root, hum = hum,
+                            dist  = dist,  health = hum.Health, role = "NPC",
+                        })
+                    end
+                end
+            end
+        end
+    end
+    return candidates
+end
+
+local function scanCandidates()
+    local list = {}
+    for _, c in ipairs(scanWorkspacePlayers()) do table.insert(list, c) end
+    for _, c in ipairs(scanNpcs())            do table.insert(list, c) end
+    return list
 end
 
 local function pickBestTarget(candidates)
@@ -481,20 +418,17 @@ local function pickBestTarget(candidates)
                 local vec = Vector2.new(sp.X, sp.Y)
                 local d = (vec - mousePos).Magnitude
                 if not settings.AIMBOT_FOV_ENABLED or d <= settings.AIMBOT_FOV then
-                    table.insert(valid, {
-                        model=c.model, part=part, dist=c.dist,
-                        screenDist=d, health=c.health, role=c.role,
-                    })
+                    table.insert(valid, { model = c.model, part = part, dist = c.dist, screenDist = d, health = c.health })
                 end
             end
         end
     end
     if #valid == 0 then return nil end
     local mode = settings.AIMBOT_LOCK_MODE
-    if mode == "Closest"          then table.sort(valid, function(a,b) return a.dist < b.dist end)
-    elseif mode == "NearestCenter" then table.sort(valid, function(a,b) return a.screenDist < b.screenDist end)
-    elseif mode == "LowestHealth"  then table.sort(valid, function(a,b) return a.health < b.health end)
-    elseif mode == "HighestHealth" then table.sort(valid, function(a,b) return a.health > b.health end) end
+    if mode == "Closest"           then table.sort(valid, function(a,b) return a.dist < b.dist end)
+    elseif mode == "NearestCenter"  then table.sort(valid, function(a,b) return a.screenDist < b.screenDist end)
+    elseif mode == "LowestHealth"   then table.sort(valid, function(a,b) return a.health < b.health end)
+    elseif mode == "HighestHealth"  then table.sort(valid, function(a,b) return a.health > b.health end) end
     return valid[1]
 end
 
@@ -559,7 +493,7 @@ RunService.RenderStepped:Connect(function(dt)
     local now = tick()
     if now - aimbotLastScan >= settings.AIMBOT_SCAN_INTERVAL then
         aimbotLastScan = now
-        aimbotCachedCandidates = buildCandidates()
+        aimbotCachedCandidates = scanCandidates()
     end
 
     local best = pickBestTarget(aimbotCachedCandidates)
@@ -621,20 +555,18 @@ end)
 -- ESP
 -- ==========================================
 local ColorPresets = {
-    ["White"] = Color3.fromRGB(255,255,255), ["Teal"]   = Color3.fromRGB(3,252,157),
-    ["Green"] = Color3.fromRGB(0,255,0),     ["Purple"] = Color3.fromRGB(158,0,179),
-    ["Red"]   = Color3.fromRGB(255,0,0),     ["Blue"]   = Color3.fromRGB(0,0,255),
-    ["Cyan"]  = Color3.fromRGB(0,255,255),   ["Gold"]   = Color3.fromRGB(255,215,0),
-    ["Orange"]= Color3.fromRGB(255,165,0),   ["Pink"]   = Color3.fromRGB(255,105,180),
-    ["Lime"]  = Color3.fromRGB(50,205,50),   ["Yellow"] = Color3.fromRGB(255,255,0),
-    ["Magenta"]=Color3.fromRGB(255,0,255),   ["Brown"]  = Color3.fromRGB(165,42,42),
+    ["White"] = Color3.fromRGB(255,255,255), ["Teal"] = Color3.fromRGB(3,252,157),
+    ["Green"] = Color3.fromRGB(0,255,0),     ["Purple"]= Color3.fromRGB(158,0,179),
+    ["Red"]   = Color3.fromRGB(255,0,0),     ["Blue"]  = Color3.fromRGB(0,0,255),
+    ["Cyan"]  = Color3.fromRGB(0,255,255),   ["Gold"]  = Color3.fromRGB(255,215,0),
+    ["Orange"]= Color3.fromRGB(255,165,0),   ["Pink"]  = Color3.fromRGB(255,105,180),
+    ["Lime"]  = Color3.fromRGB(50,205,50),   ["Yellow"]= Color3.fromRGB(255,255,0),
+    ["Magenta"]=Color3.fromRGB(255,0,255),   ["Brown"] = Color3.fromRGB(165,42,42),
     ["Gray"]  = Color3.fromRGB(128,128,128),
 }
 local function getColorFromSettings(t)
     if t == "Killers"    then return ColorPresets[settings.KILLERS_COLOR]    or ColorPresets.Red   end
     if t == "Survivors"  then return ColorPresets[settings.SURVIVORS_COLOR]  or ColorPresets.Green end
-    if t == "NoFolder"   then return ColorPresets[settings.NOFOLDER_COLOR]   or ColorPresets.White end
-    if t == "NPC"        then return ColorPresets[settings.NPC_COLOR]        or ColorPresets.Magenta end
     if t == "Generators" then return ColorPresets[settings.GENERATORS_COLOR] or ColorPresets.Cyan  end
     if t == "Items"      then return ColorPresets[settings.ITEMS_COLOR]      or ColorPresets.Gold  end
     if t == "Box"        then return ColorPresets[settings.ESP_BOX_COLOR]    or ColorPresets.White end
@@ -758,104 +690,54 @@ local function RemoveESP(inst)
     end
 end
 
--- Применяет ESP к модели в правильной категории
-local function applyESPForModel(model, colorKey)
-    if not model or not model.Parent then return end
-    local hum  = model:FindFirstChildOfClass("Humanoid")
-    local root = findRootPart(model)
-    if not root then return end
-    if hum and hum.Health <= 0 then return end
-
-    local color = getColorFromSettings(colorKey)
-    UpdateHighlight(model, root, {MaxDistance=settings.ESP_MAX_DISTANCE, MinDistance=settings.ESP_MIN_DISTANCE, Color=color})
-    if settings.SHOW_TEXT then UpdateText(model, root, {MinDistance=settings.ESP_TEXT_MIN_DISTANCE, Text=model.Name, Color=color}) end
-    if settings.ESP_BOX_ENABLED    then UpdateBox(model, root, {Color=getColorFromSettings("Box")}) end
-    if settings.ESP_TRACER_ENABLED then UpdateTracer(model, root, {Color=getColorFromSettings("Tracer")}) end
-end
-
 task.spawn(function()
     while true do
         task.wait(settings.ESP_UPDATE_INTERVAL)
         pcall(function()
             if not settings.ESP_ENABLED then clearAllESP() return end
             local alive = {}
+
             local wsPlayers = getWorkspacePlayersFolder()
-
-            -- 1) Killers / Survivors из workspace.Players
             if wsPlayers then
-                if settings.KILLERS_ESP then
-                    local f = wsPlayers:FindFirstChild("Killers")
-                    if f then
+                for _, info in ipairs({
+                    { folder = "Killers",   enabled = settings.KILLERS_ESP,   colorKey = "Killers"   },
+                    { folder = "Survivors", enabled = settings.SURVIVORS_ESP, colorKey = "Survivors" },
+                }) do
+                    local f = wsPlayers:FindFirstChild(info.folder)
+                    if f and info.enabled then
                         for _, model in ipairs(f:GetChildren()) do
                             if model:IsA("Model") then
-                                applyESPForModel(model, "Killers")
-                                alive[model] = true
-                            end
-                        end
-                    end
-                end
-                if settings.SURVIVORS_ESP then
-                    local f = wsPlayers:FindFirstChild("Survivors")
-                    if f then
-                        for _, model in ipairs(f:GetChildren()) do
-                            if model:IsA("Model") then
-                                applyESPForModel(model, "Survivors")
-                                alive[model] = true
-                            end
-                        end
-                    end
-                end
-            end
-
-            -- 2) Игроки без папки — белый
-            if settings.NOFOLDER_ESP then
-                for _, plr in ipairs(Players:GetPlayers()) do
-                    if plr ~= player then
-                        local hasFolder = getWorkspaceModel(plr) ~= nil
-                        if not hasFolder and plr.Character then
-                            local char = plr.Character
-                            if char.Parent then
-                                applyESPForModel(char, "NoFolder")
-                                alive[char] = true
+                                local hum  = model:FindFirstChildOfClass("Humanoid")
+                                local root = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart
+                                if hum and root and hum.Health > 0 then
+                                    local color = getColorFromSettings(info.colorKey)
+                                    local plr = Players:GetPlayerFromCharacter(model)
+                                    local name = plr and (plr.DisplayName or plr.Name) or model.Name
+                                    UpdateHighlight(model, root, {MaxDistance=settings.ESP_MAX_DISTANCE, MinDistance=settings.ESP_MIN_DISTANCE, Color=color})
+                                    if settings.SHOW_TEXT then UpdateText(model, root, {MinDistance=settings.ESP_TEXT_MIN_DISTANCE, Text=name, Color=color}) end
+                                    if settings.ESP_BOX_ENABLED    then UpdateBox(model, root, {Color=getColorFromSettings("Box")}) end
+                                    if settings.ESP_TRACER_ENABLED then UpdateTracer(model, root, {Color=getColorFromSettings("Tracer")}) end
+                                    alive[model] = true
+                                end
                             end
                         end
                     end
                 end
             end
 
-            -- 3) NPC — кастомный цвет
-            if settings.NPC_ESP then
-                -- Берём всех с Humanoid в Workspace, кто не в папках и не персонаж игрока
-                for _, obj in ipairs(Workspace:GetChildren()) do
-                    if obj:IsA("Model") and obj:FindFirstChildOfClass("Humanoid") then
-                        local inFolder = false
-                        if wsPlayers then
-                            for _, folderName in ipairs({"Killers","Survivors"}) do
-                                local f = wsPlayers:FindFirstChild(folderName)
-                                if f and obj:IsDescendantOf(f) then inFolder = true break end
-                            end
-                        end
-                        local isPlayerChar = false
-                        for _, plr in ipairs(Players:GetPlayers()) do
-                            if plr.Character == obj then isPlayerChar = true break end
-                        end
-                        if not inFolder and not isPlayerChar and obj ~= character then
-                            applyESPForModel(obj, "NPC")
-                            alive[obj] = true
-                        end
-                    end
-                end
-            end
-
-            -- 4) Generators
             if settings.GENERATORS_ESP then
                 for _, obj in ipairs(Workspace:GetDescendants()) do
                     if obj:IsA("Model") and obj.Parent then
                         local n = string.lower(obj.Name)
                         if string.find(n,"generator") or string.find(n,"gen") or obj:GetAttribute("Generator") then
                             local p = obj:FindFirstChild("Progress")
-                            if not (p and p.Value >= 100) then
-                                applyESPForModel(obj, "Generators")
+                            if p and p.Value >= 100 then RemoveESP(obj)
+                            else
+                                local root = obj:FindFirstChild("Main") or obj:FindFirstChild("HumanoidRootPart") or obj
+                                local color = getColorFromSettings("Generators")
+                                UpdateHighlight(obj, root, {MaxDistance=settings.ESP_MAX_DISTANCE, MinDistance=settings.ESP_MIN_DISTANCE, Color=color})
+                                if settings.SHOW_TEXT then UpdateText(obj, root, {MinDistance=settings.ESP_TEXT_MIN_DISTANCE, Text=obj.Name, Color=color}) end
+                                if settings.ESP_BOX_ENABLED then UpdateBox(obj, root, {Color=getColorFromSettings("Box")}) end
                                 alive[obj] = true
                             end
                         end
@@ -863,7 +745,6 @@ task.spawn(function()
                 end
             end
 
-            -- 5) Items
             if settings.ITEMS_ESP then
                 for _, obj in ipairs(Workspace:GetDescendants()) do
                     if obj:IsA("Tool") and obj.Parent then
@@ -871,6 +752,7 @@ task.spawn(function()
                         local color = getColorFromSettings("Items")
                         UpdateHighlight(obj, root, {MaxDistance=settings.ESP_MAX_DISTANCE, MinDistance=settings.ESP_MIN_DISTANCE, Color=color})
                         if settings.SHOW_TEXT then UpdateText(obj, root, {MinDistance=settings.ESP_TEXT_MIN_DISTANCE, Text=obj.Name, Color=color}) end
+                        if settings.ESP_BOX_ENABLED then UpdateBox(obj, root, {Color=getColorFromSettings("Box")}) end
                         alive[obj] = true
                     end
                 end
@@ -956,11 +838,12 @@ local function toggleNoClip()
     if noClipActive then
         disableAllModes("noclip")
         humanoid.AutoRotate = true; humanoid.PlatformStand = false
+        local det = character:FindFirstChild("NoclipDetector"); if det then det:Destroy() end
         for _, p in ipairs(character:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end
         hrp.AssemblyLinearVelocity = Vector3.zero; hrp.AssemblyAngularVelocity = Vector3.zero
         showNotification("🌀 No Clip","Активирован")
     else
-        for _, p in ipairs(character:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = true end end
+        for _, p in ipairs(character:GetDescendants()) do if p:IsA("BasePart") and p.Name ~= "NoclipDetector" then p.CanCollide = true end end
         gravityDir = Vector3.new(0,-1,0); upDir = Vector3.new(0,1,0)
         showNotification("🌀 No Clip","Деактивирован")
     end
@@ -993,8 +876,12 @@ task.spawn(function()
             if pressed[Enum.KeyCode.D] then md = md + cr end
             if md.Magnitude > 0 then md = md.Unit end
             local sp = settings.TURBO_SPEED; local mode = settings.TURBO_MODE
-            if mode == "Velocity" then hrp.AssemblyLinearVelocity = md * sp
-            elseif mode == "Teleport" then hrp.CFrame = hrp.CFrame + md * (sp*0.016)
+            if mode == "Velocity" then
+                hrp.AssemblyLinearVelocity = md * sp
+                hrp.AssemblyAngularVelocity = Vector3.zero
+            elseif mode == "Teleport" then
+                hrp.CFrame = hrp.CFrame + md * (sp*0.016)
+                hrp.AssemblyLinearVelocity = Vector3.zero
             elseif mode == "Combo" then
                 hrp.AssemblyLinearVelocity = md * sp * 0.5
                 hrp.CFrame = hrp.CFrame + md * (sp*0.008)
@@ -1175,6 +1062,7 @@ end
 loadWaypoints()
 
 local waypointBeacons = {}
+
 local function createBeacon(position, name, color)
     local part = Instance.new("Part")
     part.Name = "ForsakenSurge_WP"
@@ -1259,11 +1147,9 @@ local function teleportToPlayer(targetName)
         if plr ~= player and plr.Name:lower():find(targetName:lower(), 1, true) then target = plr break end
     end
     if not target then showNotification("📍 TP","Игрок не найден: " .. targetName) return end
-
-    -- Пробуем модель из workspace.Players, потом Character
-    local wsModel = getWorkspaceModel(target)
-    local root = wsModel and findRootPart(wsModel) or (target.Character and findRootPart(target.Character))
-    if not root then showNotification("📍 TP","У игрока нет модели") return end
+    local model = getWorkspaceModel(target)
+    local root = model and (model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart)
+    if not root then showNotification("📍 TP","У игрока нет модели в workspace.Players") return end
     if not hrp then return end
     hrp.CFrame = CFrame.new(root.Position + Vector3.new(0,3,0))
     hrp.AssemblyLinearVelocity = Vector3.zero
@@ -1366,7 +1252,7 @@ Window:CreateHomeTab({
     DiscordInvite = "forsakensurge", Icon = 2,
 })
 
--- HOTKEYS
+-- HOTKEYS TAB
 local HotkeysTab = Window:CreateTab({ Name="Hotkeys", Icon="keyboard", ImageSource="Material", ShowTitle=true })
 HotkeysTab:CreateParagraph({ Title="🔑 HOTKEY PERMISSIONS", Text="Включи тумблер — клавиша работает." })
 HotkeysTab:CreateToggle({ Name="🕷️ Wall Walk (C)", CurrentValue=settings.HOTKEY_WALLWALK_ENABLED,
@@ -1396,10 +1282,10 @@ HotkeysTab:CreateToggle({ Name="🎯 Aimbot Hotkey", CurrentValue=settings.HOTKE
     Callback=function(v) settings.HOTKEY_AIMBOT_ENABLED=v; SaveSettings(settings)
         if not v then aimbotActive=false; aimbotHolding=false end end })
 
--- AIMBOT
+-- AIMBOT TAB
 local AimbotTab = Window:CreateTab({ Name="Aimbot", Icon="my_location", ImageSource="Material", ShowTitle=true })
-AimbotTab:CreateParagraph({ Title="🎯 AIMBOT v17",
-    Text="Ищет цели везде: workspace.Players.Killers/Survivors, plr.Character (без папки) и NPC. Никакой блокировки по умолчанию." })
+AimbotTab:CreateParagraph({ Title="🎯 WORKING AIMBOT v15",
+    Text="Цели берутся из workspace.Players.Killers / Survivors. У игроков нет Team — роль определяется по папке." })
 
 AimbotTab:CreateToggle({ Name="🎯 Enable Aimbot", CurrentValue=settings.AIMBOT_ENABLED,
     Callback=function(v)
@@ -1415,16 +1301,20 @@ AimbotTab:CreateDropdown({ Name="🔑 Клавиша", Options={"E","Q","R","X",
 AimbotTab:CreateToggle({ Name="🔄 Toggle Mode", CurrentValue=settings.AIMBOT_TOGGLE_MODE,
     Callback=function(v) settings.AIMBOT_TOGGLE_MODE=v; SaveSettings(settings) end })
 
-AimbotTab:CreateLabel({ Text="🎯 КОГО АТАКОВАТЬ", Style=1 })
-AimbotTab:CreateToggle({ Name="Атаковать Killers (папка)", CurrentValue=settings.AIMBOT_TARGET_KILLERS,
+AimbotTab:CreateLabel({ Text="🚀 ПРОИЗВОДИТЕЛЬНОСТЬ", Style=1 })
+AimbotTab:CreateSlider({ Name="Интервал сканирования (сек)", Range={0.02,0.5}, Increment=0.01, CurrentValue=settings.AIMBOT_SCAN_INTERVAL,
+    Callback=function(v) settings.AIMBOT_SCAN_INTERVAL=v; SaveSettings(settings) end })
+AimbotTab:CreateSlider({ Name="Радиус NPC", Range={30,1000}, Increment=10, CurrentValue=settings.AIMBOT_PVE_RADIUS,
+    Callback=function(v) settings.AIMBOT_PVE_RADIUS=v; SaveSettings(settings) end })
+AimbotTab:CreateSlider({ Name="Макс. NPC", Range={5,100}, Increment=1, CurrentValue=settings.AIMBOT_MAX_NPC_CANDIDATES,
+    Callback=function(v) settings.AIMBOT_MAX_NPC_CANDIDATES=v; SaveSettings(settings) end })
+
+AimbotTab:CreateLabel({ Text="🎯 ЦЕЛИ", Style=1 })
+AimbotTab:CreateToggle({ Name="Killers", CurrentValue=settings.AIMBOT_TARGET_KILLERS,
     Callback=function(v) settings.AIMBOT_TARGET_KILLERS=v; SaveSettings(settings) end })
-AimbotTab:CreateToggle({ Name="Атаковать Survivors (папка)", CurrentValue=settings.AIMBOT_TARGET_SURVIVORS,
+AimbotTab:CreateToggle({ Name="Survivors", CurrentValue=settings.AIMBOT_TARGET_SURVIVORS,
     Callback=function(v) settings.AIMBOT_TARGET_SURVIVORS=v; SaveSettings(settings) end })
-AimbotTab:CreateToggle({ Name="Атаковать игроков БЕЗ папки", CurrentValue=settings.AIMBOT_TARGET_NOFOLDER,
-    Callback=function(v) settings.AIMBOT_TARGET_NOFOLDER=v; SaveSettings(settings) end })
-AimbotTab:CreateToggle({ Name="Атаковать NPC", CurrentValue=settings.AIMBOT_TARGET_NPCS,
-    Callback=function(v) settings.AIMBOT_TARGET_NPCS=v; SaveSettings(settings) end })
-AimbotTab:CreateToggle({ Name="⚠️ Не бить свою папку (Team Check)", CurrentValue=settings.AIMBOT_TEAM_CHECK,
+AimbotTab:CreateToggle({ Name="Не бить свою папку (Team Check)", CurrentValue=settings.AIMBOT_TEAM_CHECK,
     Callback=function(v) settings.AIMBOT_TEAM_CHECK=v; SaveSettings(settings) end })
 AimbotTab:CreateToggle({ Name="Игнорировать мёртвых", CurrentValue=settings.AIMBOT_IGNORE_DEAD,
     Callback=function(v) settings.AIMBOT_IGNORE_DEAD=v; SaveSettings(settings) end })
@@ -1434,7 +1324,7 @@ AimbotTab:CreateToggle({ Name="Проверка стен", CurrentValue=settings
 AimbotTab:CreateLabel({ Text="👁️ FOV", Style=1 })
 AimbotTab:CreateToggle({ Name="Ограничение FOV", CurrentValue=settings.AIMBOT_FOV_ENABLED,
     Callback=function(v) settings.AIMBOT_FOV_ENABLED=v; SaveSettings(settings) end })
-AimbotTab:CreateSlider({ Name="FOV (пиксели)", Range={10,1000}, Increment=5, CurrentValue=settings.AIMBOT_FOV,
+AimbotTab:CreateSlider({ Name="FOV (пиксели)", Range={10,800}, Increment=5, CurrentValue=settings.AIMBOT_FOV,
     Callback=function(v) settings.AIMBOT_FOV=v; SaveSettings(settings) end })
 AimbotTab:CreateToggle({ Name="Показывать FOV-круг", CurrentValue=settings.AIMBOT_SHOW_FOV,
     Callback=function(v) settings.AIMBOT_SHOW_FOV=v; SaveSettings(settings)
@@ -1463,72 +1353,35 @@ AimbotTab:CreateDropdown({ Name="Hitbox", Options={"Head","Torso","HumanoidRootP
     Callback=function(o) settings.AIMBOT_HITBOX=o; SaveSettings(settings) end })
 AimbotTab:CreateSlider({ Name="Смещение Y", Range={-5,5}, Increment=0.1, CurrentValue=settings.AIMBOT_HITBOX_OFFSET_Y,
     Callback=function(v) settings.AIMBOT_HITBOX_OFFSET_Y=v; SaveSettings(settings) end })
-AimbotTab:CreateToggle({ Name="Prediction", CurrentValue=settings.AIMBOT_PREDICTION,
+AimbotTab:CreateToggle({ Name="Prediction (упреждение)", CurrentValue=settings.AIMBOT_PREDICTION,
     Callback=function(v) settings.AIMBOT_PREDICTION=v; SaveSettings(settings) end })
+AimbotTab:CreateSlider({ Name="Prediction X", Range={0,1}, Increment=0.005, CurrentValue=settings.AIMBOT_PREDICTION_X,
+    Callback=function(v) settings.AIMBOT_PREDICTION_X=v; SaveSettings(settings) end })
+AimbotTab:CreateSlider({ Name="Prediction Y", Range={0,1}, Increment=0.005, CurrentValue=settings.AIMBOT_PREDICTION_Y,
+    Callback=function(v) settings.AIMBOT_PREDICTION_Y=v; SaveSettings(settings) end })
+AimbotTab:CreateSlider({ Name="Prediction Z", Range={0,1}, Increment=0.005, CurrentValue=settings.AIMBOT_PREDICTION_Z,
+    Callback=function(v) settings.AIMBOT_PREDICTION_Z=v; SaveSettings(settings) end })
 
-AimbotTab:CreateLabel({ Text="🔫 AUTO SHOOT", Style=1 })
+AimbotTab:CreateLabel({ Text="🔫 АВТО-СТРЕЛЬБА", Style=1 })
 AimbotTab:CreateToggle({ Name="Auto Shoot", CurrentValue=settings.AIMBOT_AUTO_SHOOT,
     Callback=function(v) settings.AIMBOT_AUTO_SHOOT=v; SaveSettings(settings) end })
 AimbotTab:CreateSlider({ Name="Задержка", Range={0.01,1.0}, Increment=0.01, CurrentValue=settings.AIMBOT_AUTO_SHOOT_DELAY,
     Callback=function(v) settings.AIMBOT_AUTO_SHOOT_DELAY=v; SaveSettings(settings) end })
+AimbotTab:CreateToggle({ Name="Только по видимым", CurrentValue=settings.AIMBOT_AUTO_SHOOT_ONLY_VISIBLE,
+    Callback=function(v) settings.AIMBOT_AUTO_SHOOT_ONLY_VISIBLE=v; SaveSettings(settings) end })
 
-AimbotTab:CreateLabel({ Text="🚀 ОПТИМИЗАЦИЯ", Style=1 })
-AimbotTab:CreateSlider({ Name="Интервал сканирования", Range={0.02,0.5}, Increment=0.01, CurrentValue=settings.AIMBOT_SCAN_INTERVAL,
-    Callback=function(v) settings.AIMBOT_SCAN_INTERVAL=v; SaveSettings(settings) end })
-AimbotTab:CreateSlider({ Name="Радиус поиска NPC", Range={30,1000}, Increment=10, CurrentValue=settings.AIMBOT_PVE_RADIUS,
-    Callback=function(v) settings.AIMBOT_PVE_RADIUS=v; SaveSettings(settings) end })
-
--- ESP TAB
-local ESPTab = Window:CreateTab({ Name="ESP", Icon="visibility", ImageSource="Material", ShowTitle=true })
-ESPTab:CreateToggle({ Name="Enable ESP", CurrentValue=settings.ESP_ENABLED,
-    Callback=function(v) settings.ESP_ENABLED=v; SaveSettings(settings); if not v then clearAllESP() end end })
-ESPTab:CreateSlider({ Name="Интервал обновления", Range={0.01,1.0}, Increment=0.01, CurrentValue=settings.ESP_UPDATE_INTERVAL,
-    Callback=function(v) settings.ESP_UPDATE_INTERVAL=v; SaveSettings(settings) end })
-ESPTab:CreateSlider({ Name="Макс. дистанция", Range={50,2000}, Increment=10, CurrentValue=settings.ESP_MAX_DISTANCE,
-    Callback=function(v) settings.ESP_MAX_DISTANCE=v; SaveSettings(settings) end })
-ESPTab:CreateSlider({ Name="Мин. дистанция", Range={1,100}, Increment=1, CurrentValue=settings.ESP_MIN_DISTANCE,
-    Callback=function(v) settings.ESP_MIN_DISTANCE=v; SaveSettings(settings) end })
-ESPTab:CreateSlider({ Name="Прозрачность заливки", Range={0.0,1.0}, Increment=0.05, CurrentValue=settings.ESP_FILL_TRANSPARENCY,
-    Callback=function(v) settings.ESP_FILL_TRANSPARENCY=v; SaveSettings(settings) end })
-ESPTab:CreateSlider({ Name="Прозрачность контура", Range={0.0,1.0}, Increment=0.05, CurrentValue=settings.ESP_OUTLINE_TRANSPARENCY,
-    Callback=function(v) settings.ESP_OUTLINE_TRANSPARENCY=v; SaveSettings(settings) end })
-ESPTab:CreateToggle({ Name="Показывать имена", CurrentValue=settings.SHOW_TEXT,
-    Callback=function(v) settings.SHOW_TEXT=v; SaveSettings(settings) end })
-ESPTab:CreateToggle({ Name="Box ESP", CurrentValue=settings.ESP_BOX_ENABLED,
-    Callback=function(v) settings.ESP_BOX_ENABLED=v; SaveSettings(settings) end })
-ESPTab:CreateToggle({ Name="Tracer", CurrentValue=settings.ESP_TRACER_ENABLED,
-    Callback=function(v) settings.ESP_TRACER_ENABLED=v; SaveSettings(settings) end })
-
-ESPTab:CreateLabel({ Text="🎨 ЦВЕТА И ФИЛЬТРЫ", Style=1 })
-ESPTab:CreateToggle({ Name="Killers ESP", CurrentValue=settings.KILLERS_ESP,
-    Callback=function(v) settings.KILLERS_ESP=v; SaveSettings(settings) end })
-ESPTab:CreateDropdown({ Name="Killers Color", Options={"Red","Orange","Purple","Gold","White","Pink","Magenta"},
-    CurrentOption={settings.KILLERS_COLOR or "Red"}, MultipleOptions=false,
-    Callback=function(o) settings.KILLERS_COLOR=o; SaveSettings(settings) end })
-
-ESPTab:CreateToggle({ Name="Survivors ESP", CurrentValue=settings.SURVIVORS_ESP,
-    Callback=function(v) settings.SURVIVORS_ESP=v; SaveSettings(settings) end })
-ESPTab:CreateDropdown({ Name="Survivors Color", Options={"Green","Cyan","Blue","Lime","Teal","White"},
-    CurrentOption={settings.SURVIVORS_COLOR or "Green"}, MultipleOptions=false,
-    Callback=function(o) settings.SURVIVORS_COLOR=o; SaveSettings(settings) end })
-
-ESPTab:CreateToggle({ Name="🆕 NoFolder ESP (игроки без папки)", CurrentValue=settings.NOFOLDER_ESP,
-    Callback=function(v) settings.NOFOLDER_ESP=v; SaveSettings(settings) end })
-ESPTab:CreateDropdown({ Name="NoFolder Color", Options={"White","Gray","Teal","Yellow","Cyan"},
-    CurrentOption={settings.NOFOLDER_COLOR or "White"}, MultipleOptions=false,
-    Callback=function(o) settings.NOFOLDER_COLOR=o; SaveSettings(settings) end })
-
-ESPTab:CreateToggle({ Name="🆕 NPC ESP", CurrentValue=settings.NPC_ESP,
-    Callback=function(v) settings.NPC_ESP=v; SaveSettings(settings) end })
-ESPTab:CreateDropdown({ Name="NPC Color", Options={"Magenta","Pink","Purple","Orange","Red","Cyan","Lime"},
-    CurrentOption={settings.NPC_COLOR or "Magenta"}, MultipleOptions=false,
-    Callback=function(o) settings.NPC_COLOR=o; SaveSettings(settings) end })
-
-ESPTab:CreateLabel({ Text="🏭 ОБЪЕКТЫ", Style=1 })
-ESPTab:CreateToggle({ Name="Generators ESP", CurrentValue=settings.GENERATORS_ESP,
-    Callback=function(v) settings.GENERATORS_ESP=v; SaveSettings(settings) end })
-ESPTab:CreateToggle({ Name="Items ESP", CurrentValue=settings.ITEMS_ESP,
-    Callback=function(v) settings.ITEMS_ESP=v; SaveSettings(settings) end })
+AimbotTab:CreateLabel({ Text="🎨 ИНДИКАТОР", Style=1 })
+AimbotTab:CreateToggle({ Name="Показывать точку цели", CurrentValue=settings.AIMBOT_SHOW_TARGET,
+    Callback=function(v) settings.AIMBOT_SHOW_TARGET=v; SaveSettings(settings) end })
+AimbotTab:CreateSlider({ Name="Цель R", Range={0,255}, Increment=1, CurrentValue=settings.AIMBOT_TARGET_COLOR_R,
+    Callback=function(v) settings.AIMBOT_TARGET_COLOR_R=v; SaveSettings(settings) end })
+AimbotTab:CreateSlider({ Name="Цель G", Range={0,255}, Increment=1, CurrentValue=settings.AIMBOT_TARGET_COLOR_G,
+    Callback=function(v) settings.AIMBOT_TARGET_COLOR_G=v; SaveSettings(settings) end })
+AimbotTab:CreateSlider({ Name="Цель B", Range={0,255}, Increment=1, CurrentValue=settings.AIMBOT_TARGET_COLOR_B,
+    Callback=function(v) settings.AIMBOT_TARGET_COLOR_B=v; SaveSettings(settings) end })
+AimbotTab:CreateButton({ Name="🧹 Сбросить цель", Callback=function()
+    aimbotTarget=nil; aimbotTargetPart=nil; aimbotCachedCandidates={}
+    showNotification("🎯 Aimbot","Цель сброшена") end })
 
 -- WALL WALK TAB
 local WallWalkTab = Window:CreateTab({ Name="Wall Walk", Icon="directions_walk", ImageSource="Material", ShowTitle=true })
@@ -1536,6 +1389,7 @@ WallWalkTab:CreateParagraph({ Title="🕷️ SURFACE WALK PRO", Text="Хотке
 WallWalkTab:CreateToggle({ Name="⚡ Unlimited", CurrentValue=settings.UNLIMITED_MODE,
     Callback=function(v) settings.UNLIMITED_MODE=v; SaveSettings(settings)
         showNotification("⚡ Unlimited", v and "Вкл" or "Выкл") end })
+WallWalkTab:CreateLabel({ Text="ДВИЖЕНИЕ", Style=1 })
 WallWalkTab:CreateSlider({ Name="Скорость", Range={1, settings.UNLIMITED_MODE and 400 or 50}, Increment=1, CurrentValue=settings.WALK_SPEED,
     Callback=function(v) settings.WALK_SPEED=v; SaveSettings(settings) end })
 WallWalkTab:CreateSlider({ Name="Множитель спринта", Range={1.0, settings.UNLIMITED_MODE and 10 or 3.0}, Increment=0.1, CurrentValue=settings.SPRINT_MULTIPLIER,
@@ -1557,7 +1411,44 @@ WallWalkTab:CreateToggle({ Name="Прилипание", CurrentValue=settings.ST
 WallWalkTab:CreateToggle({ Name="Авто-сброс", CurrentValue=settings.AUTO_RESET_ON_FALL,
     Callback=function(v) settings.AUTO_RESET_ON_FALL=v; SaveSettings(settings) end })
 
--- CLICK TP
+-- ESP TAB
+local ESPTab = Window:CreateTab({ Name="ESP", Icon="visibility", ImageSource="Material", ShowTitle=true })
+ESPTab:CreateToggle({ Name="Enable ESP", CurrentValue=settings.ESP_ENABLED,
+    Callback=function(v) settings.ESP_ENABLED=v; SaveSettings(settings); if not v then clearAllESP() end end })
+ESPTab:CreateSlider({ Name="Интервал обновления", Range={0.01,1.0}, Increment=0.01, CurrentValue=settings.ESP_UPDATE_INTERVAL,
+    Callback=function(v) settings.ESP_UPDATE_INTERVAL=v; SaveSettings(settings) end })
+ESPTab:CreateSlider({ Name="Макс. дистанция", Range={50,2000}, Increment=10, CurrentValue=settings.ESP_MAX_DISTANCE,
+    Callback=function(v) settings.ESP_MAX_DISTANCE=v; SaveSettings(settings) end })
+ESPTab:CreateSlider({ Name="Мин. дистанция", Range={1,100}, Increment=1, CurrentValue=settings.ESP_MIN_DISTANCE,
+    Callback=function(v) settings.ESP_MIN_DISTANCE=v; SaveSettings(settings) end })
+ESPTab:CreateSlider({ Name="Прозрачность заливки", Range={0.0,1.0}, Increment=0.05, CurrentValue=settings.ESP_FILL_TRANSPARENCY,
+    Callback=function(v) settings.ESP_FILL_TRANSPARENCY=v; SaveSettings(settings) end })
+ESPTab:CreateSlider({ Name="Прозрачность контура", Range={0.0,1.0}, Increment=0.05, CurrentValue=settings.ESP_OUTLINE_TRANSPARENCY,
+    Callback=function(v) settings.ESP_OUTLINE_TRANSPARENCY=v; SaveSettings(settings) end })
+ESPTab:CreateToggle({ Name="Показывать имена", CurrentValue=settings.SHOW_TEXT,
+    Callback=function(v) settings.SHOW_TEXT=v; SaveSettings(settings) end })
+ESPTab:CreateToggle({ Name="Box ESP", CurrentValue=settings.ESP_BOX_ENABLED,
+    Callback=function(v) settings.ESP_BOX_ENABLED=v; SaveSettings(settings) end })
+ESPTab:CreateToggle({ Name="Tracer", CurrentValue=settings.ESP_TRACER_ENABLED,
+    Callback=function(v) settings.ESP_TRACER_ENABLED=v; SaveSettings(settings) end })
+ESPTab:CreateLabel({ Text="👥 ИГРОКИ", Style=1 })
+ESPTab:CreateToggle({ Name="Killers ESP", CurrentValue=settings.KILLERS_ESP,
+    Callback=function(v) settings.KILLERS_ESP=v; SaveSettings(settings) end })
+ESPTab:CreateDropdown({ Name="Killers Color", Options={"Red","Orange","Purple","Gold","White","Pink"},
+    CurrentOption={settings.KILLERS_COLOR or "Red"}, MultipleOptions=false,
+    Callback=function(o) settings.KILLERS_COLOR=o; SaveSettings(settings) end })
+ESPTab:CreateToggle({ Name="Survivors ESP", CurrentValue=settings.SURVIVORS_ESP,
+    Callback=function(v) settings.SURVIVORS_ESP=v; SaveSettings(settings) end })
+ESPTab:CreateDropdown({ Name="Survivors Color", Options={"Green","Cyan","Blue","Lime"},
+    CurrentOption={settings.SURVIVORS_COLOR or "Green"}, MultipleOptions=false,
+    Callback=function(o) settings.SURVIVORS_COLOR=o; SaveSettings(settings) end })
+ESPTab:CreateLabel({ Text="🏭 ОБЪЕКТЫ", Style=1 })
+ESPTab:CreateToggle({ Name="Generators ESP", CurrentValue=settings.GENERATORS_ESP,
+    Callback=function(v) settings.GENERATORS_ESP=v; SaveSettings(settings) end })
+ESPTab:CreateToggle({ Name="Items ESP", CurrentValue=settings.ITEMS_ESP,
+    Callback=function(v) settings.ITEMS_ESP=v; SaveSettings(settings) end })
+
+-- CLICK TP TAB
 local ClickTPTab = Window:CreateTab({ Name="Click TP", Icon="mouse", ImageSource="Material", ShowTitle=true })
 ClickTPTab:CreateToggle({ Name="Enable Click TP", CurrentValue=settings.CLICKTP_ENABLED,
     Callback=function(v)
@@ -1569,7 +1460,7 @@ ClickTPTab:CreateSlider({ Name="Смещение Y", Range={0,20}, Increment=0.5
     Callback=function(v) settings.CLICKTP_OFFSET_Y=v; SaveSettings(settings) end })
 ClickTPTab:CreateButton({ Name="🖱️ ТП к курсору", Callback=function() performClickTP() end })
 
--- FREECAM
+-- FREECAM TAB
 local FreecamTab = Window:CreateTab({ Name="Freecam", Icon="videocam", ImageSource="Material", ShowTitle=true })
 FreecamTab:CreateToggle({ Name="Enable Freecam", CurrentValue=settings.FREECAM_ENABLED,
     Callback=function(v)
@@ -1595,7 +1486,7 @@ FreecamTab:CreateToggle({ Name="Скрывать персонажа", CurrentVal
         end
     end })
 
--- TURBO
+-- TURBO TAB
 local TurboTab = Window:CreateTab({ Name="Turbo", Icon="speed", ImageSource="Material", ShowTitle=true })
 TurboTab:CreateToggle({ Name="Activate Turbo", CurrentValue=false,
     Callback=function(v)
@@ -1604,11 +1495,11 @@ TurboTab:CreateToggle({ Name="Activate Turbo", CurrentValue=false,
     end })
 TurboTab:CreateSlider({ Name="Turbo Speed", Range={5, settings.UNLIMITED_MODE and 400 or 100}, Increment=5, CurrentValue=settings.TURBO_SPEED,
     Callback=function(v) settings.TURBO_SPEED=v; SaveSettings(settings) end })
-TurboTab:CreateButton({ Name="Mode: Velocity", Callback=function() settings.TURBO_MODE="Velocity"; SaveSettings(settings) end })
-TurboTab:CreateButton({ Name="Mode: Teleport", Callback=function() settings.TURBO_MODE="Teleport"; SaveSettings(settings) end })
-TurboTab:CreateButton({ Name="Mode: Combo",    Callback=function() settings.TURBO_MODE="Combo";    SaveSettings(settings) end })
+TurboTab:CreateButton({ Name="Mode: Velocity", Callback=function() settings.TURBO_MODE="Velocity"; SaveSettings(settings); showNotification("⚡","Mode: Velocity") end })
+TurboTab:CreateButton({ Name="Mode: Teleport", Callback=function() settings.TURBO_MODE="Teleport"; SaveSettings(settings); showNotification("⚡","Mode: Teleport") end })
+TurboTab:CreateButton({ Name="Mode: Combo",    Callback=function() settings.TURBO_MODE="Combo";    SaveSettings(settings); showNotification("⚡","Mode: Combo")    end })
 
--- NOCLIP
+-- NO CLIP TAB
 local NoClipTab = Window:CreateTab({ Name="No Clip", Icon="open_with", ImageSource="Material", ShowTitle=true })
 NoClipTab:CreateToggle({ Name="Activate No Clip", CurrentValue=false,
     Callback=function(v)
@@ -1616,7 +1507,7 @@ NoClipTab:CreateToggle({ Name="Activate No Clip", CurrentValue=false,
         if v and not noClipActive then toggleNoClip() elseif not v and noClipActive then toggleNoClip() end
     end })
 
--- FLY
+-- FLY TAB
 local FlyTab = Window:CreateTab({ Name="Fly", Icon="flight", ImageSource="Material", ShowTitle=true })
 FlyTab:CreateToggle({ Name="Enable Flight", CurrentValue=false,
     Callback=function(v)
@@ -1630,7 +1521,7 @@ FlyTab:CreateSlider({ Name="Max Speed", Range={50, settings.UNLIMITED_MODE and 8
 FlyTab:CreateToggle({ Name="Hover", CurrentValue=settings.FLY_HOVER,
     Callback=function(v) settings.FLY_HOVER=v; SaveSettings(settings) end })
 
--- WAYPOINTS
+-- WAYPOINTS TAB
 local WaypointTab = Window:CreateTab({ Name="Waypoints", Icon="place", ImageSource="Material", ShowTitle=true })
 WaypointTab:CreateParagraph({ Title="📍 WAYPOINT SYSTEM", Text="P — сохранить, L — удалить, T — ТП к #1" })
 WaypointTab:CreateToggle({ Name="🔁 SWAP MODE", CurrentValue=settings.WP_SWAP_ENABLED,
@@ -1654,7 +1545,7 @@ WaypointTab:CreateButton({ Name="🚀 ТП к игроку",
         else showNotification("📍","Введи ник") end
     end })
 
--- FULLBRIGHT
+-- FULLBRIGHT TAB
 local FullbrightTab = Window:CreateTab({ Name="Fullbright", Icon="wb_sunny", ImageSource="Material", ShowTitle=true })
 FullbrightTab:CreateToggle({ Name="Enable Fullbright", CurrentValue=false,
     Callback=function(v)
@@ -1675,7 +1566,7 @@ FullbrightTab:CreateToggle({ Name="Убирать туман", CurrentValue=sett
         end
     end })
 
--- SETTINGS
+-- SETTINGS TAB
 local SettingsTab = Window:CreateTab({ Name="Settings", Icon="settings", ImageSource="Material", ShowTitle=true })
 SettingsTab:CreateToggle({ Name="Remove Killer Walls", CurrentValue=settings.REMOVE_KILLER_WALLS,
     Callback=function(v) settings.REMOVE_KILLER_WALLS=v; SaveSettings(settings); if v then pcall(removeKillerWalls) end end })
@@ -1738,7 +1629,9 @@ RunService.Heartbeat:Connect(function(dt)
         local targetVel = moveDir * settings.FLY_SPEED
         if settings.FLY_HOVER and moveDir.Magnitude < 0.1 then targetVel = Vector3.zero end
         flyVelocity = flyVelocity:Lerp(targetVel, math.min(1, dt * settings.FLY_ACCELERATION))
-        if flyVelocity.Magnitude > settings.FLY_MAX_SPEED then flyVelocity = flyVelocity.Unit * settings.FLY_MAX_SPEED end
+        if flyVelocity.Magnitude > settings.FLY_MAX_SPEED then
+            flyVelocity = flyVelocity.Unit * settings.FLY_MAX_SPEED
+        end
         hrp.AssemblyLinearVelocity = flyVelocity
         if moveDir.Magnitude > 0.1 then
             local targetCF = CFrame.lookAt(hrp.Position, hrp.Position + moveDir, camUp)
@@ -1822,15 +1715,13 @@ end)
 -- INIT
 -- ==========================================
 print("═══════════════════════════════════════════════════════")
-print("🎯 Forsaken Surge v17 — AIMBOT ищет ВЕЗДЕ")
-print("   1) workspace.Players.Killers")
-print("   2) workspace.Players.Survivors")
-print("   3) plr.Character (игроки без папки)")
-print("   4) Любой Humanoid в Workspace (NPC)")
-print("   Team Check по умолчанию ВЫКЛ — ничего не блокируется")
+print("🎯 Forsaken Surge v15 — AIMBOT via workspace.Players")
+print("   Killers:   workspace.Players.Killers.<Name>")
+print("   Survivors: workspace.Players.Survivors.<Name>")
+print("   Team'ов у игроков нет — роль = папка")
 print("═══════════════════════════════════════════════════════")
-print("🎨 ESP: Killers=Red, Survivors=Green, NoFolder=White, NPC=Magenta")
-print("🔑 " .. settings.AIMBOT_KEY .. " - AIMBOT | C/V/B/Z/F/G - режимы")
+print("🔑 C/V/B/Z/F/G - режимы | " .. settings.AIMBOT_KEY .. " - AIMBOT")
+print("🔑 P/L/T - Waypoints | ЛКМ - Click TP")
 print("═══════════════════════════════════════════════════════")
 
 task.wait(0.5)
