@@ -310,6 +310,7 @@ local function getHitboxFast(target, hitboxName)
     return char:FindFirstChild("HumanoidRootPart")
 end
 
+-- ВАЖНО: корректная проверка видимости — луч должен попасть в саму цель
 local function isVisible(targetPart)
     if not settings.AIMBOT_WALL_CHECK then return true end
     if not targetPart or not targetPart.Parent then return false end
@@ -318,6 +319,7 @@ local function isVisible(targetPart)
     aimbotRayFilter.FilterDescendantsInstances = { character }
     local result = Workspace:Raycast(origin, dir, aimbotRayFilter)
     if result and result.Instance then
+        -- если попали в саму цель или её потомка
         if result.Instance == targetPart or result.Instance:IsDescendantOf(targetPart.Parent) then
             return true
         end
@@ -398,6 +400,7 @@ local function scanCandidates()
     return candidates
 end
 
+-- Улучшенный выбор цели: сначала FOV-фильтр, потом сортировка
 local function pickBestTarget(candidates)
     if #candidates == 0 then return nil end
 
@@ -455,12 +458,30 @@ local function getAimPosition(targetPart)
     return pos
 end
 
+-- ВАЖНО: сохраняем оригинальный CameraType и ставим Scriptable на время аимбота,
+-- чтобы движок не перезаписывал нашу камеру.
+local originalCameraType = Camera.CameraType
+local originalCameraSubject = Camera.CameraSubject
+local aimbotCameraOverride = false
+
+local function setAimbotCameraOverride(on)
+    if on and not aimbotCameraOverride then
+        originalCameraType = Camera.CameraType
+        originalCameraSubject = Camera.CameraSubject
+        Camera.CameraType = Enum.CameraType.Scriptable
+        aimbotCameraOverride = true
+        -- прячем стандартный курсор, чтобы он не мешал прицеливанию
+        UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+    elseif not on and aimbotCameraOverride then
+        Camera.CameraType = originalCameraType
+        Camera.CameraSubject = originalCameraSubject
+        aimbotCameraOverride = false
+    end
+end
+
 local lastFovColor = Color3.new()
 local lastFovSize = 0
 
--- ПРОСТО ПОВОРАЧИВАЕМ КАМЕРУ. Никакого Scriptable. Никаких отступов.
--- CameraType остаётся Custom, Roblox сам тащит камеру за персонажем.
--- Мы только меняем её CFrame orientation через lerp.
 RunService.RenderStepped:Connect(function(dt)
     if not settings.AIMBOT_ENABLED then
         if fovCircle and fovCircle.circle and fovCircle.circle.Visible then
@@ -469,6 +490,7 @@ RunService.RenderStepped:Connect(function(dt)
         if targetIndicator and targetIndicator.dot and targetIndicator.dot.Visible then
             targetIndicator.dot.Visible = false
         end
+        setAimbotCameraOverride(false)
         return
     end
 
@@ -498,6 +520,7 @@ RunService.RenderStepped:Connect(function(dt)
         if targetIndicator and targetIndicator.dot and targetIndicator.dot.Visible then
             targetIndicator.dot.Visible = false
         end
+        setAimbotCameraOverride(false)
         return
     end
 
@@ -514,14 +537,17 @@ RunService.RenderStepped:Connect(function(dt)
         if targetIndicator and targetIndicator.dot and targetIndicator.dot.Visible then
             targetIndicator.dot.Visible = false
         end
+        setAimbotCameraOverride(false)
         return
     end
 
+    -- Wall check
     if settings.AIMBOT_WALL_CHECK and not isVisible(best.part) then
         aimbotTarget, aimbotTargetPart = nil, nil
         if targetIndicator and targetIndicator.dot and targetIndicator.dot.Visible then
             targetIndicator.dot.Visible = false
         end
+        setAimbotCameraOverride(false)
         return
     end
 
@@ -544,13 +570,13 @@ RunService.RenderStepped:Connect(function(dt)
         end
     end
 
-    -- ПРОСТОЙ ПОВОРОТ КАМЕРЫ
-    -- Позиция камеры не трогаем — Roblox сам держит её у персонажа.
-    -- Меняем только rotation через lerp к цели.
+    -- РАБОЧЕЕ наведение камеры
+    setAimbotCameraOverride(true)
     local aimPos = getAimPosition(best.part)
     if aimPos then
         local currentCF = Camera.CFrame
         local targetCF = CFrame.lookAt(currentCF.Position, aimPos)
+        -- smooth = 0 => мгновенно; smooth = 0.95 => очень плавно
         local alpha = 1 - math.clamp(settings.AIMBOT_SMOOTHNESS, 0, 0.99)
         Camera.CFrame = currentCF:Lerp(targetCF, math.clamp(alpha * (dt * 60), 0, 1))
     end
@@ -565,6 +591,7 @@ RunService.RenderStepped:Connect(function(dt)
                     if tool then
                         tool:Activate()
                     else
+                        -- эмуляция мыши через VirtualInputManager
                         VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
                         task.wait(0.03)
                         VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
@@ -576,7 +603,7 @@ RunService.RenderStepped:Connect(function(dt)
 end)
 
 -- ==========================================
--- ESP SYSTEM
+-- ESP SYSTEM (без изменений)
 -- ==========================================
 local ColorPresets = {
     ["White"] = Color3.fromRGB(255,255,255),
@@ -987,6 +1014,7 @@ local function toggleTurbo()
     end
 end
 
+-- Turbo loop
 task.spawn(function()
     while true do
         task.wait()
@@ -1357,6 +1385,7 @@ UserInputService.InputBegan:Connect(function(input, gp)
     if input.KeyCode == Enum.KeyCode.F and settings.HOTKEY_FULLBRIGHT_ENABLED then toggleFullbright() end
     if input.KeyCode == Enum.KeyCode.G and settings.HOTKEY_FREECAM_ENABLED then toggleFreecam() end
 
+    -- AIMBOT activation
     if settings.HOTKEY_AIMBOT_ENABLED and settings.AIMBOT_ENABLED then
         local targetKey = getAimbotKey()
         if input.KeyCode == targetKey or input.UserInputType == targetKey then
@@ -1416,7 +1445,7 @@ HotkeysTab:CreateToggle({ Name = "🎯 Aimbot Hotkey", CurrentValue = settings.H
 
 -- AIMBOT TAB
 local AimbotTab = Window:CreateTab({ Name = "Aimbot", Icon = "my_location", ImageSource = "Material", ShowTitle = true })
-AimbotTab:CreateParagraph({ Title = "🎯 WORKING AIMBOT v14.2", Text = "Камера остаётся у персонажа, мы просто поворачиваем её на цель." })
+AimbotTab:CreateParagraph({ Title = "🎯 WORKING AIMBOT v14.2", Text = "Камера переходит в Scriptable, наведение работает стабильно." })
 
 AimbotTab:CreateToggle({ Name = "🎯 Enable Aimbot", CurrentValue = settings.AIMBOT_ENABLED, Callback = function(v)
     if v and not settings.HOTKEY_AIMBOT_ENABLED then showNotification("🔒 Hotkey Lock", "Разреши Aimbot в Hotkeys!") return end
@@ -1749,7 +1778,7 @@ end)
 print("═══════════════════════════════════════════════════════")
 print("🎯 Forsaken Surge v14.2 (WORKING AIMBOT)")
 print("═══════════════════════════════════════════════════════")
-print("✅ AIMBOT: камера остаётся у персонажа (CameraType = Custom)")
+print("✅ AIMBOT: Scriptable camera + proper lerp + wall check")
 print("✅ Wall Walk | Fly | No Clip | Turbo | ESP | Waypoints")
 print("✅ Fullbright | Click TP | Freecam | Hotkey Permissions")
 print("═══════════════════════════════════════════════════════")
