@@ -132,8 +132,6 @@ local DefaultSettings = {
     AIMBOT_SCAN_INTERVAL = 0.1,
     AIMBOT_PVE_RADIUS = 200,
     AIMBOT_MAX_NPC_CANDIDATES = 30,
-    AIMBOT_CAMERA_HEIGHT = 1.5,
-    AIMBOT_CAMERA_BACK = 0,
 }
 
 local function LoadSettings()
@@ -457,28 +455,12 @@ local function getAimPosition(targetPart)
     return pos
 end
 
--- ВАЖНО: сохраняем оригинальный CameraType и ставим Scriptable на время аимбота
-local originalCameraType = Camera.CameraType
-local originalCameraSubject = Camera.CameraSubject
-local aimbotCameraOverride = false
-
-local function setAimbotCameraOverride(on)
-    if on and not aimbotCameraOverride then
-        originalCameraType = Camera.CameraType
-        originalCameraSubject = Camera.CameraSubject
-        Camera.CameraType = Enum.CameraType.Scriptable
-        aimbotCameraOverride = true
-        UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-    elseif not on and aimbotCameraOverride then
-        Camera.CameraType = originalCameraType
-        Camera.CameraSubject = originalCameraSubject
-        aimbotCameraOverride = false
-    end
-end
-
 local lastFovColor = Color3.new()
 local lastFovSize = 0
 
+-- ПРОСТО ПОВОРАЧИВАЕМ КАМЕРУ. Никакого Scriptable. Никаких отступов.
+-- CameraType остаётся Custom, Roblox сам тащит камеру за персонажем.
+-- Мы только меняем её CFrame orientation через lerp.
 RunService.RenderStepped:Connect(function(dt)
     if not settings.AIMBOT_ENABLED then
         if fovCircle and fovCircle.circle and fovCircle.circle.Visible then
@@ -487,7 +469,6 @@ RunService.RenderStepped:Connect(function(dt)
         if targetIndicator and targetIndicator.dot and targetIndicator.dot.Visible then
             targetIndicator.dot.Visible = false
         end
-        setAimbotCameraOverride(false)
         return
     end
 
@@ -517,7 +498,6 @@ RunService.RenderStepped:Connect(function(dt)
         if targetIndicator and targetIndicator.dot and targetIndicator.dot.Visible then
             targetIndicator.dot.Visible = false
         end
-        setAimbotCameraOverride(false)
         return
     end
 
@@ -534,17 +514,14 @@ RunService.RenderStepped:Connect(function(dt)
         if targetIndicator and targetIndicator.dot and targetIndicator.dot.Visible then
             targetIndicator.dot.Visible = false
         end
-        setAimbotCameraOverride(false)
         return
     end
 
-    -- Wall check
     if settings.AIMBOT_WALL_CHECK and not isVisible(best.part) then
         aimbotTarget, aimbotTargetPart = nil, nil
         if targetIndicator and targetIndicator.dot and targetIndicator.dot.Visible then
             targetIndicator.dot.Visible = false
         end
-        setAimbotCameraOverride(false)
         return
     end
 
@@ -567,36 +544,15 @@ RunService.RenderStepped:Connect(function(dt)
         end
     end
 
-    -- НАВЕДЕНИЕ КАМЕРЫ: позиция у головы персонажа, поворот на цель
-    setAimbotCameraOverride(true)
-
-    -- Персонаж мёртв или отсутствует
-    if not character or not character.Parent or not humanoid or not hrp or humanoid.Health <= 0 then
-        return
-    end
-
+    -- ПРОСТОЙ ПОВОРОТ КАМЕРЫ
+    -- Позиция камеры не трогаем — Roblox сам держит её у персонажа.
+    -- Меняем только rotation через lerp к цели.
     local aimPos = getAimPosition(best.part)
     if aimPos then
-        local head = character:FindFirstChild("Head") or hrp
-        local camPos = head.Position + Vector3.new(0, settings.AIMBOT_CAMERA_HEIGHT, 0)
-
-        -- Если нужно отодвинуть камеру назад за плечо
-        if settings.AIMBOT_CAMERA_BACK and settings.AIMBOT_CAMERA_BACK > 0 then
-            local flatLook = Vector3.new(Camera.CFrame.LookVector.X, 0, Camera.CFrame.LookVector.Z)
-            if flatLook.Magnitude < 0.001 then flatLook = Vector3.new(0, 0, 1) end
-            flatLook = flatLook.Unit
-            camPos = camPos - flatLook * settings.AIMBOT_CAMERA_BACK
-        end
-
-        local targetCF = CFrame.lookAt(camPos, aimPos)
         local currentCF = Camera.CFrame
+        local targetCF = CFrame.lookAt(currentCF.Position, aimPos)
         local alpha = 1 - math.clamp(settings.AIMBOT_SMOOTHNESS, 0, 0.99)
-        local t = math.clamp(alpha * (dt * 60), 0, 1)
-
-        -- Позиция камеры ВСЕГДА у головы (следует за персонажем)
-        -- Поворот плавно интерполируется на цель
-        local blended = currentCF:Lerp(targetCF, t)
-        Camera.CFrame = CFrame.new(camPos) * (blended - blended.Position)
+        Camera.CFrame = currentCF:Lerp(targetCF, math.clamp(alpha * (dt * 60), 0, 1))
     end
 
     -- Auto-shoot
@@ -1460,7 +1416,7 @@ HotkeysTab:CreateToggle({ Name = "🎯 Aimbot Hotkey", CurrentValue = settings.H
 
 -- AIMBOT TAB
 local AimbotTab = Window:CreateTab({ Name = "Aimbot", Icon = "my_location", ImageSource = "Material", ShowTitle = true })
-AimbotTab:CreateParagraph({ Title = "🎯 WORKING AIMBOT v14.2", Text = "Камера следует за персонажем + поворот на цель." })
+AimbotTab:CreateParagraph({ Title = "🎯 WORKING AIMBOT v14.2", Text = "Камера остаётся у персонажа, мы просто поворачиваем её на цель." })
 
 AimbotTab:CreateToggle({ Name = "🎯 Enable Aimbot", CurrentValue = settings.AIMBOT_ENABLED, Callback = function(v)
     if v and not settings.HOTKEY_AIMBOT_ENABLED then showNotification("🔒 Hotkey Lock", "Разреши Aimbot в Hotkeys!") return end
@@ -1472,10 +1428,6 @@ end })
 AimbotTab:CreateDropdown({ Name = "🎮 Режим", Options = {"PVP", "PVE", "Both"}, CurrentOption = {settings.AIMBOT_MODE}, MultipleOptions = false, Callback = function(o) settings.AIMBOT_MODE = o SaveSettings(settings) end })
 AimbotTab:CreateDropdown({ Name = "🔑 Клавиша", Options = {"E", "Q", "R", "X", "MouseButton2"}, CurrentOption = {settings.AIMBOT_KEY}, MultipleOptions = false, Callback = function(o) settings.AIMBOT_KEY = o SaveSettings(settings) end })
 AimbotTab:CreateToggle({ Name = "🔄 Toggle Mode", CurrentValue = settings.AIMBOT_TOGGLE_MODE, Callback = function(v) settings.AIMBOT_TOGGLE_MODE = v SaveSettings(settings) end })
-
-AimbotTab:CreateLabel({ Text = "📷 КАМЕРА", Style = 1 })
-AimbotTab:CreateSlider({ Name = "Высота камеры", Range = {-2, 5}, Increment = 0.1, CurrentValue = settings.AIMBOT_CAMERA_HEIGHT, Callback = function(v) settings.AIMBOT_CAMERA_HEIGHT = v SaveSettings(settings) end })
-AimbotTab:CreateSlider({ Name = "Отступ назад (плечо)", Range = {0, 8}, Increment = 0.5, CurrentValue = settings.AIMBOT_CAMERA_BACK, Callback = function(v) settings.AIMBOT_CAMERA_BACK = v SaveSettings(settings) end })
 
 AimbotTab:CreateLabel({ Text = "🚀 ПРОИЗВОДИТЕЛЬНОСТЬ", Style = 1 })
 AimbotTab:CreateSlider({ Name = "Интервал сканирования (сек)", Range = {0.02, 0.5}, Increment = 0.01, CurrentValue = settings.AIMBOT_SCAN_INTERVAL, Callback = function(v) settings.AIMBOT_SCAN_INTERVAL = v SaveSettings(settings) end })
@@ -1797,7 +1749,7 @@ end)
 print("═══════════════════════════════════════════════════════")
 print("🎯 Forsaken Surge v14.2 (WORKING AIMBOT)")
 print("═══════════════════════════════════════════════════════")
-print("✅ AIMBOT: камера следует за персонажем, поворот на цель")
+print("✅ AIMBOT: камера остаётся у персонажа (CameraType = Custom)")
 print("✅ Wall Walk | Fly | No Clip | Turbo | ESP | Waypoints")
 print("✅ Fullbright | Click TP | Freecam | Hotkey Permissions")
 print("═══════════════════════════════════════════════════════")
