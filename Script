@@ -5,7 +5,7 @@ local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-S
 -- ==========================================
 local Window = Luna:CreateWindow({
     Name = "Forsaken Surge",
-    Subtitle = "v13.0 | HOTKEY PERMISSIONS + WALL WALK + TURBO + FLY + NOCLIP + ESP + CLICKTP + FREECAM",
+    Subtitle = "v14.0 | AIMBOT (PVP+PVE) + WALL WALK + TURBO + FLY + NOCLIP + ESP + CLICKTP + FREECAM",
     LogoID = nil,
     LoadingEnabled = true,
     LoadingTitle = "Forsaken Surge",
@@ -30,6 +30,7 @@ local Debris = game:GetService("Debris")
 local Lighting = game:GetService("Lighting")
 local Camera = Workspace.CurrentCamera
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local player = Players.LocalPlayer
 
@@ -172,7 +173,7 @@ local DefaultSettings = {
     WP_SWAP_ENABLED = false,
 
     -- ==========================================
-    -- 🔑 HOTKEY PERMISSIONS (разрешения на хоткеи)
+    -- 🔑 HOTKEY PERMISSIONS
     -- ==========================================
     HOTKEY_WALLWALK_ENABLED = true,
     HOTKEY_FLY_ENABLED = true,
@@ -182,6 +183,53 @@ local DefaultSettings = {
     HOTKEY_FREECAM_ENABLED = true,
     HOTKEY_CLICKTP_ENABLED = true,
     HOTKEY_WAYPOINTS_ENABLED = true,
+    HOTKEY_AIMBOT_ENABLED = true, -- 🎯 AIMBOT
+
+    -- ==========================================
+    -- 🎯 AIMBOT SETTINGS
+    -- ==========================================
+    AIMBOT_ENABLED = false,
+    AIMBOT_MODE = "PVP",                    -- "PVP" | "PVE" | "Both"
+    AIMBOT_KEY = "E",                       -- "E", "Q", "R", "X", "MouseButton2"
+    AIMBOT_TOGGLE_MODE = false,             -- false = hold, true = toggle
+    AIMBOT_ACTIVE = false,
+
+    AIMBOT_TARGET_PLAYERS = true,
+    AIMBOT_TARGET_NPCS = true,
+    AIMBOT_TARGET_KILLERS = true,
+    AIMBOT_TARGET_SURVIVORS = false,
+    AIMBOT_TEAM_CHECK = true,
+    AIMBOT_IGNORE_DEAD = true,
+    AIMBOT_WALL_CHECK = true,
+
+    AIMBOT_FOV_ENABLED = true,
+    AIMBOT_FOV = 150,
+    AIMBOT_SHOW_FOV = true,
+    AIMBOT_FOV_COLOR_R = 255,
+    AIMBOT_FOV_COLOR_G = 255,
+    AIMBOT_FOV_COLOR_B = 255,
+
+    AIMBOT_SMOOTHNESS = 0.25,
+    AIMBOT_MAX_DISTANCE = 1000,
+    AIMBOT_MIN_DISTANCE = 0,
+    AIMBOT_LOCK_MODE = "Closest",
+
+    AIMBOT_HITBOX = "Head",
+    AIMBOT_HITBOX_OFFSET_Y = 0,
+
+    AIMBOT_PREDICTION = true,
+    AIMBOT_PREDICTION_X = 0.165,
+    AIMBOT_PREDICTION_Y = 0.165,
+    AIMBOT_PREDICTION_Z = 0.165,
+
+    AIMBOT_AUTO_SHOOT = false,
+    AIMBOT_AUTO_SHOOT_DELAY = 0.1,
+    AIMBOT_AUTO_SHOOT_ONLY_VISIBLE = true,
+
+    AIMBOT_SHOW_TARGET = true,
+    AIMBOT_TARGET_COLOR_R = 255,
+    AIMBOT_TARGET_COLOR_G = 0,
+    AIMBOT_TARGET_COLOR_B = 0,
 }
 
 function LoadSettings()
@@ -255,6 +303,15 @@ local freecamSavedCamSubject = nil
 local freecamSavedCamCFrame = CFrame.new()
 local clickTPActive = false
 
+-- 🎯 AIMBOT states
+local aimbotActive = false
+local aimbotHolding = false
+local aimbotTarget = nil
+local aimbotTargetPart = nil
+local lastAutoShoot = 0
+local fovCircle = nil
+local targetIndicator = nil
+
 local rayParams = RaycastParams.new()
 rayParams.FilterType = Enum.RaycastFilterType.Exclude
 rayParams.RespectCanCollide = true
@@ -262,7 +319,6 @@ rayParams.RespectCanCollide = true
 -- ==========================================
 -- 🔑 HOTKEY PERMISSION CHECK
 -- ==========================================
--- Возвращает true, если хоткей разрешён в панели
 local function isHotkeyAllowed(permissionKey)
     return settings[permissionKey] == true
 end
@@ -575,7 +631,6 @@ task.spawn(function()
 
             local alive = {}
 
-            -- Player ESP
             for _, plr in ipairs(Players:GetPlayers()) do
                 if plr == player then continue end
                 local char = plr.Character
@@ -624,7 +679,6 @@ task.spawn(function()
                 end
             end
 
-            -- Generators ESP
             if settings.GENERATORS_ESP then
                 for _, obj in ipairs(Workspace:GetDescendants()) do
                     if obj:IsA("Model") and obj.Parent then
@@ -650,7 +704,6 @@ task.spawn(function()
                 end
             end
 
-            -- Items ESP
             if settings.ITEMS_ESP then
                 for _, obj in ipairs(Workspace:GetDescendants()) do
                     if obj:IsA("Tool") and obj.Parent then
@@ -717,6 +770,368 @@ local function showNotification(title, text)
     end)
     print(string.format("[%s] %s", title, text))
 end
+
+-- ==========================================
+-- 🎯 AIMBOT SYSTEM (PVP + PVE)
+-- ==========================================
+local function createFovCircle()
+    if fovCircle and fovCircle.gui then fovCircle.gui:Destroy() end
+
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "ForsakenSurge_FOV"
+    gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = true
+    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    gui.Parent = player:WaitForChild("PlayerGui")
+
+    local circle = Instance.new("Frame")
+    circle.Name = "FovCircle"
+    circle.AnchorPoint = Vector2.new(0.5, 0.5)
+    circle.Position = UDim2.fromScale(0.5, 0.5)
+    circle.Size = UDim2.fromOffset(settings.AIMBOT_FOV * 2, settings.AIMBOT_FOV * 2)
+    circle.BackgroundTransparency = 1
+    circle.BorderSizePixel = 0
+    circle.Visible = settings.AIMBOT_ENABLED and settings.AIMBOT_SHOW_FOV
+    circle.Parent = gui
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Thickness = 1.5
+    stroke.Color = Color3.fromRGB(
+        settings.AIMBOT_FOV_COLOR_R,
+        settings.AIMBOT_FOV_COLOR_G,
+        settings.AIMBOT_FOV_COLOR_B
+    )
+    stroke.Transparency = 0.3
+    stroke.Parent = circle
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(1, 0)
+    corner.Parent = circle
+
+    fovCircle = { gui = gui, circle = circle, stroke = stroke }
+end
+
+local function createTargetIndicator()
+    if targetIndicator and targetIndicator.gui then targetIndicator.gui:Destroy() end
+
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "ForsakenSurge_Target"
+    gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = true
+    gui.Parent = player:WaitForChild("PlayerGui")
+
+    local dot = Instance.new("Frame")
+    dot.Name = "TargetDot"
+    dot.AnchorPoint = Vector2.new(0.5, 0.5)
+    dot.Size = UDim2.fromOffset(10, 10)
+    dot.BackgroundColor3 = Color3.fromRGB(
+        settings.AIMBOT_TARGET_COLOR_R,
+        settings.AIMBOT_TARGET_COLOR_G,
+        settings.AIMBOT_TARGET_COLOR_B
+    )
+    dot.BorderSizePixel = 0
+    dot.Visible = false
+    dot.ZIndex = 999
+    dot.Parent = gui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(1, 0)
+    corner.Parent = dot
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Thickness = 2
+    stroke.Color = Color3.new(1, 1, 1)
+    stroke.Parent = dot
+
+    targetIndicator = { gui = gui, dot = dot, stroke = stroke }
+end
+
+createFovCircle()
+createTargetIndicator()
+
+-- Определение роли игрока (Killer/Survivor)
+local function getPlayerRole(plr)
+    if not plr or not plr.Team then return "Unknown" end
+    local teamName = plr.Team.Name:lower()
+    if teamName:find("killer") or teamName:find("monster") or teamName:find("enemy") then
+        return "Killer"
+    end
+    return "Survivor"
+end
+
+-- Валидность цели
+local function isValidTarget(inst)
+    if not inst then return false end
+
+    if inst:IsA("Player") then
+        if inst == player then return false end
+        if settings.AIMBOT_TEAM_CHECK and inst.Team ~= nil and inst.Team == player.Team then
+            return false
+        end
+        local char = inst.Character
+        if not char then return false end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum then return false end
+        if settings.AIMBOT_IGNORE_DEAD and hum.Health <= 0 then return false end
+        if not char:FindFirstChild("HumanoidRootPart") then return false end
+
+        local role = getPlayerRole(inst)
+        if role == "Killer" and not settings.AIMBOT_TARGET_KILLERS then return false end
+        if role == "Survivor" and not settings.AIMBOT_TARGET_SURVIVORS then return false end
+
+        return true
+    end
+
+    if inst:IsA("Model") then
+        local hum = inst:FindFirstChildOfClass("Humanoid")
+        if not hum then return false end
+        if settings.AIMBOT_IGNORE_DEAD and hum.Health <= 0 then return false end
+        if not inst:FindFirstChild("HumanoidRootPart") then return false end
+        return true
+    end
+
+    return false
+end
+
+-- Hitbox цели
+local function getHitboxPart(target)
+    if not target then return nil end
+    local char = target:IsA("Player") and target.Character or target
+    if not char then return nil end
+
+    if settings.AIMBOT_HITBOX == "Head" then
+        return char:FindFirstChild("Head")
+    elseif settings.AIMBOT_HITBOX == "Torso" then
+        return char:FindFirstChild("Torso")
+            or char:FindFirstChild("UpperTorso")
+            or char:FindFirstChild("LowerTorso")
+            or char:FindFirstChild("HumanoidRootPart")
+    elseif settings.AIMBOT_HITBOX == "HumanoidRootPart" then
+        return char:FindFirstChild("HumanoidRootPart")
+    elseif settings.AIMBOT_HITBOX == "Closest" then
+        local mouse = player:GetMouse()
+        local closest, closestDist = nil, math.huge
+        for _, part in ipairs(char:GetChildren()) do
+            if part:IsA("BasePart") then
+                local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+                if onScreen then
+                    local dist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(mouse.X, mouse.Y)).Magnitude
+                    if dist < closestDist then
+                        closestDist = dist
+                        closest = part
+                    end
+                end
+            end
+        end
+        return closest or char:FindFirstChild("HumanoidRootPart")
+    end
+    return char:FindFirstChild("HumanoidRootPart")
+end
+
+-- Проверка видимости
+local function isVisible(targetPart)
+    if not settings.AIMBOT_WALL_CHECK then return true end
+    if not targetPart then return false end
+
+    local origin = Camera.CFrame.Position
+    local dir = (targetPart.Position - origin)
+
+    local filter = RaycastParams.new()
+    filter.FilterType = Enum.RaycastFilterType.Exclude
+    local excludeList = {}
+    if character then table.insert(excludeList, character) end
+    filter.FilterDescendantsInstances = excludeList
+    filter.RespectCanCollide = true
+
+    local result = Workspace:Raycast(origin, dir, filter)
+    if result then
+        if result.Instance and targetPart.Parent and result.Instance:IsDescendantOf(targetPart.Parent) then
+            return true
+        end
+        return false
+    end
+    return true
+end
+
+-- Поиск лучшей цели
+local function findBestTarget()
+    local mouse = player:GetMouse()
+    local mousePos = Vector2.new(mouse.X, mouse.Y)
+    local myPos = Camera.CFrame.Position
+
+    local candidates = {}
+
+    -- Игроки (PVP)
+    if settings.AIMBOT_TARGET_PLAYERS and (settings.AIMBOT_MODE == "PVP" or settings.AIMBOT_MODE == "Both") then
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if isValidTarget(plr) then
+                table.insert(candidates, plr)
+            end
+        end
+    end
+
+    -- NPC / Монстры (PVE)
+    if settings.AIMBOT_TARGET_NPCS and (settings.AIMBOT_MODE == "PVE" or settings.AIMBOT_MODE == "Both") then
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj:IsA("Model") and obj:FindFirstChildOfClass("Humanoid") then
+                local isPlayerChar = false
+                for _, plr in ipairs(Players:GetPlayers()) do
+                    if plr.Character == obj then
+                        isPlayerChar = true
+                        break
+                    end
+                end
+                if not isPlayerChar and isValidTarget(obj) then
+                    table.insert(candidates, obj)
+                end
+            end
+        end
+    end
+
+    -- Фильтрация
+    local valid = {}
+    for _, target in ipairs(candidates) do
+        local char = target:IsA("Player") and target.Character or target
+        if char then
+            local part = getHitboxPart(target)
+            if part then
+                local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+                if onScreen then
+                    local screenVec = Vector2.new(screenPos.X, screenPos.Y)
+                    local distToMouse = (screenVec - mousePos).Magnitude
+                    local dist3D = (part.Position - myPos).Magnitude
+
+                    if dist3D >= settings.AIMBOT_MIN_DISTANCE
+                        and dist3D <= settings.AIMBOT_MAX_DISTANCE
+                        and (not settings.AIMBOT_FOV_ENABLED or distToMouse <= settings.AIMBOT_FOV)
+                        and isVisible(part) then
+
+                        local hum = char:FindFirstChildOfClass("Humanoid")
+                        table.insert(valid, {
+                            target = target,
+                            part = part,
+                            dist = dist3D,
+                            screenDist = distToMouse,
+                            health = hum and hum.Health or 100,
+                        })
+                    end
+                end
+            end
+        end
+    end
+
+    if #valid == 0 then return nil, nil end
+
+    local mode = settings.AIMBOT_LOCK_MODE
+    if mode == "Closest" then
+        table.sort(valid, function(a, b) return a.dist < b.dist end)
+    elseif mode == "NearestCenter" then
+        table.sort(valid, function(a, b) return a.screenDist < b.screenDist end)
+    elseif mode == "LowestHealth" then
+        table.sort(valid, function(a, b) return a.health < b.health end)
+    elseif mode == "HighestHealth" then
+        table.sort(valid, function(a, b) return a.health > b.health end)
+    end
+
+    return valid[1].target, valid[1].part
+end
+
+-- Позиция для наведения
+local function getAimPosition(targetPart)
+    if not targetPart then return nil end
+    local pos = targetPart.Position + Vector3.new(0, settings.AIMBOT_HITBOX_OFFSET_Y, 0)
+
+    if settings.AIMBOT_PREDICTION then
+        local vel = targetPart.AssemblyLinearVelocity or Vector3.zero
+        pos = pos + Vector3.new(
+            vel.X * settings.AIMBOT_PREDICTION_X,
+            vel.Y * settings.AIMBOT_PREDICTION_Y,
+            vel.Z * settings.AIMBOT_PREDICTION_Z
+        )
+    end
+    return pos
+end
+
+-- Основной цикл аимбота
+RunService.RenderStepped:Connect(function(dt)
+    if not fovCircle or not fovCircle.circle then return end
+
+    if not settings.AIMBOT_ENABLED then
+        fovCircle.circle.Visible = false
+        if targetIndicator and targetIndicator.dot then targetIndicator.dot.Visible = false end
+        return
+    end
+
+    fovCircle.circle.Visible = settings.AIMBOT_SHOW_FOV
+    fovCircle.circle.Size = UDim2.fromOffset(settings.AIMBOT_FOV * 2, settings.AIMBOT_FOV * 2)
+    fovCircle.stroke.Color = Color3.fromRGB(
+        settings.AIMBOT_FOV_COLOR_R,
+        settings.AIMBOT_FOV_COLOR_G,
+        settings.AIMBOT_FOV_COLOR_B
+    )
+
+    local shouldAim = aimbotActive
+    if not settings.AIMBOT_TOGGLE_MODE then
+        shouldAim = aimbotHolding
+    end
+
+    if not shouldAim or not Camera then
+        if targetIndicator and targetIndicator.dot then targetIndicator.dot.Visible = false end
+        return
+    end
+
+    local target, part = findBestTarget()
+    if not target or not part then
+        aimbotTarget = nil
+        aimbotTargetPart = nil
+        if targetIndicator and targetIndicator.dot then targetIndicator.dot.Visible = false end
+        return
+    end
+
+    aimbotTarget = target
+    aimbotTargetPart = part
+
+    if targetIndicator and targetIndicator.dot then
+        local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+        if onScreen and settings.AIMBOT_SHOW_TARGET then
+            targetIndicator.dot.Visible = true
+            targetIndicator.dot.Position = UDim2.fromOffset(screenPos.X, screenPos.Y)
+            targetIndicator.dot.BackgroundColor3 = Color3.fromRGB(
+                settings.AIMBOT_TARGET_COLOR_R,
+                settings.AIMBOT_TARGET_COLOR_G,
+                settings.AIMBOT_TARGET_COLOR_B
+            )
+        else
+            targetIndicator.dot.Visible = false
+        end
+    end
+
+    local aimPos = getAimPosition(part)
+    if aimPos then
+        local currentCF = Camera.CFrame
+        local targetCF = CFrame.lookAt(currentCF.Position, aimPos)
+        local smooth = math.clamp(settings.AIMBOT_SMOOTHNESS, 0, 0.99)
+        Camera.CFrame = currentCF:Lerp(targetCF, 1 - smooth)
+    end
+
+    if settings.AIMBOT_AUTO_SHOOT then
+        local now = tick()
+        if now - lastAutoShoot >= settings.AIMBOT_AUTO_SHOOT_DELAY then
+            if not settings.AIMBOT_AUTO_SHOOT_ONLY_VISIBLE or isVisible(part) then
+                lastAutoShoot = now
+                pcall(function()
+                    local tool = character and character:FindFirstChildOfClass("Tool")
+                    if tool then
+                        tool:Activate()
+                    end
+                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
+                    task.wait(0.03)
+                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
+                end)
+            end
+        end
+    end
+end)
 
 -- ==========================================
 -- WALL WALK
@@ -1338,12 +1753,20 @@ end
 -- ==========================================
 -- INPUT HANDLING (С ПРОВЕРКОЙ РАЗРЕШЕНИЙ)
 -- ==========================================
+local function getAimbotKey()
+    local keyMap = {
+        E = Enum.KeyCode.E,
+        Q = Enum.KeyCode.Q,
+        R = Enum.KeyCode.R,
+        X = Enum.KeyCode.X,
+        MouseButton2 = Enum.UserInputType.MouseButton2,
+    }
+    return keyMap[settings.AIMBOT_KEY] or Enum.KeyCode.E
+end
+
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
     pressed[input.KeyCode] = true
-
-    -- 🔒 Все хоткеи проверяют, разрешены ли они в панели.
-    -- Если разрешение выключено — клавиша полностью игнорируется.
 
     if input.KeyCode == Enum.KeyCode.C and isHotkeyAllowed("HOTKEY_WALLWALK_ENABLED") then
         toggleClimb()
@@ -1369,14 +1792,25 @@ UserInputService.InputBegan:Connect(function(input, gp)
         toggleFreecam()
     end
 
-    -- Click TP через ЛКМ
+    -- 🎯 AIMBOT активация
+    if settings.HOTKEY_AIMBOT_ENABLED then
+        local targetKey = getAimbotKey()
+        if input.KeyCode == targetKey or input.UserInputType == targetKey then
+            if settings.AIMBOT_TOGGLE_MODE then
+                aimbotActive = not aimbotActive
+                showNotification("🎯 Aimbot", aimbotActive and "Включён (toggle)" or "Выключен")
+            else
+                aimbotHolding = true
+            end
+        end
+    end
+
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
         if clickTPActive and settings.HOTKEY_CLICKTP_ENABLED and not freecamActive then
             performClickTP()
         end
     end
 
-    -- Waypoints hotkeys
     if isHotkeyAllowed("HOTKEY_WAYPOINTS_ENABLED") then
         if input.KeyCode == Enum.KeyCode.P then addWaypoint("WP" .. (#waypoints + 1)) end
         if input.KeyCode == Enum.KeyCode.L then removeWaypoint(#waypoints) end
@@ -1390,6 +1824,14 @@ UserInputService.InputEnded:Connect(function(input, gp)
     if gp then return end
     pressed[input.KeyCode] = false
     if input.KeyCode == Enum.KeyCode.LeftShift then isSprinting = false end
+
+    -- 🎯 AIMBOT release
+    if settings.HOTKEY_AIMBOT_ENABLED and not settings.AIMBOT_TOGGLE_MODE then
+        local targetKey = getAimbotKey()
+        if input.KeyCode == targetKey or input.UserInputType == targetKey then
+            aimbotHolding = false
+        end
+    end
 end)
 
 -- ==========================================
@@ -1413,7 +1855,7 @@ local HotkeysTab = Window:CreateTab({
 
 HotkeysTab:CreateParagraph({
     Title = "🔑 HOTKEY PERMISSIONS",
-    Text = "Включи тумблер — и соответствующая клавиша начнёт работать.\nВыключи — клавиша будет полностью игнорироваться.\n\nТумблеры 'Enable ... Hotkey' — это РАЗРЕШЕНИЯ, а не состояние режима."
+    Text = "Включи тумблер — и соответствующая клавиша начнёт работать.\nВыключи — клавиша будет полностью игнорироваться."
 })
 
 HotkeysTab:CreateToggle({
@@ -1422,10 +1864,7 @@ HotkeysTab:CreateToggle({
     Callback = function(Value)
         settings.HOTKEY_WALLWALK_ENABLED = Value
         SaveSettings(settings)
-        if not Value and climbing then
-            toggleClimb()
-            showNotification("🔒 Hotkey Lock", "Wall Walk принудительно выключен")
-        end
+        if not Value and climbing then toggleClimb() end
     end
 })
 
@@ -1435,10 +1874,7 @@ HotkeysTab:CreateToggle({
     Callback = function(Value)
         settings.HOTKEY_FLY_ENABLED = Value
         SaveSettings(settings)
-        if not Value and flying then
-            toggleFly()
-            showNotification("🔒 Hotkey Lock", "Fly принудительно выключен")
-        end
+        if not Value and flying then toggleFly() end
     end
 })
 
@@ -1448,10 +1884,7 @@ HotkeysTab:CreateToggle({
     Callback = function(Value)
         settings.HOTKEY_NOCLIP_ENABLED = Value
         SaveSettings(settings)
-        if not Value and noClipActive then
-            toggleNoClip()
-            showNotification("🔒 Hotkey Lock", "No Clip принудительно выключен")
-        end
+        if not Value and noClipActive then toggleNoClip() end
     end
 })
 
@@ -1461,10 +1894,7 @@ HotkeysTab:CreateToggle({
     Callback = function(Value)
         settings.HOTKEY_TURBO_ENABLED = Value
         SaveSettings(settings)
-        if not Value and turboActive then
-            toggleTurbo()
-            showNotification("🔒 Hotkey Lock", "Turbo принудительно выключен")
-        end
+        if not Value and turboActive then toggleTurbo() end
     end
 })
 
@@ -1474,10 +1904,7 @@ HotkeysTab:CreateToggle({
     Callback = function(Value)
         settings.HOTKEY_FULLBRIGHT_ENABLED = Value
         SaveSettings(settings)
-        if not Value and fullbrightActive then
-            toggleFullbright()
-            showNotification("🔒 Hotkey Lock", "Fullbright принудительно выключен")
-        end
+        if not Value and fullbrightActive then toggleFullbright() end
     end
 })
 
@@ -1487,10 +1914,7 @@ HotkeysTab:CreateToggle({
     Callback = function(Value)
         settings.HOTKEY_FREECAM_ENABLED = Value
         SaveSettings(settings)
-        if not Value and freecamActive then
-            stopFreecam()
-            showNotification("🔒 Hotkey Lock", "Freecam принудительно выключен")
-        end
+        if not Value and freecamActive then stopFreecam() end
     end
 })
 
@@ -1504,7 +1928,6 @@ HotkeysTab:CreateToggle({
             clickTPActive = false
             settings.CLICKTP_ENABLED = false
             SaveSettings(settings)
-            showNotification("🔒 Hotkey Lock", "Click TP принудительно выключен")
         end
     end
 })
@@ -1515,13 +1938,313 @@ HotkeysTab:CreateToggle({
     Callback = function(Value)
         settings.HOTKEY_WAYPOINTS_ENABLED = Value
         SaveSettings(settings)
-        showNotification("🔑 Hotkeys", Value and "Waypoint-хоткеи разрешены" or "Waypoint-хоткеи заблокированы")
+    end
+})
+
+HotkeysTab:CreateToggle({
+    Name = "🎯 Enable Aimbot Hotkey",
+    CurrentValue = settings.HOTKEY_AIMBOT_ENABLED,
+    Callback = function(Value)
+        settings.HOTKEY_AIMBOT_ENABLED = Value
+        SaveSettings(settings)
+        if not Value then
+            aimbotActive = false
+            aimbotHolding = false
+            showNotification("🔒 Hotkey Lock", "Aimbot принудительно выключен")
+        end
     end
 })
 
 HotkeysTab:CreateParagraph({
     Title = "ℹ️ КАК ЭТО РАБОТАЕТ",
-    Text = "Пример: выключи 'Enable Turbo Hotkey (Z)' — и сколько бы ты ни жал Z, Turbo не включится. Если Turbo был активен — он сразу отключится."
+    Text = "Выключи тумблер — и клавиша перестанет работать. Если режим был активен — он сразу отключится."
+})
+
+-- ==========================================
+-- 🎯 AIMBOT TAB
+-- ==========================================
+local AimbotTab = Window:CreateTab({
+    Name = "Aimbot",
+    Icon = "my_location",
+    ImageSource = "Material",
+    ShowTitle = true
+})
+
+AimbotTab:CreateParagraph({
+    Title = "🎯 AIMBOT PRO (PVP + PVE)",
+    Text = "Универсальный аимбот. Настрой режим, FOV, плавность, предикт и авто-стрельбу."
+})
+
+AimbotTab:CreateToggle({
+    Name = "🎯 Enable Aimbot",
+    CurrentValue = settings.AIMBOT_ENABLED,
+    Callback = function(Value)
+        if Value and not settings.HOTKEY_AIMBOT_ENABLED then
+            showNotification("🔒 Hotkey Lock", "Сначала разреши Aimbot в табе Hotkeys!")
+            return
+        end
+        settings.AIMBOT_ENABLED = Value
+        SaveSettings(settings)
+        if fovCircle and fovCircle.circle then
+            fovCircle.circle.Visible = Value and settings.AIMBOT_SHOW_FOV
+        end
+        showNotification("🎯 Aimbot", Value and "Включён" or "Выключен")
+    end
+})
+
+AimbotTab:CreateDropdown({
+    Name = "🎮 Режим",
+    Options = {"PVP", "PVE", "Both"},
+    CurrentOption = {settings.AIMBOT_MODE},
+    MultipleOptions = false,
+    Callback = function(Options)
+        settings.AIMBOT_MODE = Options
+        SaveSettings(settings)
+        showNotification("🎯 Aimbot", "Режим: " .. Options)
+    end
+})
+
+AimbotTab:CreateDropdown({
+    Name = "🔑 Клавиша активации",
+    Options = {"E", "Q", "R", "X", "MouseButton2"},
+    CurrentOption = {settings.AIMBOT_KEY},
+    MultipleOptions = false,
+    Callback = function(Options)
+        settings.AIMBOT_KEY = Options
+        SaveSettings(settings)
+    end
+})
+
+AimbotTab:CreateToggle({
+    Name = "🔄 Toggle Mode (вместо Hold)",
+    CurrentValue = settings.AIMBOT_TOGGLE_MODE,
+    Callback = function(Value)
+        settings.AIMBOT_TOGGLE_MODE = Value
+        SaveSettings(settings)
+    end
+})
+
+AimbotTab:CreateLabel({ Text = "🎯 ЦЕЛИ", Style = 1 })
+
+AimbotTab:CreateToggle({
+    Name = "Игроки (PVP)",
+    CurrentValue = settings.AIMBOT_TARGET_PLAYERS,
+    Callback = function(Value) settings.AIMBOT_TARGET_PLAYERS = Value SaveSettings(settings) end
+})
+
+AimbotTab:CreateToggle({
+    Name = "NPC / Монстры (PVE)",
+    CurrentValue = settings.AIMBOT_TARGET_NPCS,
+    Callback = function(Value) settings.AIMBOT_TARGET_NPCS = Value SaveSettings(settings) end
+})
+
+AimbotTab:CreateToggle({
+    Name = "Killers",
+    CurrentValue = settings.AIMBOT_TARGET_KILLERS,
+    Callback = function(Value) settings.AIMBOT_TARGET_KILLERS = Value SaveSettings(settings) end
+})
+
+AimbotTab:CreateToggle({
+    Name = "Survivors",
+    CurrentValue = settings.AIMBOT_TARGET_SURVIVORS,
+    Callback = function(Value) settings.AIMBOT_TARGET_SURVIVORS = Value SaveSettings(settings) end
+})
+
+AimbotTab:CreateToggle({
+    Name = "Team Check (не бить своих)",
+    CurrentValue = settings.AIMBOT_TEAM_CHECK,
+    Callback = function(Value) settings.AIMBOT_TEAM_CHECK = Value SaveSettings(settings) end
+})
+
+AimbotTab:CreateToggle({
+    Name = "Игнорировать мёртвых",
+    CurrentValue = settings.AIMBOT_IGNORE_DEAD,
+    Callback = function(Value) settings.AIMBOT_IGNORE_DEAD = Value SaveSettings(settings) end
+})
+
+AimbotTab:CreateToggle({
+    Name = "Проверка стен",
+    CurrentValue = settings.AIMBOT_WALL_CHECK,
+    Callback = function(Value) settings.AIMBOT_WALL_CHECK = Value SaveSettings(settings) end
+})
+
+AimbotTab:CreateLabel({ Text = "👁️ FOV / РАДИУС", Style = 1 })
+
+AimbotTab:CreateToggle({
+    Name = "Ограничение FOV",
+    CurrentValue = settings.AIMBOT_FOV_ENABLED,
+    Callback = function(Value) settings.AIMBOT_FOV_ENABLED = Value SaveSettings(settings) end
+})
+
+AimbotTab:CreateSlider({
+    Name = "FOV (пиксели)",
+    Range = {10, 800}, Increment = 5,
+    CurrentValue = settings.AIMBOT_FOV,
+    Callback = function(Value)
+        settings.AIMBOT_FOV = Value
+        SaveSettings(settings)
+        if fovCircle and fovCircle.circle then
+            fovCircle.circle.Size = UDim2.fromOffset(Value * 2, Value * 2)
+        end
+    end
+})
+
+AimbotTab:CreateToggle({
+    Name = "Показывать FOV-круг",
+    CurrentValue = settings.AIMBOT_SHOW_FOV,
+    Callback = function(Value)
+        settings.AIMBOT_SHOW_FOV = Value
+        SaveSettings(settings)
+        if fovCircle and fovCircle.circle then
+            fovCircle.circle.Visible = Value and settings.AIMBOT_ENABLED
+        end
+    end
+})
+
+AimbotTab:CreateSlider({
+    Name = "FOV R", Range = {0, 255}, Increment = 1,
+    CurrentValue = settings.AIMBOT_FOV_COLOR_R,
+    Callback = function(Value) settings.AIMBOT_FOV_COLOR_R = Value SaveSettings(settings) end
+})
+
+AimbotTab:CreateSlider({
+    Name = "FOV G", Range = {0, 255}, Increment = 1,
+    CurrentValue = settings.AIMBOT_FOV_COLOR_G,
+    Callback = function(Value) settings.AIMBOT_FOV_COLOR_G = Value SaveSettings(settings) end
+})
+
+AimbotTab:CreateSlider({
+    Name = "FOV B", Range = {0, 255}, Increment = 1,
+    CurrentValue = settings.AIMBOT_FOV_COLOR_B,
+    Callback = function(Value) settings.AIMBOT_FOV_COLOR_B = Value SaveSettings(settings) end
+})
+
+AimbotTab:CreateLabel({ Text = "🎯 НАВЕДЕНИЕ", Style = 1 })
+
+AimbotTab:CreateSlider({
+    Name = "Плавность (0 = мгновенно)",
+    Range = {0, 0.95}, Increment = 0.05,
+    CurrentValue = settings.AIMBOT_SMOOTHNESS,
+    Callback = function(Value) settings.AIMBOT_SMOOTHNESS = Value SaveSettings(settings) end
+})
+
+AimbotTab:CreateSlider({
+    Name = "Макс. дистанция",
+    Range = {10, 5000}, Increment = 10,
+    CurrentValue = settings.AIMBOT_MAX_DISTANCE,
+    Callback = function(Value) settings.AIMBOT_MAX_DISTANCE = Value SaveSettings(settings) end
+})
+
+AimbotTab:CreateSlider({
+    Name = "Мин. дистанция",
+    Range = {0, 500}, Increment = 1,
+    CurrentValue = settings.AIMBOT_MIN_DISTANCE,
+    Callback = function(Value) settings.AIMBOT_MIN_DISTANCE = Value SaveSettings(settings) end
+})
+
+AimbotTab:CreateDropdown({
+    Name = "Режим выбора цели",
+    Options = {"Closest", "NearestCenter", "LowestHealth", "HighestHealth"},
+    CurrentOption = {settings.AIMBOT_LOCK_MODE},
+    MultipleOptions = false,
+    Callback = function(Options) settings.AIMBOT_LOCK_MODE = Options SaveSettings(settings) end
+})
+
+AimbotTab:CreateLabel({ Text = "🎯 HITBOX / PREDICTION", Style = 1 })
+
+AimbotTab:CreateDropdown({
+    Name = "Hitbox",
+    Options = {"Head", "Torso", "HumanoidRootPart", "Closest"},
+    CurrentOption = {settings.AIMBOT_HITBOX},
+    MultipleOptions = false,
+    Callback = function(Options) settings.AIMBOT_HITBOX = Options SaveSettings(settings) end
+})
+
+AimbotTab:CreateSlider({
+    Name = "Смещение hitbox по Y",
+    Range = {-5, 5}, Increment = 0.1,
+    CurrentValue = settings.AIMBOT_HITBOX_OFFSET_Y,
+    Callback = function(Value) settings.AIMBOT_HITBOX_OFFSET_Y = Value SaveSettings(settings) end
+})
+
+AimbotTab:CreateToggle({
+    Name = "🎯 Prediction (упреждение)",
+    CurrentValue = settings.AIMBOT_PREDICTION,
+    Callback = function(Value) settings.AIMBOT_PREDICTION = Value SaveSettings(settings) end
+})
+
+AimbotTab:CreateSlider({
+    Name = "Prediction X", Range = {0, 1}, Increment = 0.005,
+    CurrentValue = settings.AIMBOT_PREDICTION_X,
+    Callback = function(Value) settings.AIMBOT_PREDICTION_X = Value SaveSettings(settings) end
+})
+
+AimbotTab:CreateSlider({
+    Name = "Prediction Y", Range = {0, 1}, Increment = 0.005,
+    CurrentValue = settings.AIMBOT_PREDICTION_Y,
+    Callback = function(Value) settings.AIMBOT_PREDICTION_Y = Value SaveSettings(settings) end
+})
+
+AimbotTab:CreateSlider({
+    Name = "Prediction Z", Range = {0, 1}, Increment = 0.005,
+    CurrentValue = settings.AIMBOT_PREDICTION_Z,
+    Callback = function(Value) settings.AIMBOT_PREDICTION_Z = Value SaveSettings(settings) end
+})
+
+AimbotTab:CreateLabel({ Text = "🔫 АВТО-СТРЕЛЬБА", Style = 1 })
+
+AimbotTab:CreateToggle({
+    Name = "Auto Shoot",
+    CurrentValue = settings.AIMBOT_AUTO_SHOOT,
+    Callback = function(Value) settings.AIMBOT_AUTO_SHOOT = Value SaveSettings(settings) end
+})
+
+AimbotTab:CreateSlider({
+    Name = "Задержка выстрелов",
+    Range = {0.01, 1.0}, Increment = 0.01,
+    CurrentValue = settings.AIMBOT_AUTO_SHOOT_DELAY,
+    Callback = function(Value) settings.AIMBOT_AUTO_SHOOT_DELAY = Value SaveSettings(settings) end
+})
+
+AimbotTab:CreateToggle({
+    Name = "Стрелять только по видимым",
+    CurrentValue = settings.AIMBOT_AUTO_SHOOT_ONLY_VISIBLE,
+    Callback = function(Value) settings.AIMBOT_AUTO_SHOOT_ONLY_VISIBLE = Value SaveSettings(settings) end
+})
+
+AimbotTab:CreateLabel({ Text = "🎨 ИНДИКАТОР ЦЕЛИ", Style = 1 })
+
+AimbotTab:CreateToggle({
+    Name = "Показывать точку цели",
+    CurrentValue = settings.AIMBOT_SHOW_TARGET,
+    Callback = function(Value) settings.AIMBOT_SHOW_TARGET = Value SaveSettings(settings) end
+})
+
+AimbotTab:CreateSlider({
+    Name = "Цель R", Range = {0, 255}, Increment = 1,
+    CurrentValue = settings.AIMBOT_TARGET_COLOR_R,
+    Callback = function(Value) settings.AIMBOT_TARGET_COLOR_R = Value SaveSettings(settings) end
+})
+
+AimbotTab:CreateSlider({
+    Name = "Цель G", Range = {0, 255}, Increment = 1,
+    CurrentValue = settings.AIMBOT_TARGET_COLOR_G,
+    Callback = function(Value) settings.AIMBOT_TARGET_COLOR_G = Value SaveSettings(settings) end
+})
+
+AimbotTab:CreateSlider({
+    Name = "Цель B", Range = {0, 255}, Increment = 1,
+    CurrentValue = settings.AIMBOT_TARGET_COLOR_B,
+    Callback = function(Value) settings.AIMBOT_TARGET_COLOR_B = Value SaveSettings(settings) end
+})
+
+AimbotTab:CreateButton({
+    Name = "🧹 Сбросить текущую цель",
+    Callback = function()
+        aimbotTarget = nil
+        aimbotTargetPart = nil
+        showNotification("🎯 Aimbot", "Цель сброшена")
+    end
 })
 
 -- ==========================================
@@ -1556,10 +2279,7 @@ WallWalkTab:CreateSlider({
     Range = {1, getMaxValue("WALK_SPEED", 50)},
     Increment = 1,
     CurrentValue = settings.WALK_SPEED,
-    Callback = function(Value)
-        settings.WALK_SPEED = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.WALK_SPEED = Value SaveSettings(settings) end
 })
 
 WallWalkTab:CreateSlider({
@@ -1567,10 +2287,7 @@ WallWalkTab:CreateSlider({
     Range = {1.0, getMaxValue("SPRINT_MULTIPLIER", 3.0)},
     Increment = 0.1,
     CurrentValue = settings.SPRINT_MULTIPLIER,
-    Callback = function(Value)
-        settings.SPRINT_MULTIPLIER = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.SPRINT_MULTIPLIER = Value SaveSettings(settings) end
 })
 
 WallWalkTab:CreateSlider({
@@ -1578,10 +2295,7 @@ WallWalkTab:CreateSlider({
     Range = {1, getMaxValue("GRAVITY", 60)},
     Increment = 1,
     CurrentValue = settings.GRAVITY,
-    Callback = function(Value)
-        settings.GRAVITY = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.GRAVITY = Value SaveSettings(settings) end
 })
 
 WallWalkTab:CreateLabel({ Text = "ДАЛЬНОСТЬ", Style = 1 })
@@ -1591,10 +2305,7 @@ WallWalkTab:CreateSlider({
     Range = {1, getMaxValue("WALL_RANGE", 10)},
     Increment = 0.5,
     CurrentValue = settings.WALL_RANGE,
-    Callback = function(Value)
-        settings.WALL_RANGE = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.WALL_RANGE = Value SaveSettings(settings) end
 })
 
 WallWalkTab:CreateSlider({
@@ -1602,10 +2313,7 @@ WallWalkTab:CreateSlider({
     Range = {1, 15},
     Increment = 1,
     CurrentValue = settings.ALIGN_SPEED,
-    Callback = function(Value)
-        settings.ALIGN_SPEED = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.ALIGN_SPEED = Value SaveSettings(settings) end
 })
 
 WallWalkTab:CreateLabel({ Text = "ПОТОЛОК", Style = 1 })
@@ -1613,10 +2321,7 @@ WallWalkTab:CreateLabel({ Text = "ПОТОЛОК", Style = 1 })
 WallWalkTab:CreateToggle({
     Name = "Фиксация на потолке",
     CurrentValue = settings.CEILING_GRIP,
-    Callback = function(Value)
-        settings.CEILING_GRIP = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.CEILING_GRIP = Value SaveSettings(settings) end
 })
 
 WallWalkTab:CreateSlider({
@@ -1624,10 +2329,7 @@ WallWalkTab:CreateSlider({
     Range = {1, 20},
     Increment = 0.5,
     CurrentValue = settings.CEILING_GRIP_FORCE,
-    Callback = function(Value)
-        settings.CEILING_GRIP_FORCE = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.CEILING_GRIP_FORCE = Value SaveSettings(settings) end
 })
 
 WallWalkTab:CreateSlider({
@@ -1635,28 +2337,19 @@ WallWalkTab:CreateSlider({
     Range = {1, 10},
     Increment = 0.5,
     CurrentValue = settings.CEILING_MAX_TIME,
-    Callback = function(Value)
-        settings.CEILING_MAX_TIME = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.CEILING_MAX_TIME = Value SaveSettings(settings) end
 })
 
 WallWalkTab:CreateToggle({
     Name = "Прилипание к поверхности",
     CurrentValue = settings.STICK_TO_SURFACE,
-    Callback = function(Value)
-        settings.STICK_TO_SURFACE = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.STICK_TO_SURFACE = Value SaveSettings(settings) end
 })
 
 WallWalkTab:CreateToggle({
     Name = "Авто-сброс при падении",
     CurrentValue = settings.AUTO_RESET_ON_FALL,
-    Callback = function(Value)
-        settings.AUTO_RESET_ON_FALL = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.AUTO_RESET_ON_FALL = Value SaveSettings(settings) end
 })
 
 -- ESP TAB
@@ -1686,79 +2379,52 @@ ESPTab:CreateLabel({ Text = "⚙️ ОБНОВЛЕНИЕ И ДАЛЬНОСТЬ",
 
 ESPTab:CreateSlider({
     Name = "Интервал обновления ESP (сек)",
-    Range = {0.01, 1.0},
-    Increment = 0.01,
+    Range = {0.01, 1.0}, Increment = 0.01,
     CurrentValue = settings.ESP_UPDATE_INTERVAL,
-    Callback = function(Value)
-        settings.ESP_UPDATE_INTERVAL = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.ESP_UPDATE_INTERVAL = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateSlider({
     Name = "Максимальная дистанция ESP",
-    Range = {50, 2000},
-    Increment = 10,
+    Range = {50, 2000}, Increment = 10,
     CurrentValue = settings.ESP_MAX_DISTANCE,
-    Callback = function(Value)
-        settings.ESP_MAX_DISTANCE = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.ESP_MAX_DISTANCE = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateSlider({
     Name = "Минимальная дистанция",
-    Range = {1, 100},
-    Increment = 1,
+    Range = {1, 100}, Increment = 1,
     CurrentValue = settings.ESP_MIN_DISTANCE,
-    Callback = function(Value)
-        settings.ESP_MIN_DISTANCE = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.ESP_MIN_DISTANCE = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateToggle({
     Name = "Затухание по дистанции",
     CurrentValue = settings.ESP_RENDER_DISTANCE_FADE,
-    Callback = function(Value)
-        settings.ESP_RENDER_DISTANCE_FADE = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.ESP_RENDER_DISTANCE_FADE = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateSlider({
     Name = "Минимальная яркость",
-    Range = {0.0, 1.0},
-    Increment = 0.05,
+    Range = {0.0, 1.0}, Increment = 0.05,
     CurrentValue = settings.ESP_FADE_MIN_ALPHA,
-    Callback = function(Value)
-        settings.ESP_FADE_MIN_ALPHA = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.ESP_FADE_MIN_ALPHA = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateLabel({ Text = "🎨 ПРОЗРАЧНОСТЬ", Style = 1 })
 
 ESPTab:CreateSlider({
     Name = "Прозрачность заливки",
-    Range = {0.0, 1.0},
-    Increment = 0.05,
+    Range = {0.0, 1.0}, Increment = 0.05,
     CurrentValue = settings.ESP_FILL_TRANSPARENCY,
-    Callback = function(Value)
-        settings.ESP_FILL_TRANSPARENCY = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.ESP_FILL_TRANSPARENCY = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateSlider({
     Name = "Прозрачность контура",
-    Range = {0.0, 1.0},
-    Increment = 0.05,
+    Range = {0.0, 1.0}, Increment = 0.05,
     CurrentValue = settings.ESP_OUTLINE_TRANSPARENCY,
-    Callback = function(Value)
-        settings.ESP_OUTLINE_TRANSPARENCY = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.ESP_OUTLINE_TRANSPARENCY = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateLabel({ Text = "📝 ТЕКСТ", Style = 1 })
@@ -1766,30 +2432,20 @@ ESPTab:CreateLabel({ Text = "📝 ТЕКСТ", Style = 1 })
 ESPTab:CreateToggle({
     Name = "Показывать имена",
     CurrentValue = settings.SHOW_TEXT,
-    Callback = function(Value)
-        settings.SHOW_TEXT = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.SHOW_TEXT = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateSlider({
     Name = "Размер текста",
-    Range = {8, 48},
-    Increment = 1,
+    Range = {8, 48}, Increment = 1,
     CurrentValue = settings.ESP_TEXT_SIZE,
-    Callback = function(Value)
-        settings.ESP_TEXT_SIZE = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.ESP_TEXT_SIZE = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateToggle({
     Name = "Показывать дистанцию",
     CurrentValue = settings.ESP_SHOW_DISTANCE_TEXT,
-    Callback = function(Value)
-        settings.ESP_SHOW_DISTANCE_TEXT = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.ESP_SHOW_DISTANCE_TEXT = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateLabel({ Text = "📦 BOX / 📏 TRACER", Style = 1 })
@@ -1797,19 +2453,13 @@ ESPTab:CreateLabel({ Text = "📦 BOX / 📏 TRACER", Style = 1 })
 ESPTab:CreateToggle({
     Name = "Включить Box ESP",
     CurrentValue = settings.ESP_BOX_ENABLED,
-    Callback = function(Value)
-        settings.ESP_BOX_ENABLED = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.ESP_BOX_ENABLED = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateToggle({
     Name = "Включить Tracer",
     CurrentValue = settings.ESP_TRACER_ENABLED,
-    Callback = function(Value)
-        settings.ESP_TRACER_ENABLED = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.ESP_TRACER_ENABLED = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateLabel({ Text = "🎯 ФИЛЬТРЫ", Style = 1 })
@@ -1817,10 +2467,7 @@ ESPTab:CreateLabel({ Text = "🎯 ФИЛЬТРЫ", Style = 1 })
 ESPTab:CreateToggle({
     Name = "Team Check",
     CurrentValue = settings.ESP_TEAM_CHECK,
-    Callback = function(Value)
-        settings.ESP_TEAM_CHECK = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.ESP_TEAM_CHECK = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateLabel({ Text = "👥 ИГРОКИ", Style = 1 })
@@ -1828,10 +2475,7 @@ ESPTab:CreateLabel({ Text = "👥 ИГРОКИ", Style = 1 })
 ESPTab:CreateToggle({
     Name = "Killers ESP",
     CurrentValue = settings.KILLERS_ESP,
-    Callback = function(Value)
-        settings.KILLERS_ESP = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.KILLERS_ESP = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateDropdown({
@@ -1839,19 +2483,13 @@ ESPTab:CreateDropdown({
     Options = {"Red", "Orange", "Purple", "Gold", "White", "Pink", "Magenta", "Yellow"},
     CurrentOption = {settings.KILLERS_COLOR or "Red"},
     MultipleOptions = false,
-    Callback = function(Options)
-        settings.KILLERS_COLOR = Options
-        SaveSettings(settings)
-    end
+    Callback = function(Options) settings.KILLERS_COLOR = Options SaveSettings(settings) end
 })
 
 ESPTab:CreateToggle({
     Name = "Survivors ESP",
     CurrentValue = settings.SURVIVORS_ESP,
-    Callback = function(Value)
-        settings.SURVIVORS_ESP = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.SURVIVORS_ESP = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateDropdown({
@@ -1859,10 +2497,7 @@ ESPTab:CreateDropdown({
     Options = {"Green", "Cyan", "Blue", "Lime", "Teal", "White", "Yellow"},
     CurrentOption = {settings.SURVIVORS_COLOR or "Green"},
     MultipleOptions = false,
-    Callback = function(Options)
-        settings.SURVIVORS_COLOR = Options
-        SaveSettings(settings)
-    end
+    Callback = function(Options) settings.SURVIVORS_COLOR = Options SaveSettings(settings) end
 })
 
 ESPTab:CreateLabel({ Text = "🏭 ОБЪЕКТЫ", Style = 1 })
@@ -1870,19 +2505,13 @@ ESPTab:CreateLabel({ Text = "🏭 ОБЪЕКТЫ", Style = 1 })
 ESPTab:CreateToggle({
     Name = "Generators ESP",
     CurrentValue = settings.GENERATORS_ESP,
-    Callback = function(Value)
-        settings.GENERATORS_ESP = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.GENERATORS_ESP = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateToggle({
     Name = "Items ESP",
     CurrentValue = settings.ITEMS_ESP,
-    Callback = function(Value)
-        settings.ITEMS_ESP = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.ITEMS_ESP = Value SaveSettings(settings) end
 })
 
 ESPTab:CreateDropdown({
@@ -1890,10 +2519,7 @@ ESPTab:CreateDropdown({
     Options = {"AlwaysOnTop", "Occluded"},
     CurrentOption = {settings.ESP_HIGHLIGHT_DEPTH_MODE or "AlwaysOnTop"},
     MultipleOptions = false,
-    Callback = function(Options)
-        settings.ESP_HIGHLIGHT_DEPTH_MODE = Options
-        SaveSettings(settings)
-    end
+    Callback = function(Options) settings.ESP_HIGHLIGHT_DEPTH_MODE = Options SaveSettings(settings) end
 })
 
 -- ==========================================
@@ -1925,31 +2551,21 @@ ClickTPTab:CreateToggle({
 
 ClickTPTab:CreateSlider({
     Name = "Макс. дистанция рейкаста",
-    Range = {50, 5000},
-    Increment = 50,
+    Range = {50, 5000}, Increment = 50,
     CurrentValue = settings.CLICKTP_DISTANCE,
-    Callback = function(Value)
-        settings.CLICKTP_DISTANCE = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.CLICKTP_DISTANCE = Value SaveSettings(settings) end
 })
 
 ClickTPTab:CreateSlider({
     Name = "Смещение по Y (высота)",
-    Range = {0, 20},
-    Increment = 0.5,
+    Range = {0, 20}, Increment = 0.5,
     CurrentValue = settings.CLICKTP_OFFSET_Y,
-    Callback = function(Value)
-        settings.CLICKTP_OFFSET_Y = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.CLICKTP_OFFSET_Y = Value SaveSettings(settings) end
 })
 
 ClickTPTab:CreateButton({
     Name = "🖱️ Телепорт в точку под курсором (разово)",
-    Callback = function()
-        performClickTP()
-    end
+    Callback = function() performClickTP() end
 })
 
 -- ==========================================
@@ -1964,7 +2580,7 @@ local FreecamTab = Window:CreateTab({
 
 FreecamTab:CreateParagraph({
     Title = "🎥 FREECAM",
-    Text = "WASD — движение, Space/Ctrl — вверх/вниз, Shift — ускорение. Хоткей: G (если разрешён в Hotkeys)"
+    Text = "WASD — движение, Space/Ctrl — вверх/вниз, Shift — ускорение. Хоткей: G (если разрешён)"
 })
 
 FreecamTab:CreateToggle({
@@ -1975,34 +2591,23 @@ FreecamTab:CreateToggle({
             showNotification("🔒 Hotkey Lock", "Сначала разреши Freecam в табе Hotkeys!")
             return
         end
-        if Value and not freecamActive then
-            startFreecam()
-        elseif not Value and freecamActive then
-            stopFreecam()
-        end
+        if Value and not freecamActive then startFreecam()
+        elseif not Value and freecamActive then stopFreecam() end
     end
 })
 
 FreecamTab:CreateSlider({
     Name = "Скорость Freecam",
-    Range = {5, 500},
-    Increment = 5,
+    Range = {5, 500}, Increment = 5,
     CurrentValue = settings.FREECAM_SPEED,
-    Callback = function(Value)
-        settings.FREECAM_SPEED = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.FREECAM_SPEED = Value SaveSettings(settings) end
 })
 
 FreecamTab:CreateSlider({
     Name = "Множитель спринта",
-    Range = {1, 10},
-    Increment = 0.5,
+    Range = {1, 10}, Increment = 0.5,
     CurrentValue = settings.FREECAM_SPRINT_MULT,
-    Callback = function(Value)
-        settings.FREECAM_SPRINT_MULT = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.FREECAM_SPRINT_MULT = Value SaveSettings(settings) end
 })
 
 FreecamTab:CreateToggle({
@@ -2011,24 +2616,13 @@ FreecamTab:CreateToggle({
     Callback = function(Value)
         settings.FREECAM_HIDE_CHAR = Value
         SaveSettings(settings)
-        if freecamActive then
-            if Value and character then
-                for _, part in ipairs(character:GetDescendants()) do
-                    if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                        part.LocalTransparencyModifier = 1
-                        part.Transparency = 1
-                    elseif part:IsA("Decal") or part:IsA("Texture") then
-                        part.Transparency = 1
-                    end
-                end
-            elseif character then
-                for _, part in ipairs(character:GetDescendants()) do
-                    if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                        part.LocalTransparencyModifier = 0
-                        part.Transparency = 0
-                    elseif part:IsA("Decal") or part:IsA("Texture") then
-                        part.Transparency = 0
-                    end
+        if freecamActive and character then
+            for _, part in ipairs(character:GetDescendants()) do
+                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                    part.LocalTransparencyModifier = Value and 1 or 0
+                    part.Transparency = Value and 1 or 0
+                elseif part:IsA("Decal") or part:IsA("Texture") then
+                    part.Transparency = Value and 1 or 0
                 end
             end
         end
@@ -2068,10 +2662,7 @@ TurboTab:CreateSlider({
     Range = {5, getMaxValue("TURBO_SPEED", 100)},
     Increment = 5,
     CurrentValue = settings.TURBO_SPEED,
-    Callback = function(Value)
-        settings.TURBO_SPEED = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.TURBO_SPEED = Value SaveSettings(settings) end
 })
 
 TurboTab:CreateButton({
@@ -2158,10 +2749,7 @@ FlyTab:CreateSlider({
     Range = {10, getMaxValue("FLY_SPEED", 100)},
     Increment = 1,
     CurrentValue = settings.FLY_SPEED,
-    Callback = function(Value)
-        settings.FLY_SPEED = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.FLY_SPEED = Value SaveSettings(settings) end
 })
 
 FlyTab:CreateSlider({
@@ -2169,19 +2757,13 @@ FlyTab:CreateSlider({
     Range = {50, getMaxValue("FLY_MAX_SPEED", 300)},
     Increment = 5,
     CurrentValue = settings.FLY_MAX_SPEED,
-    Callback = function(Value)
-        settings.FLY_MAX_SPEED = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.FLY_MAX_SPEED = Value SaveSettings(settings) end
 })
 
 FlyTab:CreateToggle({
     Name = "Hover",
     CurrentValue = settings.FLY_HOVER,
-    Callback = function(Value)
-        settings.FLY_HOVER = Value
-        SaveSettings(settings)
-    end
+    Callback = function(Value) settings.FLY_HOVER = Value SaveSettings(settings) end
 })
 
 -- WAYPOINTS TAB
@@ -2194,7 +2776,7 @@ local WaypointTab = Window:CreateTab({
 
 WaypointTab:CreateParagraph({
     Title = "📍 WAYPOINT SYSTEM",
-    Text = "P — сохранить точку\nL — удалить последнюю\nT — ТП к #1\n(работают, если разрешены в Hotkeys)"
+    Text = "P — сохранить точку\nL — удалить последнюю\nT — ТП к #1"
 })
 
 WaypointTab:CreateToggle({
@@ -2204,7 +2786,6 @@ WaypointTab:CreateToggle({
         settings.WP_SWAP_ENABLED = Value
         SaveSettings(settings)
         refreshBeacons()
-        showNotification("🔁 Waypoint", Value and "SWAP MODE включён" or "SWAP MODE выключен")
     end
 })
 
@@ -2213,9 +2794,7 @@ WaypointTab:CreateInput({
     CurrentValue = "",
     PlaceholderText = "Введи имя...",
     RemoveTextAfterFocusLost = false,
-    Callback = function(Text)
-        _G.__wpName = Text
-    end
+    Callback = function(Text) _G.__wpName = Text end
 })
 
 WaypointTab:CreateButton({
@@ -2242,9 +2821,7 @@ WaypointTab:CreateLabel({ Text = "ТЕЛЕПОРТ К ТОЧКЕ", Style = 1 })
 for i = 1, MAX_WAYPOINTS do
     WaypointTab:CreateButton({
         Name = "📍 ТП → #" .. i,
-        Callback = function()
-            teleportToWaypoint(i)
-        end
+        Callback = function() teleportToWaypoint(i) end
     })
 end
 
@@ -2255,9 +2832,7 @@ WaypointTab:CreateInput({
     CurrentValue = "",
     PlaceholderText = "Например: Player1",
     RemoveTextAfterFocusLost = false,
-    Callback = function(Text)
-        _G.__tpPlayerName = Text
-    end
+    Callback = function(Text) _G.__tpPlayerName = Text end
 })
 
 WaypointTab:CreateButton({
@@ -2292,9 +2867,7 @@ FullbrightTab:CreateToggle({
             showNotification("🔒 Hotkey Lock", "Сначала разреши Fullbright в табе Hotkeys!")
             return
         end
-        if Value ~= fullbrightActive then
-            toggleFullbright()
-        end
+        if Value ~= fullbrightActive then toggleFullbright() end
         settings.FULLBRIGHT_ENABLED = Value
         SaveSettings(settings)
     end
@@ -2302,29 +2875,23 @@ FullbrightTab:CreateToggle({
 
 FullbrightTab:CreateSlider({
     Name = "Brightness",
-    Range = {0, 10},
-    Increment = 0.5,
+    Range = {0, 10}, Increment = 0.5,
     CurrentValue = settings.FULLBRIGHT_BRIGHTNESS,
     Callback = function(Value)
         settings.FULLBRIGHT_BRIGHTNESS = Value
         SaveSettings(settings)
-        if fullbrightActive then
-            Lighting.Brightness = Value
-        end
+        if fullbrightActive then Lighting.Brightness = Value end
     end
 })
 
 FullbrightTab:CreateSlider({
-    Name = "ClockTime (время суток)",
-    Range = {0, 24},
-    Increment = 0.5,
+    Name = "ClockTime",
+    Range = {0, 24}, Increment = 0.5,
     CurrentValue = settings.FULLBRIGHT_CLOCKTIME,
     Callback = function(Value)
         settings.FULLBRIGHT_CLOCKTIME = Value
         SaveSettings(settings)
-        if fullbrightActive then
-            Lighting.ClockTime = Value
-        end
+        if fullbrightActive then Lighting.ClockTime = Value end
     end
 })
 
@@ -2338,9 +2905,9 @@ FullbrightTab:CreateToggle({
             if Value then
                 Lighting.FogEnd = 100000
                 Lighting.FogStart = 100000
-            else
-                Lighting.FogEnd = savedLighting and savedLighting.FogEnd or 1000
-                Lighting.FogStart = savedLighting and savedLighting.FogStart or 0
+            elseif savedLighting then
+                Lighting.FogEnd = savedLighting.FogEnd or 1000
+                Lighting.FogStart = savedLighting.FogStart or 0
             end
         end
     end
@@ -2375,7 +2942,7 @@ SettingsTab:CreateToggle({
 
 SettingsTab:CreateParagraph({
     Title = "CONTROLS",
-    Text = "C - Wall Walk\nV - Fly\nB - No Clip\nZ - Turbo\nF - Fullbright\nG - Freecam\nP - Save Waypoint\nL - Delete Waypoint\nT - TP to Waypoint #1\nShift - Sprint\nЛКМ - Click TP (если разрешён)\n\n⚠️ Хоткеи работают только если их тумблер включён в табе Hotkeys."
+    Text = "🎯 AimBot - " .. settings.AIMBOT_KEY .. " (hold/toggle)\nC - Wall Walk\nV - Fly\nB - No Clip\nZ - Turbo\nF - Fullbright\nG - Freecam\nP - Save Waypoint\nL - Delete Waypoint\nT - TP Waypoint #1\nShift - Sprint\nЛКМ - Click TP"
 })
 
 SettingsTab:CreateButton({
@@ -2407,7 +2974,6 @@ RunService.Heartbeat:Connect(function(dt)
         if not hrp or not humanoid then return end
     end
 
-    -- NO CLIP MODE
     if noClipActive and hrp and humanoid then
         for _, part in ipairs(character:GetDescendants()) do
             if part:IsA("BasePart") then
@@ -2431,7 +2997,6 @@ RunService.Heartbeat:Connect(function(dt)
         return
     end
 
-    -- AUTO RESET
     if settings.AUTO_RESET_ON_FALL and climbing and hrp then
         if hrp.Position.Y < settings.RESET_HEIGHT then
             climbing = false
@@ -2449,7 +3014,6 @@ RunService.Heartbeat:Connect(function(dt)
         end
     end
 
-    -- FLY MODE
     if flying and hrp and humanoid then
         local camCFrame = Camera.CFrame
         local camForward = camCFrame.LookVector
@@ -2480,7 +3044,6 @@ RunService.Heartbeat:Connect(function(dt)
         return
     end
 
-    -- WALL WALK MODE
     if not climbing or not hrp or not humanoid then return end
 
     if isOnCeiling and settings.CEILING_GRIP then
@@ -2595,15 +3158,16 @@ end)
 -- INITIALIZATION
 -- ==========================================
 print("═══════════════════════════════════════════════════════")
-print("🕷️ Forsaken Surge v13.0")
+print("🎯 Forsaken Surge v14.0 (AIMBOT EDITION)")
 print("═══════════════════════════════════════════════════════")
 print("✅ Wall Walk | ✅ Fly | ✅ No Clip | ✅ Turbo")
 print("✅ ESP PRO | ✅ Waypoints + SWAP | ✅ Fullbright")
 print("✅ Killer Walls Remover | ✅ Unlimited Mode")
 print("✅ Click TP | ✅ Freecam | 🔑 Hotkey Permissions")
+print("🎯 AIMBOT: PVP + PVE + Prediction + Auto-Shoot")
 print("═══════════════════════════════════════════════════════")
 print("🔑 C - Wall Walk | V - Fly | B - No Clip | Z - Turbo")
-print("🔑 F - Fullbright | G - Freecam")
+print("🔑 F - Fullbright | G - Freecam | " .. settings.AIMBOT_KEY .. " - AIMBOT")
 print("🔑 P - Save WP | L - Del WP | T - TP WP#1")
 print("🔑 ЛКМ - Click TP (если разрешён)")
 print("⚠️  Хоткеи работают только если их тумблер включён в табе Hotkeys!")
