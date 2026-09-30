@@ -5,7 +5,7 @@ local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-S
 -- ==========================================
 local Window = Luna:CreateWindow({
     Name = "Forsaken Surge",
-    Subtitle = "v14.0 | AIMBOT (PVP+PVE) + WALL WALK + TURBO + FLY + NOCLIP + ESP + CLICKTP + FREECAM",
+    Subtitle = "v14.1 | OPTIMIZED AIMBOT (PVP+PVE) + WALL WALK + TURBO + FLY + NOCLIP + ESP + CLICKTP + FREECAM",
     LogoID = nil,
     LoadingEnabled = true,
     LoadingTitle = "Forsaken Surge",
@@ -183,15 +183,15 @@ local DefaultSettings = {
     HOTKEY_FREECAM_ENABLED = true,
     HOTKEY_CLICKTP_ENABLED = true,
     HOTKEY_WAYPOINTS_ENABLED = true,
-    HOTKEY_AIMBOT_ENABLED = true, -- 🎯 AIMBOT
+    HOTKEY_AIMBOT_ENABLED = true,
 
     -- ==========================================
-    -- 🎯 AIMBOT SETTINGS
+    -- 🎯 AIMBOT SETTINGS (OPTIMIZED)
     -- ==========================================
     AIMBOT_ENABLED = false,
     AIMBOT_MODE = "PVP",                    -- "PVP" | "PVE" | "Both"
-    AIMBOT_KEY = "E",                       -- "E", "Q", "R", "X", "MouseButton2"
-    AIMBOT_TOGGLE_MODE = false,             -- false = hold, true = toggle
+    AIMBOT_KEY = "E",
+    AIMBOT_TOGGLE_MODE = false,
     AIMBOT_ACTIVE = false,
 
     AIMBOT_TARGET_PLAYERS = true,
@@ -230,6 +230,11 @@ local DefaultSettings = {
     AIMBOT_TARGET_COLOR_R = 255,
     AIMBOT_TARGET_COLOR_G = 0,
     AIMBOT_TARGET_COLOR_B = 0,
+
+    -- 🚀 ОПТИМИЗАЦИЯ
+    AIMBOT_SCAN_INTERVAL = 0.1,             -- как часто искать цели (сек)
+    AIMBOT_PVE_RADIUS = 200,                -- радиус поиска NPC (studs)
+    AIMBOT_MAX_NPC_CANDIDATES = 30,         -- макс. NPC для сканирования
 }
 
 function LoadSettings()
@@ -293,7 +298,6 @@ local flyVelocity = Vector3.new(0, 0, 0)
 local fullbrightActive = false
 local savedLighting = nil
 
--- Freecam / ClickTP states
 local freecamActive = false
 local freecamCFrame = CFrame.new()
 local freecamPos = Vector3.new()
@@ -311,10 +315,18 @@ local aimbotTargetPart = nil
 local lastAutoShoot = 0
 local fovCircle = nil
 local targetIndicator = nil
+local aimbotCachedCandidates = {}
+local aimbotLastScan = 0
+local lastAimKey = Enum.KeyCode.E
 
 local rayParams = RaycastParams.new()
 rayParams.FilterType = Enum.RaycastFilterType.Exclude
 rayParams.RespectCanCollide = true
+
+-- Кэш raycast-фильтра
+local aimbotRayFilter = RaycastParams.new()
+aimbotRayFilter.FilterType = Enum.RaycastFilterType.Exclude
+aimbotRayFilter.RespectCanCollide = true
 
 -- ==========================================
 -- 🔑 HOTKEY PERMISSION CHECK
@@ -772,7 +784,7 @@ local function showNotification(title, text)
 end
 
 -- ==========================================
--- 🎯 AIMBOT SYSTEM (PVP + PVE)
+-- 🎯 AIMBOT SYSTEM (HEAVILY OPTIMIZED)
 -- ==========================================
 local function createFovCircle()
     if fovCircle and fovCircle.gui then fovCircle.gui:Destroy() end
@@ -791,7 +803,7 @@ local function createFovCircle()
     circle.Size = UDim2.fromOffset(settings.AIMBOT_FOV * 2, settings.AIMBOT_FOV * 2)
     circle.BackgroundTransparency = 1
     circle.BorderSizePixel = 0
-    circle.Visible = settings.AIMBOT_ENABLED and settings.AIMBOT_SHOW_FOV
+    circle.Visible = false
     circle.Parent = gui
 
     local stroke = Instance.new("UIStroke")
@@ -849,7 +861,6 @@ end
 createFovCircle()
 createTargetIndicator()
 
--- Определение роли игрока (Killer/Survivor)
 local function getPlayerRole(plr)
     if not plr or not plr.Team then return "Unknown" end
     local teamName = plr.Team.Name:lower()
@@ -859,91 +870,32 @@ local function getPlayerRole(plr)
     return "Survivor"
 end
 
--- Валидность цели
-local function isValidTarget(inst)
-    if not inst then return false end
-
-    if inst:IsA("Player") then
-        if inst == player then return false end
-        if settings.AIMBOT_TEAM_CHECK and inst.Team ~= nil and inst.Team == player.Team then
-            return false
-        end
-        local char = inst.Character
-        if not char then return false end
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if not hum then return false end
-        if settings.AIMBOT_IGNORE_DEAD and hum.Health <= 0 then return false end
-        if not char:FindFirstChild("HumanoidRootPart") then return false end
-
-        local role = getPlayerRole(inst)
-        if role == "Killer" and not settings.AIMBOT_TARGET_KILLERS then return false end
-        if role == "Survivor" and not settings.AIMBOT_TARGET_SURVIVORS then return false end
-
-        return true
-    end
-
-    if inst:IsA("Model") then
-        local hum = inst:FindFirstChildOfClass("Humanoid")
-        if not hum then return false end
-        if settings.AIMBOT_IGNORE_DEAD and hum.Health <= 0 then return false end
-        if not inst:FindFirstChild("HumanoidRootPart") then return false end
-        return true
-    end
-
-    return false
-end
-
--- Hitbox цели
-local function getHitboxPart(target)
-    if not target then return nil end
+-- Быстрая проверка hitbox
+local function getHitboxFast(target, hitboxName)
     local char = target:IsA("Player") and target.Character or target
     if not char then return nil end
-
-    if settings.AIMBOT_HITBOX == "Head" then
-        return char:FindFirstChild("Head")
-    elseif settings.AIMBOT_HITBOX == "Torso" then
+    if hitboxName == "Head" then
+        return char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
+    elseif hitboxName == "Torso" then
         return char:FindFirstChild("Torso")
             or char:FindFirstChild("UpperTorso")
             or char:FindFirstChild("LowerTorso")
             or char:FindFirstChild("HumanoidRootPart")
-    elseif settings.AIMBOT_HITBOX == "HumanoidRootPart" then
-        return char:FindFirstChild("HumanoidRootPart")
-    elseif settings.AIMBOT_HITBOX == "Closest" then
-        local mouse = player:GetMouse()
-        local closest, closestDist = nil, math.huge
-        for _, part in ipairs(char:GetChildren()) do
-            if part:IsA("BasePart") then
-                local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
-                if onScreen then
-                    local dist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(mouse.X, mouse.Y)).Magnitude
-                    if dist < closestDist then
-                        closestDist = dist
-                        closest = part
-                    end
-                end
-            end
-        end
-        return closest or char:FindFirstChild("HumanoidRootPart")
     end
     return char:FindFirstChild("HumanoidRootPart")
 end
 
--- Проверка видимости
+-- Проверка видимости (только для одной цели, вызывается редко)
 local function isVisible(targetPart)
     if not settings.AIMBOT_WALL_CHECK then return true end
     if not targetPart then return false end
 
     local origin = Camera.CFrame.Position
-    local dir = (targetPart.Position - origin)
+    local dir = targetPart.Position - origin
 
-    local filter = RaycastParams.new()
-    filter.FilterType = Enum.RaycastFilterType.Exclude
-    local excludeList = {}
-    if character then table.insert(excludeList, character) end
-    filter.FilterDescendantsInstances = excludeList
-    filter.RespectCanCollide = true
+    aimbotRayFilter.FilterDescendantsInstances = { character }
 
-    local result = Workspace:Raycast(origin, dir, filter)
+    local result = Workspace:Raycast(origin, dir, aimbotRayFilter)
     if result then
         if result.Instance and targetPart.Parent and result.Instance:IsDescendantOf(targetPart.Parent) then
             return true
@@ -953,74 +905,132 @@ local function isVisible(targetPart)
     return true
 end
 
--- Поиск лучшей цели
-local function findBestTarget()
-    local mouse = player:GetMouse()
-    local mousePos = Vector2.new(mouse.X, mouse.Y)
+-- 🚀 ОПТИМИЗИРОВАННЫЙ поиск кандидатов (вызывается не чаще, чем SCAN_INTERVAL)
+local function scanCandidates()
+    local candidates = {}
+    local mode = settings.AIMBOT_MODE
     local myPos = Camera.CFrame.Position
 
-    local candidates = {}
-
     -- Игроки (PVP)
-    if settings.AIMBOT_TARGET_PLAYERS and (settings.AIMBOT_MODE == "PVP" or settings.AIMBOT_MODE == "Both") then
+    if settings.AIMBOT_TARGET_PLAYERS and (mode == "PVP" or mode == "Both") then
         for _, plr in ipairs(Players:GetPlayers()) do
-            if isValidTarget(plr) then
-                table.insert(candidates, plr)
+            if plr ~= player then
+                local char = plr.Character
+                if char then
+                    local hum = char:FindFirstChildOfClass("Humanoid")
+                    local root = char:FindFirstChild("HumanoidRootPart")
+                    if hum and root and (not settings.AIMBOT_IGNORE_DEAD or hum.Health > 0) then
+                        local dist = (root.Position - myPos).Magnitude
+                        if dist <= settings.AIMBOT_MAX_DISTANCE and dist >= settings.AIMBOT_MIN_DISTANCE then
+                            -- Team check
+                            local skip = false
+                            if settings.AIMBOT_TEAM_CHECK and plr.Team and plr.Team == player.Team then
+                                skip = true
+                            end
+                            if not skip then
+                                local role = getPlayerRole(plr)
+                                if (role == "Killer" and settings.AIMBOT_TARGET_KILLERS)
+                                    or (role ~= "Killer" and settings.AIMBOT_TARGET_SURVIVORS)
+                                    or role == "Unknown" then
+                                    table.insert(candidates, {
+                                        target = plr,
+                                        root = root,
+                                        char = char,
+                                        dist = dist,
+                                        health = hum.Health,
+                                    })
+                                end
+                            end
+                        end
+                    end
+                end
             end
         end
     end
 
-    -- NPC / Монстры (PVE)
-    if settings.AIMBOT_TARGET_NPCS and (settings.AIMBOT_MODE == "PVE" or settings.AIMBOT_MODE == "Both") then
-        for _, obj in ipairs(Workspace:GetDescendants()) do
-            if obj:IsA("Model") and obj:FindFirstChildOfClass("Humanoid") then
+    -- NPC (PVE) — используем GetPartBoundsInRadius для эффективности
+    if settings.AIMBOT_TARGET_NPCS and (mode == "PVE" or mode == "Both") then
+        local params = OverlapParams.new()
+        params.FilterType = Enum.RaycastFilterType.Exclude
+        params.FilterDescendantsInstances = { character }
+        params.MaxParts = 200
+
+        local parts = Workspace:GetPartBoundsInRadius(myPos, settings.AIMBOT_PVE_RADIUS, params)
+
+        local seenModels = {}
+        local npcCount = 0
+
+        for _, part in ipairs(parts) do
+            if npcCount >= settings.AIMBOT_MAX_NPC_CANDIDATES then break end
+
+            local model = part:FindFirstAncestorOfClass("Model")
+            if model and not seenModels[model] then
+                seenModels[model] = true
+
+                -- Пропускаем персонажей игроков
                 local isPlayerChar = false
                 for _, plr in ipairs(Players:GetPlayers()) do
-                    if plr.Character == obj then
+                    if plr.Character == model then
                         isPlayerChar = true
                         break
                     end
                 end
-                if not isPlayerChar and isValidTarget(obj) then
-                    table.insert(candidates, obj)
-                end
-            end
-        end
-    end
 
-    -- Фильтрация
-    local valid = {}
-    for _, target in ipairs(candidates) do
-        local char = target:IsA("Player") and target.Character or target
-        if char then
-            local part = getHitboxPart(target)
-            if part then
-                local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
-                if onScreen then
-                    local screenVec = Vector2.new(screenPos.X, screenPos.Y)
-                    local distToMouse = (screenVec - mousePos).Magnitude
-                    local dist3D = (part.Position - myPos).Magnitude
-
-                    if dist3D >= settings.AIMBOT_MIN_DISTANCE
-                        and dist3D <= settings.AIMBOT_MAX_DISTANCE
-                        and (not settings.AIMBOT_FOV_ENABLED or distToMouse <= settings.AIMBOT_FOV)
-                        and isVisible(part) then
-
-                        local hum = char:FindFirstChildOfClass("Humanoid")
-                        table.insert(valid, {
-                            target = target,
-                            part = part,
-                            dist = dist3D,
-                            screenDist = distToMouse,
-                            health = hum and hum.Health or 100,
-                        })
+                if not isPlayerChar then
+                    local hum = model:FindFirstChildOfClass("Humanoid")
+                    local root = model:FindFirstChild("HumanoidRootPart")
+                    if hum and root and (not settings.AIMBOT_IGNORE_DEAD or hum.Health > 0) then
+                        local dist = (root.Position - myPos).Magnitude
+                        if dist <= settings.AIMBOT_MAX_DISTANCE and dist >= settings.AIMBOT_MIN_DISTANCE then
+                            npcCount = npcCount + 1
+                            table.insert(candidates, {
+                                target = model,
+                                root = root,
+                                char = model,
+                                dist = dist,
+                                health = hum.Health,
+                            })
+                        end
                     end
                 end
             end
         end
     end
 
-    if #valid == 0 then return nil, nil end
+    return candidates
+end
+
+-- Выбор лучшей цели из кандидатов (без raycast)
+local function pickBestTarget(candidates)
+    if #candidates == 0 then return nil end
+
+    local mouse = player:GetMouse()
+    local mousePos = Vector2.new(mouse.X, mouse.Y)
+    local myPos = Camera.CFrame.Position
+
+    local valid = {}
+    for _, c in ipairs(candidates) do
+        local part = getHitboxFast(c.target, settings.AIMBOT_HITBOX)
+        if part then
+            local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+            if onScreen then
+                local screenVec = Vector2.new(screenPos.X, screenPos.Y)
+                local distToMouse = (screenVec - mousePos).Magnitude
+
+                if not settings.AIMBOT_FOV_ENABLED or distToMouse <= settings.AIMBOT_FOV then
+                    table.insert(valid, {
+                        target = c.target,
+                        part = part,
+                        dist = c.dist,
+                        screenDist = distToMouse,
+                        health = c.health,
+                    })
+                end
+            end
+        end
+    end
+
+    if #valid == 0 then return nil end
 
     local mode = settings.AIMBOT_LOCK_MODE
     if mode == "Closest" then
@@ -1033,66 +1043,107 @@ local function findBestTarget()
         table.sort(valid, function(a, b) return a.health > b.health end)
     end
 
-    return valid[1].target, valid[1].part
+    return valid[1]
 end
 
--- Позиция для наведения
 local function getAimPosition(targetPart)
     if not targetPart then return nil end
     local pos = targetPart.Position + Vector3.new(0, settings.AIMBOT_HITBOX_OFFSET_Y, 0)
 
     if settings.AIMBOT_PREDICTION then
-        local vel = targetPart.AssemblyLinearVelocity or Vector3.zero
-        pos = pos + Vector3.new(
-            vel.X * settings.AIMBOT_PREDICTION_X,
-            vel.Y * settings.AIMBOT_PREDICTION_Y,
-            vel.Z * settings.AIMBOT_PREDICTION_Z
-        )
+        local vel = targetPart.AssemblyLinearVelocity
+        if vel.Magnitude > 0.1 then
+            pos = pos + Vector3.new(
+                vel.X * settings.AIMBOT_PREDICTION_X,
+                vel.Y * settings.AIMBOT_PREDICTION_Y,
+                vel.Z * settings.AIMBOT_PREDICTION_Z
+            )
+        end
     end
     return pos
 end
 
--- Основной цикл аимбота
+-- Кэш цвета FOV (обновляем только когда меняется)
+local lastFovColor = Color3.new()
+local lastFovSize = 0
+
+-- 🚀 ОСНОВНОЙ ЦИКЛ AIMBOT (RenderStepped) — максимально лёгкий
 RunService.RenderStepped:Connect(function(dt)
-    if not fovCircle or not fovCircle.circle then return end
-
+    -- Ранний выход, если аимбот выключен
     if not settings.AIMBOT_ENABLED then
-        fovCircle.circle.Visible = false
-        if targetIndicator and targetIndicator.dot then targetIndicator.dot.Visible = false end
+        if fovCircle and fovCircle.circle and fovCircle.circle.Visible then
+            fovCircle.circle.Visible = false
+        end
+        if targetIndicator and targetIndicator.dot and targetIndicator.dot.Visible then
+            targetIndicator.dot.Visible = false
+        end
         return
     end
 
-    fovCircle.circle.Visible = settings.AIMBOT_SHOW_FOV
-    fovCircle.circle.Size = UDim2.fromOffset(settings.AIMBOT_FOV * 2, settings.AIMBOT_FOV * 2)
-    fovCircle.stroke.Color = Color3.fromRGB(
-        settings.AIMBOT_FOV_COLOR_R,
-        settings.AIMBOT_FOV_COLOR_G,
-        settings.AIMBOT_FOV_COLOR_B
-    )
-
-    local shouldAim = aimbotActive
-    if not settings.AIMBOT_TOGGLE_MODE then
-        shouldAim = aimbotHolding
+    -- Обновляем FOV круг ТОЛЬКО если значения изменились
+    if fovCircle and fovCircle.circle then
+        if not fovCircle.circle.Visible then
+            fovCircle.circle.Visible = settings.AIMBOT_SHOW_FOV
+        end
+        local newSize = settings.AIMBOT_FOV * 2
+        if newSize ~= lastFovSize then
+            fovCircle.circle.Size = UDim2.fromOffset(newSize, newSize)
+            lastFovSize = newSize
+        end
+        local newColor = Color3.fromRGB(
+            settings.AIMBOT_FOV_COLOR_R,
+            settings.AIMBOT_FOV_COLOR_G,
+            settings.AIMBOT_FOV_COLOR_B
+        )
+        if newColor ~= lastFovColor then
+            fovCircle.stroke.Color = newColor
+            lastFovColor = newColor
+        end
     end
 
-    if not shouldAim or not Camera then
-        if targetIndicator and targetIndicator.dot then targetIndicator.dot.Visible = false end
+    -- Проверка активации
+    local shouldAim = settings.AIMBOT_TOGGLE_MODE and aimbotActive or (not settings.AIMBOT_TOGGLE_MODE and aimbotHolding)
+    if not shouldAim then
+        if targetIndicator and targetIndicator.dot and targetIndicator.dot.Visible then
+            targetIndicator.dot.Visible = false
+        end
         return
     end
 
-    local target, part = findBestTarget()
-    if not target or not part then
+    -- 🚀 Сканирование целей раз в SCAN_INTERVAL (не каждый кадр!)
+    local now = tick()
+    if now - aimbotLastScan >= settings.AIMBOT_SCAN_INTERVAL then
+        aimbotLastScan = now
+        aimbotCachedCandidates = scanCandidates()
+    end
+
+    -- Выбор цели из кэша
+    local best = pickBestTarget(aimbotCachedCandidates)
+    if not best then
         aimbotTarget = nil
         aimbotTargetPart = nil
-        if targetIndicator and targetIndicator.dot then targetIndicator.dot.Visible = false end
+        if targetIndicator and targetIndicator.dot and targetIndicator.dot.Visible then
+            targetIndicator.dot.Visible = false
+        end
         return
     end
 
-    aimbotTarget = target
-    aimbotTargetPart = part
+    -- 🚀 Wall-check ТОЛЬКО для выбранной цели (1 raycast на кадр, а не N)
+    if settings.AIMBOT_WALL_CHECK and not isVisible(best.part) then
+        aimbotTarget = nil
+        aimbotTargetPart = nil
+        if targetIndicator and targetIndicator.dot and targetIndicator.dot.Visible then
+            targetIndicator.dot.Visible = false
+        end
+        return
+    end
 
+    aimbotTarget = best.target
+    aimbotTargetPart = best.part
+
+    -- Индикатор цели
     if targetIndicator and targetIndicator.dot then
-        local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+        local screenPos, onScreen = Camera:WorldToViewportPoint(best.part.Position)
         if onScreen and settings.AIMBOT_SHOW_TARGET then
             targetIndicator.dot.Visible = true
             targetIndicator.dot.Position = UDim2.fromOffset(screenPos.X, screenPos.Y)
@@ -1101,12 +1152,13 @@ RunService.RenderStepped:Connect(function(dt)
                 settings.AIMBOT_TARGET_COLOR_G,
                 settings.AIMBOT_TARGET_COLOR_B
             )
-        else
+        elseif targetIndicator.dot.Visible then
             targetIndicator.dot.Visible = false
         end
     end
 
-    local aimPos = getAimPosition(part)
+    -- Наведение
+    local aimPos = getAimPosition(best.part)
     if aimPos then
         local currentCF = Camera.CFrame
         local targetCF = CFrame.lookAt(currentCF.Position, aimPos)
@@ -1114,19 +1166,20 @@ RunService.RenderStepped:Connect(function(dt)
         Camera.CFrame = currentCF:Lerp(targetCF, 1 - smooth)
     end
 
+    -- Auto-shoot throttled
     if settings.AIMBOT_AUTO_SHOOT then
-        local now = tick()
         if now - lastAutoShoot >= settings.AIMBOT_AUTO_SHOOT_DELAY then
-            if not settings.AIMBOT_AUTO_SHOOT_ONLY_VISIBLE or isVisible(part) then
+            if not settings.AIMBOT_AUTO_SHOOT_ONLY_VISIBLE or isVisible(best.part) then
                 lastAutoShoot = now
                 pcall(function()
                     local tool = character and character:FindFirstChildOfClass("Tool")
                     if tool then
                         tool:Activate()
+                    else
+                        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
+                        task.wait(0.03)
+                        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
                     end
-                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
-                    task.wait(0.03)
-                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
                 end)
             end
         end
@@ -1363,7 +1416,7 @@ task.spawn(function()
 end)
 
 -- ==========================================
--- WAYPOINT SYSTEM 📍 (с SWAP MODE)
+-- WAYPOINT SYSTEM 📍
 -- ==========================================
 local waypoints = {}
 local MAX_WAYPOINTS = 8
@@ -1751,7 +1804,7 @@ local function toggleFreecam()
 end
 
 -- ==========================================
--- INPUT HANDLING (С ПРОВЕРКОЙ РАЗРЕШЕНИЙ)
+-- INPUT HANDLING
 -- ==========================================
 local function getAimbotKey()
     local keyMap = {
@@ -1793,12 +1846,12 @@ UserInputService.InputBegan:Connect(function(input, gp)
     end
 
     -- 🎯 AIMBOT активация
-    if settings.HOTKEY_AIMBOT_ENABLED then
+    if settings.HOTKEY_AIMBOT_ENABLED and settings.AIMBOT_ENABLED then
         local targetKey = getAimbotKey()
         if input.KeyCode == targetKey or input.UserInputType == targetKey then
             if settings.AIMBOT_TOGGLE_MODE then
                 aimbotActive = not aimbotActive
-                showNotification("🎯 Aimbot", aimbotActive and "Включён (toggle)" or "Выключен")
+                showNotification("🎯 Aimbot", aimbotActive and "Активен (toggle)" or "Неактивен")
             else
                 aimbotHolding = true
             end
@@ -1825,7 +1878,6 @@ UserInputService.InputEnded:Connect(function(input, gp)
     pressed[input.KeyCode] = false
     if input.KeyCode == Enum.KeyCode.LeftShift then isSprinting = false end
 
-    -- 🎯 AIMBOT release
     if settings.HOTKEY_AIMBOT_ENABLED and not settings.AIMBOT_TOGGLE_MODE then
         local targetKey = getAimbotKey()
         if input.KeyCode == targetKey or input.UserInputType == targetKey then
@@ -1950,14 +2002,13 @@ HotkeysTab:CreateToggle({
         if not Value then
             aimbotActive = false
             aimbotHolding = false
-            showNotification("🔒 Hotkey Lock", "Aimbot принудительно выключен")
         end
     end
 })
 
 HotkeysTab:CreateParagraph({
     Title = "ℹ️ КАК ЭТО РАБОТАЕТ",
-    Text = "Выключи тумблер — и клавиша перестанет работать. Если режим был активен — он сразу отключится."
+    Text = "Выключи тумблер — и клавиша перестанет работать."
 })
 
 -- ==========================================
@@ -1971,8 +2022,8 @@ local AimbotTab = Window:CreateTab({
 })
 
 AimbotTab:CreateParagraph({
-    Title = "🎯 AIMBOT PRO (PVP + PVE)",
-    Text = "Универсальный аимбот. Настрой режим, FOV, плавность, предикт и авто-стрельбу."
+    Title = "🎯 OPTIMIZED AIMBOT (PVP + PVE)",
+    Text = "v14.1: цели сканируются не каждый кадр, NPC ищутся через spatial query, wall-check только для выбранной цели."
 })
 
 AimbotTab:CreateToggle({
@@ -2024,6 +2075,42 @@ AimbotTab:CreateToggle({
     end
 })
 
+-- 🚀 ОПТИМИЗАЦИЯ
+AimbotTab:CreateLabel({ Text = "🚀 ПРОИЗВОДИТЕЛЬНОСТЬ", Style = 1 })
+
+AimbotTab:CreateSlider({
+    Name = "Интервал сканирования целей (сек)",
+    Range = {0.02, 0.5},
+    Increment = 0.01,
+    CurrentValue = settings.AIMBOT_SCAN_INTERVAL,
+    Callback = function(Value)
+        settings.AIMBOT_SCAN_INTERVAL = Value
+        SaveSettings(settings)
+    end
+})
+
+AimbotTab:CreateSlider({
+    Name = "Радиус поиска NPC (studs)",
+    Range = {30, 1000},
+    Increment = 10,
+    CurrentValue = settings.AIMBOT_PVE_RADIUS,
+    Callback = function(Value)
+        settings.AIMBOT_PVE_RADIUS = Value
+        SaveSettings(settings)
+    end
+})
+
+AimbotTab:CreateSlider({
+    Name = "Макс. NPC для проверки",
+    Range = {5, 100},
+    Increment = 1,
+    CurrentValue = settings.AIMBOT_MAX_NPC_CANDIDATES,
+    Callback = function(Value)
+        settings.AIMBOT_MAX_NPC_CANDIDATES = Value
+        SaveSettings(settings)
+    end
+})
+
 AimbotTab:CreateLabel({ Text = "🎯 ЦЕЛИ", Style = 1 })
 
 AimbotTab:CreateToggle({
@@ -2063,7 +2150,7 @@ AimbotTab:CreateToggle({
 })
 
 AimbotTab:CreateToggle({
-    Name = "Проверка стен",
+    Name = "Проверка стен (медленнее, но точнее)",
     CurrentValue = settings.AIMBOT_WALL_CHECK,
     Callback = function(Value) settings.AIMBOT_WALL_CHECK = Value SaveSettings(settings) end
 })
@@ -2083,9 +2170,6 @@ AimbotTab:CreateSlider({
     Callback = function(Value)
         settings.AIMBOT_FOV = Value
         SaveSettings(settings)
-        if fovCircle and fovCircle.circle then
-            fovCircle.circle.Size = UDim2.fromOffset(Value * 2, Value * 2)
-        end
     end
 })
 
@@ -2154,7 +2238,7 @@ AimbotTab:CreateLabel({ Text = "🎯 HITBOX / PREDICTION", Style = 1 })
 
 AimbotTab:CreateDropdown({
     Name = "Hitbox",
-    Options = {"Head", "Torso", "HumanoidRootPart", "Closest"},
+    Options = {"Head", "Torso", "HumanoidRootPart"},
     CurrentOption = {settings.AIMBOT_HITBOX},
     MultipleOptions = false,
     Callback = function(Options) settings.AIMBOT_HITBOX = Options SaveSettings(settings) end
@@ -2243,6 +2327,7 @@ AimbotTab:CreateButton({
     Callback = function()
         aimbotTarget = nil
         aimbotTargetPart = nil
+        aimbotCachedCandidates = {}
         showNotification("🎯 Aimbot", "Цель сброшена")
     end
 })
@@ -2534,7 +2619,7 @@ local ClickTPTab = Window:CreateTab({
 
 ClickTPTab:CreateParagraph({
     Title = "🖱️ CLICK TELEPORT",
-    Text = "ЛКМ по поверхности — телепорт. Работает только если тумблер включён, и разрешено в табе Hotkeys."
+    Text = "ЛКМ по поверхности — телепорт."
 })
 
 ClickTPTab:CreateToggle({
@@ -2564,7 +2649,7 @@ ClickTPTab:CreateSlider({
 })
 
 ClickTPTab:CreateButton({
-    Name = "🖱️ Телепорт в точку под курсором (разово)",
+    Name = "🖱️ Телепорт в точку под курсором",
     Callback = function() performClickTP() end
 })
 
@@ -2580,7 +2665,7 @@ local FreecamTab = Window:CreateTab({
 
 FreecamTab:CreateParagraph({
     Title = "🎥 FREECAM",
-    Text = "WASD — движение, Space/Ctrl — вверх/вниз, Shift — ускорение. Хоткей: G (если разрешён)"
+    Text = "WASD — движение, Space/Ctrl — вверх/вниз, Shift — ускорение."
 })
 
 FreecamTab:CreateToggle({
@@ -2780,7 +2865,7 @@ WaypointTab:CreateParagraph({
 })
 
 WaypointTab:CreateToggle({
-    Name = "🔁 SWAP MODE (точка меняется местами с игроком)",
+    Name = "🔁 SWAP MODE",
     CurrentValue = settings.WP_SWAP_ENABLED,
     Callback = function(Value)
         settings.WP_SWAP_ENABLED = Value
@@ -2942,7 +3027,7 @@ SettingsTab:CreateToggle({
 
 SettingsTab:CreateParagraph({
     Title = "CONTROLS",
-    Text = "🎯 AimBot - " .. settings.AIMBOT_KEY .. " (hold/toggle)\nC - Wall Walk\nV - Fly\nB - No Clip\nZ - Turbo\nF - Fullbright\nG - Freecam\nP - Save Waypoint\nL - Delete Waypoint\nT - TP Waypoint #1\nShift - Sprint\nЛКМ - Click TP"
+    Text = "🎯 AimBot - " .. settings.AIMBOT_KEY .. "\nC - Wall Walk\nV - Fly\nB - No Clip\nZ - Turbo\nF - Fullbright\nG - Freecam\nP/L/T - Waypoints\nShift - Sprint\nЛКМ - Click TP"
 })
 
 SettingsTab:CreateButton({
@@ -3158,19 +3243,18 @@ end)
 -- INITIALIZATION
 -- ==========================================
 print("═══════════════════════════════════════════════════════")
-print("🎯 Forsaken Surge v14.0 (AIMBOT EDITION)")
+print("🎯 Forsaken Surge v14.1 (OPTIMIZED AIMBOT)")
 print("═══════════════════════════════════════════════════════")
 print("✅ Wall Walk | ✅ Fly | ✅ No Clip | ✅ Turbo")
 print("✅ ESP PRO | ✅ Waypoints + SWAP | ✅ Fullbright")
 print("✅ Killer Walls Remover | ✅ Unlimited Mode")
 print("✅ Click TP | ✅ Freecam | 🔑 Hotkey Permissions")
-print("🎯 AIMBOT: PVP + PVE + Prediction + Auto-Shoot")
+print("🎯 AIMBOT OPTIMIZED: scan cache + spatial query + 1 raycast/frame")
 print("═══════════════════════════════════════════════════════")
 print("🔑 C - Wall Walk | V - Fly | B - No Clip | Z - Turbo")
 print("🔑 F - Fullbright | G - Freecam | " .. settings.AIMBOT_KEY .. " - AIMBOT")
 print("🔑 P - Save WP | L - Del WP | T - TP WP#1")
 print("🔑 ЛКМ - Click TP (если разрешён)")
-print("⚠️  Хоткеи работают только если их тумблер включён в табе Hotkeys!")
 print("═══════════════════════════════════════════════════════")
 
 task.wait(0.5)
