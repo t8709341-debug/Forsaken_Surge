@@ -5,11 +5,11 @@ local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-S
 -- ==========================================
 local Window = Luna:CreateWindow({
     Name = "Forsaken Surge",
-    Subtitle = "v15.0 | AIMBOT + WALLWALK + FLY + NOCLIP + ESP (Team/Folder) + NPC ESP",
+    Subtitle = "v15.1 FINAL | AIMBOT (Team/Folder) + NPC ESP + WallWalk + Fly + Noclip + Turbo + ESP",
     LogoID = nil,
     LoadingEnabled = true,
     LoadingTitle = "Forsaken Surge",
-    LoadingSubtitle = "Loading modules...",
+    LoadingSubtitle = "Loading v15.1...",
     ConfigSettings = {
         RootFolder = nil,
         ConfigFolder = "ForsakenSurge"
@@ -49,9 +49,22 @@ local function updateCharacterReferences()
 end
 updateCharacterReferences()
 
+-- ===== FORWARD DECLARATIONS =====
+local aimbotCameraOverride = false
+local smoothCameraCF = nil
+local setAimbotCameraOverride  -- forward
+
 player.CharacterAdded:Connect(function(char)
     task.wait(0.5)
     updateCharacterReferences()
+    if aimbotCameraOverride and setAimbotCameraOverride then
+        setAimbotCameraOverride(false)
+    end
+    if humanoid and humanoid.Parent then
+        Camera.CameraType = Enum.CameraType.Custom
+        Camera.CameraSubject = humanoid
+    end
+    smoothCameraCF = nil
 end)
 
 -- ===== SAVE SYSTEM =====
@@ -85,21 +98,22 @@ local DefaultSettings = {
     GENERATORS_COLOR_CUSTOM = false, GENERATORS_COLOR_R = 0, GENERATORS_COLOR_G = 255, GENERATORS_COLOR_B = 255,
     ITEMS_COLOR_CUSTOM = false, ITEMS_COLOR_R = 255, ITEMS_COLOR_G = 215, ITEMS_COLOR_B = 0,
 
-    -- ===== НОВЫЕ КАТЕГОРИИ РОЛЕЙ =====
     OTHER_ESP = true, OTHER_COLOR = "Orange",
     OTHER_COLOR_CUSTOM = false, OTHER_COLOR_R = 255, OTHER_COLOR_G = 165, OTHER_COLOR_B = 0,
     NPC_ESP = true, NPC_COLOR = "Magenta",
     NPC_COLOR_CUSTOM = false, NPC_COLOR_R = 255, NPC_COLOR_G = 0, NPC_COLOR_B = 255,
 
-    -- Папки workspace.Players.*
     ROLE_FOLDER_KILLERS = "Killers",
     ROLE_FOLDER_SURVIVORS = "Survivors",
     ROLE_FOLDER_PLAYERS = "Players",
     USE_FOLDER_DETECTION = true,
-    -- NPC в Workspace
     NPC_SCAN_ENABLED = true,
     NPC_SCAN_INTERVAL = 0.5,
     NPC_MAX_DISTANCE = 500,
+    NPC_USE_HIGHLIGHT = true,
+    NPC_USE_TEXT = true,
+    NPC_USE_BOX = true,
+    NPC_USE_TRACER = true,
 
     TURBO_ACTIVE = false, TURBO_SPEED = 30, TURBO_MODE = "Velocity",
     UNLIMITED_MODE = false,
@@ -126,6 +140,7 @@ local DefaultSettings = {
     AIMBOT_TARGET_NPCS = true,
     AIMBOT_TARGET_KILLERS = true,
     AIMBOT_TARGET_SURVIVORS = false,
+    AIMBOT_TARGET_OTHER = true,
     AIMBOT_TEAM_CHECK = true,
     AIMBOT_IGNORE_DEAD = true,
     AIMBOT_WALL_CHECK = true,
@@ -149,6 +164,8 @@ local DefaultSettings = {
     AIMBOT_SCAN_INTERVAL = 0.1,
     AIMBOT_PVE_RADIUS = 200,
     AIMBOT_MAX_NPC_CANDIDATES = 30,
+    AIMBOT_CAMERA_DISTANCE = 12,
+    AIMBOT_CAMERA_HEIGHT = 1.5,
 }
 
 local function LoadSettings()
@@ -240,7 +257,7 @@ end
 local function getPlayerRole(plr)
     if not plr then return "Unknown" end
 
-    -- 1) Через Team
+    -- 1) Team
     if plr.Team then
         local tn = plr.Team.Name:lower()
         if tn:find("killer") or tn:find("monster") or tn:find("enemy") or tn:find("hunter") then
@@ -251,7 +268,7 @@ local function getPlayerRole(plr)
         end
     end
 
-    -- 2) Через папки Workspace.Players.Killers / Survivors
+    -- 2) Folders
     if settings.USE_FOLDER_DETECTION and plr.Character then
         local char = plr.Character
         local parent = char.Parent
@@ -266,14 +283,13 @@ local function getPlayerRole(plr)
                 return "Survivor"
             end
 
-            -- если персонаж лежит в workspace.Players.<подпапка>
             if pParentName == settings.ROLE_FOLDER_PLAYERS:lower() then
                 return "Other"
             end
         end
     end
 
-    -- 3) Через атрибуты персонажа
+    -- 3) Attributes
     if plr.Character then
         local attr = plr.Character:GetAttribute("Role") or plr.Character:GetAttribute("Team")
         if attr then
@@ -286,17 +302,74 @@ local function getPlayerRole(plr)
     return "Unknown"
 end
 
--- Определение роли NPC
-local function getNPCRole(model)
-    if not model then return "NPC" end
-    local name = model.Name:lower()
-    if name:find("killer") or name:find("monster") or name:find("enemy") or name:find("hunter") then
-        return "KillerNPC"
+-- ==========================================
+-- NPC: СКАНИРОВАНИЕ (ПЕРЕПИСАНО)
+-- ==========================================
+local function isPlayerCharacter(model)
+    if not model then return false end
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr.Character == model then return true end
     end
-    if name:find("survivor") or name:find("runner") or name:find("npc") then
-        return "SurvivorNPC"
+    return false
+end
+
+-- Определяем, является ли модель NPC (Humanoid + не игрок + не эффект)
+local function isNPCModel(model)
+    if not model or not model.Parent then return false end
+    if not model:IsA("Model") then return false end
+    if model == character then return false end
+    if isPlayerCharacter(model) then return false end
+
+    -- Должен быть Humanoid и HumanoidRootPart или Head
+    local hum = model:FindFirstChildOfClass("Humanoid")
+    if not hum then return false end
+    if hum.Health <= 0 then return false end
+    local root = model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("Head") or model.PrimaryPart
+    if not root then return false end
+
+    -- Исключаем пустышки/эффекты (нет ни одной BasePart)
+    local hasPart = false
+    for _, c in ipairs(model:GetChildren()) do
+        if c:IsA("BasePart") then hasPart = true break end
     end
-    return "NPC"
+    if not hasPart then return false end
+
+    return true, hum, root
+end
+
+-- Глубокий обход: Workspace, workspace.Players.*, любые вложенные папки с NPC
+local function scanNPCs()
+    local list = {}
+    local myPos = Camera.CFrame.Position
+    local seen = {}
+
+    local function processModel(model)
+        if seen[model] then return end
+        seen[model] = true
+
+        local ok, hum, root = isNPCModel(model)
+        if ok and hum and root then
+            local dist = (root.Position - myPos).Magnitude
+            if dist <= settings.NPC_MAX_DISTANCE then
+                table.insert(list, { model = model, root = root, hum = hum, dist = dist })
+            end
+        end
+    end
+
+    -- Обход дерева (максимум 3 уровня вглубь — достаточно)
+    local function walk(container, depth)
+        if depth > 3 then return end
+        for _, obj in ipairs(container:GetChildren()) do
+            if obj:IsA("Model") then
+                processModel(obj)
+            elseif obj:IsA("Folder") or obj:IsA("Model") then
+                walk(obj, depth + 1)
+            end
+        end
+    end
+
+    walk(Workspace, 0)
+    return list
 end
 
 -- ==========================================
@@ -367,6 +440,33 @@ createFovCircle()
 createTargetIndicator()
 
 -- ==========================================
+-- AIMBOT: CAMERA (ПРАВИЛЬНАЯ РАБОТА)
+-- ==========================================
+local originalCameraType = Camera.CameraType
+local originalCameraSubject = Camera.CameraSubject
+local savedMouseBehavior = UserInputService.MouseBehavior
+
+setAimbotCameraOverride = function(on)
+    if on and not aimbotCameraOverride then
+        originalCameraType = Camera.CameraType
+        originalCameraSubject = Camera.CameraSubject
+        savedMouseBehavior = UserInputService.MouseBehavior
+
+        Camera.CameraType = Enum.CameraType.Scriptable
+        aimbotCameraOverride = true
+    elseif not on and aimbotCameraOverride then
+        Camera.CameraType = originalCameraType or Enum.CameraType.Custom
+        if originalCameraSubject then
+            Camera.CameraSubject = originalCameraSubject
+        elseif humanoid then
+            Camera.CameraSubject = humanoid
+        end
+        UserInputService.MouseBehavior = savedMouseBehavior
+        aimbotCameraOverride = false
+    end
+end
+
+-- ==========================================
 -- AIMBOT: CORE
 -- ==========================================
 local function getHitboxFast(target, hitboxName)
@@ -404,6 +504,7 @@ local function scanCandidates()
     local mode = settings.AIMBOT_MODE
     local myPos = Camera.CFrame.Position
 
+    -- ИГРОКИ
     if settings.AIMBOT_TARGET_PLAYERS and (mode == "PVP" or mode == "Both") then
         for _, plr in ipairs(Players:GetPlayers()) do
             if plr ~= player then
@@ -421,12 +522,11 @@ local function scanCandidates()
                                 local want = false
                                 if role == "Killer" and settings.AIMBOT_TARGET_KILLERS then want = true end
                                 if role == "Survivor" and settings.AIMBOT_TARGET_SURVIVORS then want = true end
-                                if role == "Other" and settings.AIMBOT_TARGET_PLAYERS then want = true end
-                                if role == "Unknown" and settings.AIMBOT_TARGET_PLAYERS then want = true end
+                                if (role == "Other" or role == "Unknown") and settings.AIMBOT_TARGET_OTHER then want = true end
                                 if want then
                                     table.insert(candidates, {
                                         target = plr, root = root, char = char,
-                                        dist = dist, health = hum.Health,
+                                        dist = dist, health = hum.Health, kind = "player"
                                     })
                                 end
                             end
@@ -437,37 +537,19 @@ local function scanCandidates()
         end
     end
 
+    -- NPC
     if settings.AIMBOT_TARGET_NPCS and (mode == "PVE" or mode == "Both") then
-        local params = OverlapParams.new()
-        params.FilterType = Enum.RaycastFilterType.Exclude
-        params.FilterDescendantsInstances = { character }
-        params.MaxParts = 200
-        local parts = Workspace:GetPartBoundsInRadius(myPos, settings.AIMBOT_PVE_RADIUS, params)
-        local seenModels = {}
-        local npcCount = 0
-        for _, part in ipairs(parts) do
-            if npcCount >= settings.AIMBOT_MAX_NPC_CANDIDATES then break end
-            local model = part:FindFirstAncestorOfClass("Model")
-            if model and not seenModels[model] then
-                seenModels[model] = true
-                local isPlayerChar = false
-                for _, plr in ipairs(Players:GetPlayers()) do
-                    if plr.Character == model then isPlayerChar = true break end
-                end
-                if not isPlayerChar then
-                    local hum = model:FindFirstChildOfClass("Humanoid")
-                    local root = model:FindFirstChild("HumanoidRootPart")
-                    if hum and root and (not settings.AIMBOT_IGNORE_DEAD or hum.Health > 0) then
-                        local dist = (root.Position - myPos).Magnitude
-                        if dist <= settings.AIMBOT_MAX_DISTANCE and dist >= settings.AIMBOT_MIN_DISTANCE then
-                            npcCount = npcCount + 1
-                            table.insert(candidates, {
-                                target = model, root = root, char = model,
-                                dist = dist, health = hum.Health,
-                            })
-                        end
-                    end
-                end
+        local npcs = scanNPCs()
+        local count = 0
+        for _, npc in ipairs(npcs) do
+            if count >= settings.AIMBOT_MAX_NPC_CANDIDATES then break end
+            local dist = npc.dist
+            if dist <= settings.AIMBOT_MAX_DISTANCE and dist >= settings.AIMBOT_MIN_DISTANCE then
+                count = count + 1
+                table.insert(candidates, {
+                    target = npc.model, root = npc.root, char = npc.model,
+                    dist = dist, health = npc.hum.Health, kind = "npc"
+                })
             end
         end
     end
@@ -531,28 +613,14 @@ local function getAimPosition(targetPart)
     return pos
 end
 
-local originalCameraType = Camera.CameraType
-local originalCameraSubject = Camera.CameraSubject
-local aimbotCameraOverride = false
-
-local function setAimbotCameraOverride(on)
-    if on and not aimbotCameraOverride then
-        originalCameraType = Camera.CameraType
-        originalCameraSubject = Camera.CameraSubject
-        Camera.CameraType = Enum.CameraType.Scriptable
-        aimbotCameraOverride = true
-        UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-    elseif not on and aimbotCameraOverride then
-        Camera.CameraType = originalCameraType
-        Camera.CameraSubject = originalCameraSubject
-        aimbotCameraOverride = false
-    end
-end
-
+-- ==========================================
+-- AIMBOT: RENDER LOOP (камера едет за персонажем)
+-- ==========================================
 local lastFovColor = Color3.new()
 local lastFovSize = 0
 
 RunService.RenderStepped:Connect(function(dt)
+    -- Аимбот выключен
     if not settings.AIMBOT_ENABLED then
         if fovCircle and fovCircle.circle and fovCircle.circle.Visible then
             fovCircle.circle.Visible = false
@@ -560,10 +628,12 @@ RunService.RenderStepped:Connect(function(dt)
         if targetIndicator and targetIndicator.dot and targetIndicator.dot.Visible then
             targetIndicator.dot.Visible = false
         end
-        setAimbotCameraOverride(false)
+        if aimbotCameraOverride then setAimbotCameraOverride(false) end
+        smoothCameraCF = nil
         return
     end
 
+    -- FOV circle
     if fovCircle and fovCircle.circle then
         if fovCircle.circle.Visible ~= settings.AIMBOT_SHOW_FOV then
             fovCircle.circle.Visible = settings.AIMBOT_SHOW_FOV
@@ -584,15 +654,29 @@ RunService.RenderStepped:Connect(function(dt)
         end
     end
 
-    local shouldAim = settings.AIMBOT_TOGGLE_MODE and aimbotActive or (not settings.AIMBOT_TOGGLE_MODE and aimbotHolding)
+    local shouldAim = (settings.AIMBOT_TOGGLE_MODE and aimbotActive)
+                   or ((not settings.AIMBOT_TOGGLE_MODE) and aimbotHolding)
+
+    -- Персонаж мёртв/пропал
+    if not character or not character.Parent or not humanoid or not hrp or humanoid.Health <= 0 then
+        if aimbotCameraOverride then setAimbotCameraOverride(false) end
+        if targetIndicator and targetIndicator.dot and targetIndicator.dot.Visible then
+            targetIndicator.dot.Visible = false
+        end
+        smoothCameraCF = nil
+        return
+    end
+
     if not shouldAim then
         if targetIndicator and targetIndicator.dot and targetIndicator.dot.Visible then
             targetIndicator.dot.Visible = false
         end
-        setAimbotCameraOverride(false)
+        if aimbotCameraOverride then setAimbotCameraOverride(false) end
+        smoothCameraCF = nil
         return
     end
 
+    -- Сканирование
     local now = tick()
     if now - aimbotLastScan >= settings.AIMBOT_SCAN_INTERVAL then
         aimbotLastScan = now
@@ -600,12 +684,14 @@ RunService.RenderStepped:Connect(function(dt)
     end
 
     local best = pickBestTarget(aimbotCachedCandidates)
+
     if not best then
         aimbotTarget, aimbotTargetPart = nil, nil
         if targetIndicator and targetIndicator.dot and targetIndicator.dot.Visible then
             targetIndicator.dot.Visible = false
         end
-        setAimbotCameraOverride(false)
+        if aimbotCameraOverride then setAimbotCameraOverride(false) end
+        smoothCameraCF = nil
         return
     end
 
@@ -614,13 +700,15 @@ RunService.RenderStepped:Connect(function(dt)
         if targetIndicator and targetIndicator.dot and targetIndicator.dot.Visible then
             targetIndicator.dot.Visible = false
         end
-        setAimbotCameraOverride(false)
+        if aimbotCameraOverride then setAimbotCameraOverride(false) end
+        smoothCameraCF = nil
         return
     end
 
     aimbotTarget = best.target
     aimbotTargetPart = best.part
 
+    -- Индикатор цели
     if targetIndicator and targetIndicator.dot then
         local screenPos, onScreen = Camera:WorldToViewportPoint(best.part.Position)
         if onScreen and screenPos.Z > 0 and settings.AIMBOT_SHOW_TARGET then
@@ -636,15 +724,43 @@ RunService.RenderStepped:Connect(function(dt)
         end
     end
 
-    setAimbotCameraOverride(true)
-    local aimPos = getAimPosition(best.part)
-    if aimPos then
-        local currentCF = Camera.CFrame
-        local targetCF = CFrame.lookAt(currentCF.Position, aimPos)
-        local alpha = 1 - math.clamp(settings.AIMBOT_SMOOTHNESS, 0, 0.99)
-        Camera.CFrame = currentCF:Lerp(targetCF, math.clamp(alpha * (dt * 60), 0, 1))
+    -- Включаем Scriptable
+    if not aimbotCameraOverride then
+        setAimbotCameraOverride(true)
     end
 
+    -- Позиция камеры берётся от головы персонажа каждый кадр!
+    local head = character:FindFirstChild("Head") or hrp
+    local camPos
+    if head then
+        -- Смотрим через текущий "взгляд" камеры, чтобы камера не крутилась рывками
+        local lookDir = Camera.CFrame.LookVector
+        local flatLook = Vector3.new(lookDir.X, 0, lookDir.Z)
+        if flatLook.Magnitude < 0.001 then flatLook = Vector3.new(0, 0, 1) end
+        flatLook = flatLook.Unit
+        camPos = head.Position
+            + Vector3.new(0, settings.AIMBOT_CAMERA_HEIGHT, 0)
+            + flatLook * settings.AIMBOT_CAMERA_DISTANCE
+    else
+        camPos = Camera.CFrame.Position
+    end
+
+    local aimPos = getAimPosition(best.part)
+    if aimPos then
+        local targetCF = CFrame.lookAt(camPos, aimPos)
+        local alpha = 1 - math.clamp(settings.AIMBOT_SMOOTHNESS, 0, 0.99)
+        local smoothFactor = math.clamp(alpha * (dt * 60), 0, 1)
+        if smoothCameraCF then
+            smoothCameraCF = smoothCameraCF:Lerp(targetCF, smoothFactor)
+            -- На случай если камера "уехала" — жёстко ставим позицию
+            smoothCameraCF = CFrame.new(camPos) * (smoothCameraCF - smoothCameraCF.Position)
+        else
+            smoothCameraCF = targetCF
+        end
+        Camera.CFrame = smoothCameraCF
+    end
+
+    -- Авто-стрельба
     if settings.AIMBOT_AUTO_SHOOT then
         if now - lastAutoShoot >= settings.AIMBOT_AUTO_SHOOT_DELAY then
             if not settings.AIMBOT_AUTO_SHOOT_ONLY_VISIBLE or isVisible(best.part) then
@@ -903,52 +1019,10 @@ local function RemoveESP(ItemInstance)
 end
 
 -- ==========================================
--- NPC CACHE + MAIN ESP LOOP
+-- MAIN ESP LOOP
 -- ==========================================
 local npcCache = {}
 local npcLastScan = 0
-
-local function isPlayerCharacter(model)
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr.Character == model then return true end
-    end
-    return false
-end
-
-local function scanNPCs()
-    local list = {}
-    local myPos = Camera.CFrame.Position
-    for _, obj in ipairs(Workspace:GetChildren()) do
-        if obj:IsA("Model") and obj ~= character then
-            if obj.Name ~= settings.ROLE_FOLDER_PLAYERS then
-                if not isPlayerCharacter(obj) then
-                    local hum = obj:FindFirstChildOfClass("Humanoid")
-                    local root = obj:FindFirstChild("HumanoidRootPart")
-                    if hum and root and hum.Health > 0 then
-                        local dist = (root.Position - myPos).Magnitude
-                        if dist <= settings.NPC_MAX_DISTANCE then
-                            table.insert(list, { model = obj, root = root, hum = hum, dist = dist })
-                        end
-                    end
-                end
-            else
-                for _, sub in ipairs(obj:GetChildren()) do
-                    if sub:IsA("Model") and not isPlayerCharacter(sub) then
-                        local hum = sub:FindFirstChildOfClass("Humanoid")
-                        local root = sub:FindFirstChild("HumanoidRootPart")
-                        if hum and root and hum.Health > 0 then
-                            local dist = (root.Position - myPos).Magnitude
-                            if dist <= settings.NPC_MAX_DISTANCE then
-                                table.insert(list, { model = sub, root = root, hum = hum, dist = dist })
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-    return list
-end
 
 task.spawn(function()
     while true do
@@ -1010,10 +1084,18 @@ task.spawn(function()
                     if npc.model.Parent and npc.hum.Health > 0 then
                         local color = getColorFromSettings("NPC")
                         local label = "[NPC] " .. npc.model.Name
-                        UpdateHighlight(npc.model, npc.root, {MaxDistance = settings.NPC_MAX_DISTANCE, MinDistance = 0, Color = color})
-                        if settings.SHOW_TEXT then UpdateText(npc.model, npc.root, {MinDistance = settings.ESP_TEXT_MIN_DISTANCE, Text = label, Color = color}) end
-                        if settings.ESP_BOX_ENABLED then UpdateBox(npc.model, npc.root, {Color = color}) end
-                        if settings.ESP_TRACER_ENABLED then UpdateTracer(npc.model, npc.root, {Color = color}) end
+                        if settings.NPC_USE_HIGHLIGHT then
+                            UpdateHighlight(npc.model, npc.root, {MaxDistance = settings.NPC_MAX_DISTANCE, MinDistance = 0, Color = color})
+                        end
+                        if settings.SHOW_TEXT and settings.NPC_USE_TEXT then
+                            UpdateText(npc.model, npc.root, {MinDistance = settings.ESP_TEXT_MIN_DISTANCE, Text = label, Color = color})
+                        end
+                        if settings.ESP_BOX_ENABLED and settings.NPC_USE_BOX then
+                            UpdateBox(npc.model, npc.root, {Color = color})
+                        end
+                        if settings.ESP_TRACER_ENABLED and settings.NPC_USE_TRACER then
+                            UpdateTracer(npc.model, npc.root, {Color = color})
+                        end
                         alive[npc.model] = true
                     end
                 end
@@ -1169,7 +1251,6 @@ local function toggleTurbo()
     end
 end
 
--- Turbo loop
 task.spawn(function()
     while true do
         task.wait()
@@ -1599,7 +1680,7 @@ HotkeysTab:CreateToggle({ Name = "🎯 Aimbot Hotkey", CurrentValue = settings.H
 
 -- AIMBOT TAB
 local AimbotTab = Window:CreateTab({ Name = "Aimbot", Icon = "my_location", ImageSource = "Material", ShowTitle = true })
-AimbotTab:CreateParagraph({ Title = "🎯 AIMBOT v15.0", Text = "Учитывает Team И папки workspace.Players.*" })
+AimbotTab:CreateParagraph({ Title = "🎯 AIMBOT v15.1", Text = "Камера едет за персонажем + Team/Folder detection" })
 
 AimbotTab:CreateToggle({ Name = "🎯 Enable Aimbot", CurrentValue = settings.AIMBOT_ENABLED, Callback = function(v)
     if v and not settings.HOTKEY_AIMBOT_ENABLED then showNotification("🔒 Hotkey Lock", "Разреши Aimbot в Hotkeys!") return end
@@ -1612,19 +1693,24 @@ AimbotTab:CreateDropdown({ Name = "🎮 Режим", Options = {"PVP", "PVE", "B
 AimbotTab:CreateDropdown({ Name = "🔑 Клавиша", Options = {"E", "Q", "R", "X", "MouseButton2"}, CurrentOption = {settings.AIMBOT_KEY}, MultipleOptions = false, Callback = function(o) settings.AIMBOT_KEY = o SaveSettings(settings) end })
 AimbotTab:CreateToggle({ Name = "🔄 Toggle Mode", CurrentValue = settings.AIMBOT_TOGGLE_MODE, Callback = function(v) settings.AIMBOT_TOGGLE_MODE = v SaveSettings(settings) end })
 
-AimbotTab:CreateLabel({ Text = "🚀 ПРОИЗВОДИТЕЛЬНОСТЬ", Style = 1 })
-AimbotTab:CreateSlider({ Name = "Интервал сканирования (сек)", Range = {0.02, 0.5}, Increment = 0.01, CurrentValue = settings.AIMBOT_SCAN_INTERVAL, Callback = function(v) settings.AIMBOT_SCAN_INTERVAL = v SaveSettings(settings) end })
-AimbotTab:CreateSlider({ Name = "Радиус NPC", Range = {30, 1000}, Increment = 10, CurrentValue = settings.AIMBOT_PVE_RADIUS, Callback = function(v) settings.AIMBOT_PVE_RADIUS = v SaveSettings(settings) end })
-AimbotTab:CreateSlider({ Name = "Макс. NPC", Range = {5, 100}, Increment = 1, CurrentValue = settings.AIMBOT_MAX_NPC_CANDIDATES, Callback = function(v) settings.AIMBOT_MAX_NPC_CANDIDATES = v SaveSettings(settings) end })
-
 AimbotTab:CreateLabel({ Text = "🎯 ЦЕЛИ", Style = 1 })
 AimbotTab:CreateToggle({ Name = "Игроки (PVP)", CurrentValue = settings.AIMBOT_TARGET_PLAYERS, Callback = function(v) settings.AIMBOT_TARGET_PLAYERS = v SaveSettings(settings) end })
 AimbotTab:CreateToggle({ Name = "NPC (PVE)", CurrentValue = settings.AIMBOT_TARGET_NPCS, Callback = function(v) settings.AIMBOT_TARGET_NPCS = v SaveSettings(settings) end })
 AimbotTab:CreateToggle({ Name = "Killers", CurrentValue = settings.AIMBOT_TARGET_KILLERS, Callback = function(v) settings.AIMBOT_TARGET_KILLERS = v SaveSettings(settings) end })
 AimbotTab:CreateToggle({ Name = "Survivors", CurrentValue = settings.AIMBOT_TARGET_SURVIVORS, Callback = function(v) settings.AIMBOT_TARGET_SURVIVORS = v SaveSettings(settings) end })
+AimbotTab:CreateToggle({ Name = "Other / Unknown", CurrentValue = settings.AIMBOT_TARGET_OTHER, Callback = function(v) settings.AIMBOT_TARGET_OTHER = v SaveSettings(settings) end })
 AimbotTab:CreateToggle({ Name = "Team Check", CurrentValue = settings.AIMBOT_TEAM_CHECK, Callback = function(v) settings.AIMBOT_TEAM_CHECK = v SaveSettings(settings) end })
 AimbotTab:CreateToggle({ Name = "Игнорировать мёртвых", CurrentValue = settings.AIMBOT_IGNORE_DEAD, Callback = function(v) settings.AIMBOT_IGNORE_DEAD = v SaveSettings(settings) end })
 AimbotTab:CreateToggle({ Name = "Проверка стен", CurrentValue = settings.AIMBOT_WALL_CHECK, Callback = function(v) settings.AIMBOT_WALL_CHECK = v SaveSettings(settings) end })
+
+AimbotTab:CreateLabel({ Text = "📷 КАМЕРА", Style = 1 })
+AimbotTab:CreateSlider({ Name = "Дистанция камеры", Range = {4, 30}, Increment = 1, CurrentValue = settings.AIMBOT_CAMERA_DISTANCE, Callback = function(v) settings.AIMBOT_CAMERA_DISTANCE = v SaveSettings(settings) end })
+AimbotTab:CreateSlider({ Name = "Высота камеры", Range = {-2, 5}, Increment = 0.1, CurrentValue = settings.AIMBOT_CAMERA_HEIGHT, Callback = function(v) settings.AIMBOT_CAMERA_HEIGHT = v SaveSettings(settings) end })
+
+AimbotTab:CreateLabel({ Text = "🚀 ПРОИЗВОДИТЕЛЬНОСТЬ", Style = 1 })
+AimbotTab:CreateSlider({ Name = "Интервал сканирования (сек)", Range = {0.02, 0.5}, Increment = 0.01, CurrentValue = settings.AIMBOT_SCAN_INTERVAL, Callback = function(v) settings.AIMBOT_SCAN_INTERVAL = v SaveSettings(settings) end })
+AimbotTab:CreateSlider({ Name = "Радиус NPC", Range = {30, 1000}, Increment = 10, CurrentValue = settings.AIMBOT_PVE_RADIUS, Callback = function(v) settings.AIMBOT_PVE_RADIUS = v SaveSettings(settings) end })
+AimbotTab:CreateSlider({ Name = "Макс. NPC", Range = {5, 100}, Increment = 1, CurrentValue = settings.AIMBOT_MAX_NPC_CANDIDATES, Callback = function(v) settings.AIMBOT_MAX_NPC_CANDIDATES = v SaveSettings(settings) end })
 
 AimbotTab:CreateLabel({ Text = "👁️ FOV", Style = 1 })
 AimbotTab:CreateToggle({ Name = "Ограничение FOV", CurrentValue = settings.AIMBOT_FOV_ENABLED, Callback = function(v) settings.AIMBOT_FOV_ENABLED = v SaveSettings(settings) end })
@@ -1702,6 +1788,10 @@ ESPTab:CreateToggle({ Name = "NPC ESP", CurrentValue = settings.NPC_ESP, Callbac
 ESPTab:CreateDropdown({ Name = "NPC Color", Options = {"Magenta", "Purple", "Pink", "Blue", "Gray"}, CurrentOption = {settings.NPC_COLOR or "Magenta"}, MultipleOptions = false, Callback = function(o) settings.NPC_COLOR = o SaveSettings(settings) end })
 ESPTab:CreateSlider({ Name = "NPC Max Distance", Range = {50, 2000}, Increment = 10, CurrentValue = settings.NPC_MAX_DISTANCE, Callback = function(v) settings.NPC_MAX_DISTANCE = v SaveSettings(settings) end })
 ESPTab:CreateSlider({ Name = "NPC Scan Interval", Range = {0.1, 2.0}, Increment = 0.1, CurrentValue = settings.NPC_SCAN_INTERVAL, Callback = function(v) settings.NPC_SCAN_INTERVAL = v SaveSettings(settings) end })
+ESPTab:CreateToggle({ Name = "NPC Highlight", CurrentValue = settings.NPC_USE_HIGHLIGHT, Callback = function(v) settings.NPC_USE_HIGHLIGHT = v SaveSettings(settings) end })
+ESPTab:CreateToggle({ Name = "NPC Text", CurrentValue = settings.NPC_USE_TEXT, Callback = function(v) settings.NPC_USE_TEXT = v SaveSettings(settings) end })
+ESPTab:CreateToggle({ Name = "NPC Box", CurrentValue = settings.NPC_USE_BOX, Callback = function(v) settings.NPC_USE_BOX = v SaveSettings(settings) end })
+ESPTab:CreateToggle({ Name = "NPC Tracer", CurrentValue = settings.NPC_USE_TRACER, Callback = function(v) settings.NPC_USE_TRACER = v SaveSettings(settings) end })
 
 ESPTab:CreateLabel({ Text = "📁 DETECTION", Style = 1 })
 ESPTab:CreateToggle({ Name = "Folder Detection", CurrentValue = settings.USE_FOLDER_DETECTION, Callback = function(v) settings.USE_FOLDER_DETECTION = v SaveSettings(settings) end })
@@ -1945,42 +2035,15 @@ RunService.Heartbeat:Connect(function(dt)
 end)
 
 -- ==========================================
--- DEBUG: проверка роли игрока
--- ==========================================
-task.spawn(function()
-    while true do
-        task.wait(10)
-        if settings.ESP_ENABLED and settings.USE_FOLDER_DETECTION then
-            for _, plr in ipairs(Players:GetPlayers()) do
-                if plr ~= player and plr.Character then
-                    local role = getPlayerRole(plr)
-                    local parent = plr.Character.Parent and plr.Character.Parent.Name or "nil"
-                    print(string.format("[ROLE DEBUG] %s | Team=%s | CharParent=%s | Role=%s",
-                        plr.Name,
-                        plr.Team and plr.Team.Name or "nil",
-                        parent,
-                        role))
-                end
-            end
-        end
-    end
-end)
-
--- ==========================================
 -- INIT
 -- ==========================================
 print("═══════════════════════════════════════════════════════")
-print("🎯 Forsaken Surge v15.0 (TEAM + FOLDER DETECTION + NPC)")
+print("🎯 Forsaken Surge v15.1 FINAL")
 print("═══════════════════════════════════════════════════════")
-print("✅ Role detection: Team -> Folder -> Attribute")
+print("✅ NPC detection: walk(Workspace, depth 3) + Humanoid filter")
+print("✅ Aimbot camera follows character (no detach!)")
+print("✅ Role: Team → Folder → Attribute")
 print("✅ Categories: Killer / Survivor / Other / NPC")
-print("✅ NPC ESP (не игроки) — Magenta")
-print("✅ Other (не в командах) — Orange")
-print("✅ Wall Walk | Fly | No Clip | Turbo | Fullbright")
-print("✅ Click TP | Freecam | Waypoints | Aimbot")
-print("═══════════════════════════════════════════════════════")
-print("🔑 C/V/B/Z/F/G — режимы | " .. settings.AIMBOT_KEY .. " — AIMBOT")
-print("🔑 P/L/T — Waypoints | ЛКМ — Click TP")
 print("═══════════════════════════════════════════════════════")
 
 task.wait(0.5)
