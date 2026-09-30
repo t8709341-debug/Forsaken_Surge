@@ -5,7 +5,7 @@ local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-S
 -- ==========================================
 local Window = Luna:CreateWindow({
     Name = "Forsaken Surge",
-    Subtitle = "v14.3 | FIXED AIMBOT + WALL WALK + TURBO + FLY + NOCLIP + ESP + CLICKTP + FREECAM",
+    Subtitle = "v14.2 | WORKING AIMBOT (PVP+PVE) + WALL WALK + TURBO + FLY + NOCLIP + ESP + CLICKTP + FREECAM",
     LogoID = nil,
     LoadingEnabled = true,
     LoadingTitle = "Forsaken Surge",
@@ -289,7 +289,7 @@ createFovCircle()
 createTargetIndicator()
 
 -- ==========================================
--- AIMBOT: CORE (FIXED)
+-- AIMBOT: CORE (РАБОЧАЯ ВЕРСИЯ ИЗ v14.3)
 -- ==========================================
 local function getPlayerRole(plr)
     if not plr or not plr.Team then return "Unknown" end
@@ -475,8 +475,7 @@ local function getAimPosition(targetPart)
 end
 
 -- ==========================================
--- AIMBOT: RENDER (правильная привязка через BindToRenderStep)
--- Приоритет Camera.Value + 1 — наше обновление ПОСЛЕ движка
+-- AIMBOT: RENDER (BindToRenderStep Camera+1, rotation-only)
 -- ==========================================
 local lastFovColor = Color3.new()
 local lastFovSize = 0
@@ -565,7 +564,7 @@ local function aimbotRenderStep(dt)
         end
     end
 
-    -- ====== ГЛАВНЫЙ ФИКС ======
+    -- ====== РАБОЧИЙ ФИКС ======
     -- Меняем ТОЛЬКО rotation, position камеры оставляем движку.
     -- Экспоненциальное сглаживание не зависит от FPS.
     local aimPos = getAimPosition(best.part)
@@ -1467,7 +1466,7 @@ HotkeysTab:CreateToggle({ Name = "🎯 Aimbot Hotkey", CurrentValue = settings.H
 
 -- AIMBOT TAB
 local AimbotTab = Window:CreateTab({ Name = "Aimbot", Icon = "my_location", ImageSource = "Material", ShowTitle = true })
-AimbotTab:CreateParagraph({ Title = "🎯 AIMBOT v14.3 (FIXED)", Text = "BindToRenderStep с приоритетом выше камеры. Меняется только rotation." })
+AimbotTab:CreateParagraph({ Title = "🎯 WORKING AIMBOT v14.2", Text = "BindToRenderStep с приоритетом выше камеры. Меняется только rotation." })
 
 AimbotTab:CreateToggle({ Name = "🎯 Enable Aimbot", CurrentValue = settings.AIMBOT_ENABLED, Callback = function(v)
     if v and not settings.HOTKEY_AIMBOT_ENABLED then showNotification("🔒 Hotkey Lock", "Разреши Aimbot в Hotkeys!") return end
@@ -1798,7 +1797,7 @@ end)
 -- INIT
 -- ==========================================
 print("═══════════════════════════════════════════════════════")
-print("🎯 Forsaken Surge v14.3 (FIXED AIMBOT)")
+print("🎯 Forsaken Surge v14.2 (WORKING AIMBOT)")
 print("═══════════════════════════════════════════════════════")
 print("✅ AIMBOT: BindToRenderStep Camera+1, rotation-only, exp-smoothing")
 print("✅ Wall Walk | Fly | No Clip | Turbo | ESP | Waypoints")
