@@ -5,7 +5,7 @@ local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-S
 -- ==========================================
 local Window = Luna:CreateWindow({
     Name = "Forsaken Surge",
-    Subtitle = "v14.1 | OPTIMIZED AIMBOT (PVP+PVE) + WALL WALK + TURBO + FLY + NOCLIP + ESP + CLICKTP + FREECAM",
+    Subtitle = "v14.2 | WORKING AIMBOT (PVP+PVE) + WALL WALK + TURBO + FLY + NOCLIP + ESP + CLICKTP + FREECAM",
     LogoID = nil,
     LoadingEnabled = true,
     LoadingTitle = "Forsaken Surge",
@@ -18,7 +18,7 @@ local Window = Luna:CreateWindow({
 })
 
 -- ==========================================
--- SERVICES AND VARIABLES
+-- SERVICES
 -- ==========================================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -33,167 +33,78 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local player = Players.LocalPlayer
+local mouse = player:GetMouse()
 
--- ===== CHARACTER VARIABLES =====
-local character = nil
-local humanoid = nil
-local hrp = nil
+-- ===== CHARACTER REFS =====
+local character, humanoid, hrp
 
 local function updateCharacterReferences()
     character = player.Character
     if character then
-        humanoid = character:FindFirstChild("Humanoid")
+        humanoid = character:FindFirstChildOfClass("Humanoid")
         hrp = character:FindFirstChild("HumanoidRootPart")
     else
-        humanoid = nil
-        hrp = nil
+        humanoid, hrp = nil, nil
     end
 end
-
 updateCharacterReferences()
+
+player.CharacterAdded:Connect(function(char)
+    task.wait(0.5)
+    updateCharacterReferences()
+end)
 
 -- ===== SAVE SYSTEM =====
 local MyDataFolder = "ForsakenSurgeData"
-if not isfolder(MyDataFolder) then
-    makefolder(MyDataFolder)
-end
-
+if not isfolder(MyDataFolder) then makefolder(MyDataFolder) end
 local SaveFile = MyDataFolder .. "/Settings.json"
 
 local DefaultSettings = {
-    WALK_SPEED = 16,
-    SPRINT_MULTIPLIER = 2.0,
-    GRAVITY = 30,
-    WALL_RANGE = 4.5,
-    ALIGN_SPEED = 6,
-    GRAVITY_LERP_SPEED = 5,
-    STICK_TO_SURFACE = true,
-    FALL_OFFSET = 3,
-    FALL_LIMIT = 20,
-    SMOOTHNESS = 15,
-    CEILING_GRIP = true,
-    CEILING_GRIP_FORCE = 8,
-    CEILING_MAX_TIME = 4.0,
-    AUTO_RESET_ON_FALL = true,
-    RESET_HEIGHT = -100,
-    NOTIFICATIONS_ENABLED = true,
-
+    WALK_SPEED = 16, SPRINT_MULTIPLIER = 2.0, GRAVITY = 30, WALL_RANGE = 4.5,
+    ALIGN_SPEED = 6, GRAVITY_LERP_SPEED = 5, STICK_TO_SURFACE = true,
+    FALL_OFFSET = 3, FALL_LIMIT = 20, SMOOTHNESS = 15,
+    CEILING_GRIP = true, CEILING_GRIP_FORCE = 8, CEILING_MAX_TIME = 4.0,
+    AUTO_RESET_ON_FALL = true, RESET_HEIGHT = -100, NOTIFICATIONS_ENABLED = true,
     REMOVE_KILLER_WALLS = false,
-
-    FLY_SPEED = 50,
-    FLY_ACCELERATION = 10,
-    FLY_MAX_SPEED = 150,
-    FLY_SMOOTHNESS = 8,
-    FLY_AUTO_UP = false,
-    FLY_HOVER = false,
-
-    -- ===== ESP SETTINGS =====
-    ESP_ENABLED = true,
-    KILLERS_ESP = true,
-    KILLERS_COLOR = "Red",
-    SURVIVORS_ESP = true,
-    SURVIVORS_COLOR = "Green",
-    GENERATORS_ESP = true,
-    GENERATORS_COLOR = "Cyan",
-    ITEMS_ESP = true,
-    ITEMS_COLOR = "Gold",
-    SHOW_TEXT = true,
-
-    ESP_UPDATE_INTERVAL = 0.1,
-    ESP_MAX_DISTANCE = 500,
-    ESP_MIN_DISTANCE = 10,
-    ESP_FILL_TRANSPARENCY = 0.5,
-    ESP_OUTLINE_TRANSPARENCY = 0.3,
-    ESP_TEXT_SIZE = 14,
-    ESP_TEXT_MIN_DISTANCE = 25,
-    ESP_TEXT_MAX_DISTANCE = 1200,
-    ESP_SHOW_DISTANCE_TEXT = false,
-    ESP_BOX_ENABLED = false,
-    ESP_BOX_COLOR = "White",
-    ESP_BOX_TRANSPARENCY = 0.7,
-    ESP_TEAM_CHECK = true,
-    ESP_HIGHLIGHT_DEPTH_MODE = "AlwaysOnTop",
-    ESP_RENDER_DISTANCE_FADE = true,
-    ESP_FADE_MIN_ALPHA = 0.35,
-    ESP_TRACER_ENABLED = false,
-    ESP_TRACER_COLOR = "White",
+    FLY_SPEED = 50, FLY_ACCELERATION = 10, FLY_MAX_SPEED = 150, FLY_SMOOTHNESS = 8,
+    FLY_AUTO_UP = false, FLY_HOVER = false,
+    ESP_ENABLED = true, KILLERS_ESP = true, KILLERS_COLOR = "Red",
+    SURVIVORS_ESP = true, SURVIVORS_COLOR = "Green",
+    GENERATORS_ESP = true, GENERATORS_COLOR = "Cyan",
+    ITEMS_ESP = true, ITEMS_COLOR = "Gold", SHOW_TEXT = true,
+    ESP_UPDATE_INTERVAL = 0.1, ESP_MAX_DISTANCE = 500, ESP_MIN_DISTANCE = 10,
+    ESP_FILL_TRANSPARENCY = 0.5, ESP_OUTLINE_TRANSPARENCY = 0.3,
+    ESP_TEXT_SIZE = 14, ESP_TEXT_MIN_DISTANCE = 25, ESP_TEXT_MAX_DISTANCE = 1200,
+    ESP_SHOW_DISTANCE_TEXT = false, ESP_BOX_ENABLED = false, ESP_BOX_COLOR = "White",
+    ESP_BOX_TRANSPARENCY = 0.7, ESP_TEAM_CHECK = true,
+    ESP_HIGHLIGHT_DEPTH_MODE = "AlwaysOnTop", ESP_RENDER_DISTANCE_FADE = true,
+    ESP_FADE_MIN_ALPHA = 0.35, ESP_TRACER_ENABLED = false, ESP_TRACER_COLOR = "White",
     ESP_TRACER_TRANSPARENCY = 0.5,
-
-    KILLERS_COLOR_CUSTOM = false,
-    KILLERS_COLOR_R = 255,
-    KILLERS_COLOR_G = 0,
-    KILLERS_COLOR_B = 0,
-    SURVIVORS_COLOR_CUSTOM = false,
-    SURVIVORS_COLOR_R = 0,
-    SURVIVORS_COLOR_G = 255,
-    SURVIVORS_COLOR_B = 0,
-    GENERATORS_COLOR_CUSTOM = false,
-    GENERATORS_COLOR_R = 0,
-    GENERATORS_COLOR_G = 255,
-    GENERATORS_COLOR_B = 255,
-    ITEMS_COLOR_CUSTOM = false,
-    ITEMS_COLOR_R = 255,
-    ITEMS_COLOR_G = 215,
-    ITEMS_COLOR_B = 0,
-
-    TURBO_ACTIVE = false,
-    TURBO_SPEED = 30,
-    TURBO_MODE = "Velocity",
-
+    KILLERS_COLOR_CUSTOM = false, KILLERS_COLOR_R = 255, KILLERS_COLOR_G = 0, KILLERS_COLOR_B = 0,
+    SURVIVORS_COLOR_CUSTOM = false, SURVIVORS_COLOR_R = 0, SURVIVORS_COLOR_G = 255, SURVIVORS_COLOR_B = 0,
+    GENERATORS_COLOR_CUSTOM = false, GENERATORS_COLOR_R = 0, GENERATORS_COLOR_G = 255, GENERATORS_COLOR_B = 255,
+    ITEMS_COLOR_CUSTOM = false, ITEMS_COLOR_R = 255, ITEMS_COLOR_G = 215, ITEMS_COLOR_B = 0,
+    TURBO_ACTIVE = false, TURBO_SPEED = 30, TURBO_MODE = "Velocity",
     UNLIMITED_MODE = false,
-    WALK_SPEED_MAX = 50,
-    SPRINT_MULTIPLIER_MAX = 3.0,
-    GRAVITY_MAX = 100,
-    WALL_RANGE_MAX = 15,
-    TURBO_SPEED_MAX = 400,
-    FLY_SPEED_MAX = 400,
-    FLY_MAX_SPEED_MAX = 800,
-
-    -- FULLBRIGHT
-    FULLBRIGHT_ENABLED = false,
-    FULLBRIGHT_BRIGHTNESS = 3,
-    FULLBRIGHT_CLOCKTIME = 12,
+    WALK_SPEED_MAX = 50, SPRINT_MULTIPLIER_MAX = 3.0, GRAVITY_MAX = 100,
+    WALL_RANGE_MAX = 15, TURBO_SPEED_MAX = 400, FLY_SPEED_MAX = 400, FLY_MAX_SPEED_MAX = 800,
+    FULLBRIGHT_ENABLED = false, FULLBRIGHT_BRIGHTNESS = 3, FULLBRIGHT_CLOCKTIME = 12,
     FULLBRIGHT_REMOVE_FOG = true,
-
-    -- ===== CLICK TP =====
-    CLICKTP_ENABLED = false,
-    CLICKTP_DISTANCE = 500,
-    CLICKTP_OFFSET_Y = 3,
-    CLICKTP_ONLY_VISIBLE = true,
-    CLICKTP_IGNORE_WATER = true,
-
-    -- ===== FREECAM =====
-    FREECAM_ENABLED = false,
-    FREECAM_SPEED = 60,
-    FREECAM_SPRINT_MULT = 3,
-    FREECAM_SENSITIVITY = 0.35,
-    FREECAM_HIDE_CHAR = false,
-
-    -- ===== WAYPOINT SWAP =====
+    CLICKTP_ENABLED = false, CLICKTP_DISTANCE = 500, CLICKTP_OFFSET_Y = 3,
+    CLICKTP_ONLY_VISIBLE = true, CLICKTP_IGNORE_WATER = true,
+    FREECAM_ENABLED = false, FREECAM_SPEED = 60, FREECAM_SPRINT_MULT = 3,
+    FREECAM_SENSITIVITY = 0.35, FREECAM_HIDE_CHAR = false,
     WP_SWAP_ENABLED = false,
-
-    -- ==========================================
-    -- 🔑 HOTKEY PERMISSIONS
-    -- ==========================================
-    HOTKEY_WALLWALK_ENABLED = true,
-    HOTKEY_FLY_ENABLED = true,
-    HOTKEY_NOCLIP_ENABLED = true,
-    HOTKEY_TURBO_ENABLED = true,
-    HOTKEY_FULLBRIGHT_ENABLED = true,
-    HOTKEY_FREECAM_ENABLED = true,
-    HOTKEY_CLICKTP_ENABLED = true,
-    HOTKEY_WAYPOINTS_ENABLED = true,
+    HOTKEY_WALLWALK_ENABLED = true, HOTKEY_FLY_ENABLED = true,
+    HOTKEY_NOCLIP_ENABLED = true, HOTKEY_TURBO_ENABLED = true,
+    HOTKEY_FULLBRIGHT_ENABLED = true, HOTKEY_FREECAM_ENABLED = true,
+    HOTKEY_CLICKTP_ENABLED = true, HOTKEY_WAYPOINTS_ENABLED = true,
     HOTKEY_AIMBOT_ENABLED = true,
-
-    -- ==========================================
-    -- 🎯 AIMBOT SETTINGS (OPTIMIZED)
-    -- ==========================================
+    -- AIMBOT
     AIMBOT_ENABLED = false,
-    AIMBOT_MODE = "PVP",                    -- "PVP" | "PVE" | "Both"
+    AIMBOT_MODE = "PVP",
     AIMBOT_KEY = "E",
     AIMBOT_TOGGLE_MODE = false,
-    AIMBOT_ACTIVE = false,
-
     AIMBOT_TARGET_PLAYERS = true,
     AIMBOT_TARGET_NPCS = true,
     AIMBOT_TARGET_KILLERS = true,
@@ -201,185 +112,498 @@ local DefaultSettings = {
     AIMBOT_TEAM_CHECK = true,
     AIMBOT_IGNORE_DEAD = true,
     AIMBOT_WALL_CHECK = true,
-
     AIMBOT_FOV_ENABLED = true,
     AIMBOT_FOV = 150,
     AIMBOT_SHOW_FOV = true,
-    AIMBOT_FOV_COLOR_R = 255,
-    AIMBOT_FOV_COLOR_G = 255,
-    AIMBOT_FOV_COLOR_B = 255,
-
+    AIMBOT_FOV_COLOR_R = 255, AIMBOT_FOV_COLOR_G = 255, AIMBOT_FOV_COLOR_B = 255,
     AIMBOT_SMOOTHNESS = 0.25,
     AIMBOT_MAX_DISTANCE = 1000,
     AIMBOT_MIN_DISTANCE = 0,
     AIMBOT_LOCK_MODE = "Closest",
-
     AIMBOT_HITBOX = "Head",
     AIMBOT_HITBOX_OFFSET_Y = 0,
-
     AIMBOT_PREDICTION = true,
-    AIMBOT_PREDICTION_X = 0.165,
-    AIMBOT_PREDICTION_Y = 0.165,
-    AIMBOT_PREDICTION_Z = 0.165,
-
+    AIMBOT_PREDICTION_X = 0.165, AIMBOT_PREDICTION_Y = 0.165, AIMBOT_PREDICTION_Z = 0.165,
     AIMBOT_AUTO_SHOOT = false,
     AIMBOT_AUTO_SHOOT_DELAY = 0.1,
     AIMBOT_AUTO_SHOOT_ONLY_VISIBLE = true,
-
     AIMBOT_SHOW_TARGET = true,
-    AIMBOT_TARGET_COLOR_R = 255,
-    AIMBOT_TARGET_COLOR_G = 0,
-    AIMBOT_TARGET_COLOR_B = 0,
-
-    -- 🚀 ОПТИМИЗАЦИЯ
-    AIMBOT_SCAN_INTERVAL = 0.1,             -- как часто искать цели (сек)
-    AIMBOT_PVE_RADIUS = 200,                -- радиус поиска NPC (studs)
-    AIMBOT_MAX_NPC_CANDIDATES = 30,         -- макс. NPC для сканирования
+    AIMBOT_TARGET_COLOR_R = 255, AIMBOT_TARGET_COLOR_G = 0, AIMBOT_TARGET_COLOR_B = 0,
+    AIMBOT_SCAN_INTERVAL = 0.1,
+    AIMBOT_PVE_RADIUS = 200,
+    AIMBOT_MAX_NPC_CANDIDATES = 30,
 }
 
-function LoadSettings()
+local function LoadSettings()
     if isfile(SaveFile) then
-        local content = readfile(SaveFile)
-        local success, data = pcall(HttpService.JSONDecode, HttpService, content)
-        if success and type(data) == "table" then
-            for key, value in pairs(DefaultSettings) do
-                if data[key] == nil then data[key] = value end
+        local ok, data = pcall(HttpService.JSONDecode, HttpService, readfile(SaveFile))
+        if ok and type(data) == "table" then
+            for k, v in pairs(DefaultSettings) do
+                if data[k] == nil then data[k] = v end
             end
             return data
         end
     end
-    SaveSettings(DefaultSettings)
     return DefaultSettings
 end
 
-function SaveSettings(settingsTable)
-    local json = HttpService:JSONEncode(settingsTable)
-    writefile(SaveFile, json)
+local function SaveSettings(t)
+    pcall(function() writefile(SaveFile, HttpService:JSONEncode(t)) end)
 end
 
 local settings = LoadSettings()
+SaveSettings(settings)
 
--- ==========================================
--- MAX VALUES
--- ==========================================
-local function getMaxValue(key, defaultMax)
-    if settings.UNLIMITED_MODE then
-        local maxMap = {
-            WALK_SPEED = 400,
-            SPRINT_MULTIPLIER = 10.0,
-            GRAVITY = 400,
-            WALL_RANGE = 100,
-            TURBO_SPEED = 400,
-            FLY_SPEED = 400,
-            FLY_MAX_SPEED = 800,
-        }
-        return maxMap[key] or 400
-    end
-    return defaultMax
-end
-
--- ==========================================
--- STATES
--- ==========================================
-local climbing = false
-local flying = false
-local noClipActive = false
-local turboActive = false
+-- ===== STATES =====
+local climbing, flying, noClipActive, turboActive = false, false, false, false
 local gravityDir = Vector3.new(0, -1, 0)
 local upDir = Vector3.new(0, 1, 0)
-local fallSpeed = 0
-local isGrounded = false
+local fallSpeed, isGrounded = 0, false
 local facing = Vector3.new(0, 0, -1)
 local pressed = {}
 local isSprinting = false
-local isOnCeiling = false
-local ceilingTime = 0
-local flyVelocity = Vector3.new(0, 0, 0)
-local fullbrightActive = false
-local savedLighting = nil
-
+local isOnCeiling, ceilingTime = false, 0
+local flyVelocity = Vector3.zero
+local fullbrightActive, savedLighting = false, nil
 local freecamActive = false
-local freecamCFrame = CFrame.new()
-local freecamPos = Vector3.new()
-local freecamRot = CFrame.new()
-local freecamSavedCamType = nil
-local freecamSavedCamSubject = nil
-local freecamSavedCamCFrame = CFrame.new()
+local freecamPos, freecamRot = Vector3.zero, CFrame.new()
+local freecamSavedCamType, freecamSavedCamSubject
 local clickTPActive = false
 
--- 🎯 AIMBOT states
+-- Aimbot states
 local aimbotActive = false
 local aimbotHolding = false
 local aimbotTarget = nil
 local aimbotTargetPart = nil
 local lastAutoShoot = 0
-local fovCircle = nil
-local targetIndicator = nil
+local fovCircle, targetIndicator
 local aimbotCachedCandidates = {}
 local aimbotLastScan = 0
-local lastAimKey = Enum.KeyCode.E
 
 local rayParams = RaycastParams.new()
 rayParams.FilterType = Enum.RaycastFilterType.Exclude
 rayParams.RespectCanCollide = true
 
--- Кэш raycast-фильтра
 local aimbotRayFilter = RaycastParams.new()
 aimbotRayFilter.FilterType = Enum.RaycastFilterType.Exclude
 aimbotRayFilter.RespectCanCollide = true
 
 -- ==========================================
--- 🔑 HOTKEY PERMISSION CHECK
+-- HELPERS
 -- ==========================================
-local function isHotkeyAllowed(permissionKey)
-    return settings[permissionKey] == true
+local function projectToPlane(v, n) return v - n * v:Dot(n) end
+
+local function makeCFrame(pos, forward, up)
+    local f = forward.Unit
+    local r = f:Cross(up)
+    if r.Magnitude < 1e-5 then r = Vector3.new(1, 0, 0) end
+    r = r.Unit
+    local u = r:Cross(f).Unit
+    return CFrame.new(pos.X, pos.Y, pos.Z, r.X, r.Y, r.Z, u.X, u.Y, u.Z, -f.X, -f.Y, -f.Z)
+end
+
+local function slerp(a, b, t)
+    local au, bu = a.Unit, b.Unit
+    local dot = math.clamp(au:Dot(bu), -1, 1)
+    if dot > 0.9999 then return bu end
+    local angle = math.acos(dot)
+    local sin = math.sin(angle)
+    return (au * math.sin((1 - t) * angle) + bu * math.sin(t * angle)) / sin
+end
+
+local function showNotification(title, text)
+    if not settings.NOTIFICATIONS_ENABLED then return end
+    pcall(function() Luna:Notify({ Title = title, Description = text, Duration = 3 }) end)
+    print(string.format("[%s] %s", title, text))
 end
 
 -- ==========================================
--- EXCLUSIVE MODE
+-- AIMBOT: FOV CIRCLE & TARGET INDICATOR
 -- ==========================================
-local function disableAllModes(except)
-    if except ~= "climb" and climbing then
-        climbing = false
-        if humanoid then
-            humanoid.AutoRotate = true
-            humanoid.PlatformStand = false
-        end
-        gravityDir = Vector3.new(0, -1, 0)
-        upDir = Vector3.new(0, 1, 0)
-        fallSpeed = 0
-        isGrounded = false
-        isOnCeiling = false
-        ceilingTime = 0
-    end
+local function createFovCircle()
+    if fovCircle and fovCircle.gui then fovCircle.gui:Destroy() end
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "ForsakenSurge_FOV"
+    gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = true
+    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    gui.Parent = player:WaitForChild("PlayerGui")
 
-    if except ~= "fly" and flying then
-        flying = false
-        if humanoid then
-            humanoid.AutoRotate = true
-            humanoid.PlatformStand = false
-        end
-        flyVelocity = Vector3.zero
-        if hrp then hrp.AssemblyLinearVelocity = Vector3.zero end
-    end
+    local circle = Instance.new("Frame")
+    circle.Name = "FovCircle"
+    circle.AnchorPoint = Vector2.new(0.5, 0.5)
+    circle.Position = UDim2.fromScale(0.5, 0.5)
+    circle.Size = UDim2.fromOffset(settings.AIMBOT_FOV * 2, settings.AIMBOT_FOV * 2)
+    circle.BackgroundTransparency = 1
+    circle.BorderSizePixel = 0
+    circle.Visible = false
+    circle.Parent = gui
 
-    if except ~= "noclip" and noClipActive then
-        noClipActive = false
-        for _, part in ipairs(character and character:GetDescendants() or {}) do
-            if part:IsA("BasePart") then
-                part.CanCollide = true
+    local stroke = Instance.new("UIStroke")
+    stroke.Thickness = 1.5
+    stroke.Color = Color3.fromRGB(settings.AIMBOT_FOV_COLOR_R, settings.AIMBOT_FOV_COLOR_G, settings.AIMBOT_FOV_COLOR_B)
+    stroke.Transparency = 0.3
+    stroke.Parent = circle
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(1, 0)
+    corner.Parent = circle
+
+    fovCircle = { gui = gui, circle = circle, stroke = stroke }
+end
+
+local function createTargetIndicator()
+    if targetIndicator and targetIndicator.gui then targetIndicator.gui:Destroy() end
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "ForsakenSurge_Target"
+    gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = true
+    gui.Parent = player:WaitForChild("PlayerGui")
+
+    local dot = Instance.new("Frame")
+    dot.Name = "TargetDot"
+    dot.AnchorPoint = Vector2.new(0.5, 0.5)
+    dot.Size = UDim2.fromOffset(10, 10)
+    dot.BackgroundColor3 = Color3.fromRGB(settings.AIMBOT_TARGET_COLOR_R, settings.AIMBOT_TARGET_COLOR_G, settings.AIMBOT_TARGET_COLOR_B)
+    dot.BorderSizePixel = 0
+    dot.Visible = false
+    dot.ZIndex = 999
+    dot.Parent = gui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(1, 0)
+    corner.Parent = dot
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Thickness = 2
+    stroke.Color = Color3.new(1, 1, 1)
+    stroke.Parent = dot
+
+    targetIndicator = { gui = gui, dot = dot, stroke = stroke }
+end
+createFovCircle()
+createTargetIndicator()
+
+-- ==========================================
+-- AIMBOT: CORE
+-- ==========================================
+local function getPlayerRole(plr)
+    if not plr or not plr.Team then return "Unknown" end
+    local teamName = plr.Team.Name:lower()
+    if teamName:find("killer") or teamName:find("monster") or teamName:find("enemy") then
+        return "Killer"
+    end
+    return "Survivor"
+end
+
+local function getHitboxFast(target, hitboxName)
+    local char = target:IsA("Player") and target.Character or target
+    if not char then return nil end
+    if hitboxName == "Head" then
+        return char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
+    elseif hitboxName == "Torso" then
+        return char:FindFirstChild("Torso")
+            or char:FindFirstChild("UpperTorso")
+            or char:FindFirstChild("LowerTorso")
+            or char:FindFirstChild("HumanoidRootPart")
+    end
+    return char:FindFirstChild("HumanoidRootPart")
+end
+
+-- ВАЖНО: корректная проверка видимости — луч должен попасть в саму цель
+local function isVisible(targetPart)
+    if not settings.AIMBOT_WALL_CHECK then return true end
+    if not targetPart or not targetPart.Parent then return false end
+    local origin = Camera.CFrame.Position
+    local dir = targetPart.Position - origin
+    aimbotRayFilter.FilterDescendantsInstances = { character }
+    local result = Workspace:Raycast(origin, dir, aimbotRayFilter)
+    if result and result.Instance then
+        -- если попали в саму цель или её потомка
+        if result.Instance == targetPart or result.Instance:IsDescendantOf(targetPart.Parent) then
+            return true
+        end
+        return false
+    end
+    return true
+end
+
+local function scanCandidates()
+    local candidates = {}
+    local mode = settings.AIMBOT_MODE
+    local myPos = Camera.CFrame.Position
+
+    if settings.AIMBOT_TARGET_PLAYERS and (mode == "PVP" or mode == "Both") then
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= player then
+                local char = plr.Character
+                if char then
+                    local hum = char:FindFirstChildOfClass("Humanoid")
+                    local root = char:FindFirstChild("HumanoidRootPart")
+                    if hum and root and (not settings.AIMBOT_IGNORE_DEAD or hum.Health > 0) then
+                        local dist = (root.Position - myPos).Magnitude
+                        if dist <= settings.AIMBOT_MAX_DISTANCE and dist >= settings.AIMBOT_MIN_DISTANCE then
+                            local skip = false
+                            if settings.AIMBOT_TEAM_CHECK and plr.Team and plr.Team == player.Team then skip = true end
+                            if not skip then
+                                local role = getPlayerRole(plr)
+                                if (role == "Killer" and settings.AIMBOT_TARGET_KILLERS)
+                                    or (role ~= "Killer" and settings.AIMBOT_TARGET_SURVIVORS)
+                                    or role == "Unknown" then
+                                    table.insert(candidates, {
+                                        target = plr, root = root, char = char,
+                                        dist = dist, health = hum.Health,
+                                    })
+                                end
+                            end
+                        end
+                    end
+                end
             end
         end
     end
 
-    if except ~= "turbo" and turboActive then
-        turboActive = false
-        if hrp then hrp.AssemblyLinearVelocity = Vector3.zero end
+    if settings.AIMBOT_TARGET_NPCS and (mode == "PVE" or mode == "Both") then
+        local params = OverlapParams.new()
+        params.FilterType = Enum.RaycastFilterType.Exclude
+        params.FilterDescendantsInstances = { character }
+        params.MaxParts = 200
+        local parts = Workspace:GetPartBoundsInRadius(myPos, settings.AIMBOT_PVE_RADIUS, params)
+        local seenModels = {}
+        local npcCount = 0
+        for _, part in ipairs(parts) do
+            if npcCount >= settings.AIMBOT_MAX_NPC_CANDIDATES then break end
+            local model = part:FindFirstAncestorOfClass("Model")
+            if model and not seenModels[model] then
+                seenModels[model] = true
+                local isPlayerChar = false
+                for _, plr in ipairs(Players:GetPlayers()) do
+                    if plr.Character == model then isPlayerChar = true break end
+                end
+                if not isPlayerChar then
+                    local hum = model:FindFirstChildOfClass("Humanoid")
+                    local root = model:FindFirstChild("HumanoidRootPart")
+                    if hum and root and (not settings.AIMBOT_IGNORE_DEAD or hum.Health > 0) then
+                        local dist = (root.Position - myPos).Magnitude
+                        if dist <= settings.AIMBOT_MAX_DISTANCE and dist >= settings.AIMBOT_MIN_DISTANCE then
+                            npcCount = npcCount + 1
+                            table.insert(candidates, {
+                                target = model, root = root, char = model,
+                                dist = dist, health = hum.Health,
+                            })
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return candidates
+end
+
+-- Улучшенный выбор цели: сначала FOV-фильтр, потом сортировка
+local function pickBestTarget(candidates)
+    if #candidates == 0 then return nil end
+
+    local mousePos = Vector2.new(mouse.X, mouse.Y)
+    local valid = {}
+
+    for _, c in ipairs(candidates) do
+        local part = getHitboxFast(c.target, settings.AIMBOT_HITBOX)
+        if part and part.Parent then
+            local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+            if onScreen and screenPos.Z > 0 then
+                local screenVec = Vector2.new(screenPos.X, screenPos.Y)
+                local distToMouse = (screenVec - mousePos).Magnitude
+                if not settings.AIMBOT_FOV_ENABLED or distToMouse <= settings.AIMBOT_FOV then
+                    table.insert(valid, {
+                        target = c.target,
+                        part = part,
+                        dist = c.dist,
+                        screenDist = distToMouse,
+                        health = c.health,
+                    })
+                end
+            end
+        end
+    end
+
+    if #valid == 0 then return nil end
+
+    local mode = settings.AIMBOT_LOCK_MODE
+    if mode == "Closest" then
+        table.sort(valid, function(a, b) return a.dist < b.dist end)
+    elseif mode == "NearestCenter" then
+        table.sort(valid, function(a, b) return a.screenDist < b.screenDist end)
+    elseif mode == "LowestHealth" then
+        table.sort(valid, function(a, b) return a.health < b.health end)
+    elseif mode == "HighestHealth" then
+        table.sort(valid, function(a, b) return a.health > b.health end)
+    end
+    return valid[1]
+end
+
+local function getAimPosition(targetPart)
+    if not targetPart then return nil end
+    local pos = targetPart.Position + Vector3.new(0, settings.AIMBOT_HITBOX_OFFSET_Y, 0)
+    if settings.AIMBOT_PREDICTION then
+        local vel = targetPart.AssemblyLinearVelocity
+        if vel.Magnitude > 0.1 then
+            pos = pos + Vector3.new(
+                vel.X * settings.AIMBOT_PREDICTION_X,
+                vel.Y * settings.AIMBOT_PREDICTION_Y,
+                vel.Z * settings.AIMBOT_PREDICTION_Z
+            )
+        end
+    end
+    return pos
+end
+
+-- ВАЖНО: сохраняем оригинальный CameraType и ставим Scriptable на время аимбота,
+-- чтобы движок не перезаписывал нашу камеру.
+local originalCameraType = Camera.CameraType
+local originalCameraSubject = Camera.CameraSubject
+local aimbotCameraOverride = false
+
+local function setAimbotCameraOverride(on)
+    if on and not aimbotCameraOverride then
+        originalCameraType = Camera.CameraType
+        originalCameraSubject = Camera.CameraSubject
+        Camera.CameraType = Enum.CameraType.Scriptable
+        aimbotCameraOverride = true
+        -- прячем стандартный курсор, чтобы он не мешал прицеливанию
+        UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+    elseif not on and aimbotCameraOverride then
+        Camera.CameraType = originalCameraType
+        Camera.CameraSubject = originalCameraSubject
+        aimbotCameraOverride = false
     end
 end
 
+local lastFovColor = Color3.new()
+local lastFovSize = 0
+
+RunService.RenderStepped:Connect(function(dt)
+    if not settings.AIMBOT_ENABLED then
+        if fovCircle and fovCircle.circle and fovCircle.circle.Visible then
+            fovCircle.circle.Visible = false
+        end
+        if targetIndicator and targetIndicator.dot and targetIndicator.dot.Visible then
+            targetIndicator.dot.Visible = false
+        end
+        setAimbotCameraOverride(false)
+        return
+    end
+
+    -- FOV circle updates
+    if fovCircle and fovCircle.circle then
+        if fovCircle.circle.Visible ~= settings.AIMBOT_SHOW_FOV then
+            fovCircle.circle.Visible = settings.AIMBOT_SHOW_FOV
+        end
+        local newSize = settings.AIMBOT_FOV * 2
+        if newSize ~= lastFovSize then
+            fovCircle.circle.Size = UDim2.fromOffset(newSize, newSize)
+            lastFovSize = newSize
+        end
+        local newColor = Color3.fromRGB(
+            settings.AIMBOT_FOV_COLOR_R,
+            settings.AIMBOT_FOV_COLOR_G,
+            settings.AIMBOT_FOV_COLOR_B
+        )
+        if newColor ~= lastFovColor then
+            fovCircle.stroke.Color = newColor
+            lastFovColor = newColor
+        end
+    end
+
+    local shouldAim = settings.AIMBOT_TOGGLE_MODE and aimbotActive or (not settings.AIMBOT_TOGGLE_MODE and aimbotHolding)
+    if not shouldAim then
+        if targetIndicator and targetIndicator.dot and targetIndicator.dot.Visible then
+            targetIndicator.dot.Visible = false
+        end
+        setAimbotCameraOverride(false)
+        return
+    end
+
+    -- Сканирование целей
+    local now = tick()
+    if now - aimbotLastScan >= settings.AIMBOT_SCAN_INTERVAL then
+        aimbotLastScan = now
+        aimbotCachedCandidates = scanCandidates()
+    end
+
+    local best = pickBestTarget(aimbotCachedCandidates)
+    if not best then
+        aimbotTarget, aimbotTargetPart = nil, nil
+        if targetIndicator and targetIndicator.dot and targetIndicator.dot.Visible then
+            targetIndicator.dot.Visible = false
+        end
+        setAimbotCameraOverride(false)
+        return
+    end
+
+    -- Wall check
+    if settings.AIMBOT_WALL_CHECK and not isVisible(best.part) then
+        aimbotTarget, aimbotTargetPart = nil, nil
+        if targetIndicator and targetIndicator.dot and targetIndicator.dot.Visible then
+            targetIndicator.dot.Visible = false
+        end
+        setAimbotCameraOverride(false)
+        return
+    end
+
+    aimbotTarget = best.target
+    aimbotTargetPart = best.part
+
+    -- Индикатор цели
+    if targetIndicator and targetIndicator.dot then
+        local screenPos, onScreen = Camera:WorldToViewportPoint(best.part.Position)
+        if onScreen and screenPos.Z > 0 and settings.AIMBOT_SHOW_TARGET then
+            targetIndicator.dot.Visible = true
+            targetIndicator.dot.Position = UDim2.fromOffset(screenPos.X, screenPos.Y)
+            targetIndicator.dot.BackgroundColor3 = Color3.fromRGB(
+                settings.AIMBOT_TARGET_COLOR_R,
+                settings.AIMBOT_TARGET_COLOR_G,
+                settings.AIMBOT_TARGET_COLOR_B
+            )
+        elseif targetIndicator.dot.Visible then
+            targetIndicator.dot.Visible = false
+        end
+    end
+
+    -- РАБОЧЕЕ наведение камеры
+    setAimbotCameraOverride(true)
+    local aimPos = getAimPosition(best.part)
+    if aimPos then
+        local currentCF = Camera.CFrame
+        local targetCF = CFrame.lookAt(currentCF.Position, aimPos)
+        -- smooth = 0 => мгновенно; smooth = 0.95 => очень плавно
+        local alpha = 1 - math.clamp(settings.AIMBOT_SMOOTHNESS, 0, 0.99)
+        Camera.CFrame = currentCF:Lerp(targetCF, math.clamp(alpha * (dt * 60), 0, 1))
+    end
+
+    -- Auto-shoot
+    if settings.AIMBOT_AUTO_SHOOT then
+        if now - lastAutoShoot >= settings.AIMBOT_AUTO_SHOOT_DELAY then
+            if not settings.AIMBOT_AUTO_SHOOT_ONLY_VISIBLE or isVisible(best.part) then
+                lastAutoShoot = now
+                pcall(function()
+                    local tool = character and character:FindFirstChildOfClass("Tool")
+                    if tool then
+                        tool:Activate()
+                    else
+                        -- эмуляция мыши через VirtualInputManager
+                        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+                        task.wait(0.03)
+                        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+                    end
+                end)
+            end
+        end
+    end
+end)
+
 -- ==========================================
--- ESP SYSTEM
+-- ESP SYSTEM (без изменений)
 -- ==========================================
 local ColorPresets = {
     ["White"] = Color3.fromRGB(255,255,255),
@@ -432,11 +656,7 @@ local espFolder = Instance.new("Folder")
 espFolder.Name = "ForsakenSurgeESP"
 espFolder.Parent = player:WaitForChild("PlayerGui")
 
-local espHighlights = {}
-local espBillboards = {}
-local espBoxes = {}
-local espTracers = {}
-local espTracked = {}
+local espHighlights, espBillboards, espBoxes, espTracers, espTracked = {}, {}, {}, {}, {}
 
 local function clearAllESP()
     for _, hl in ipairs(espHighlights) do pcall(function() hl:Destroy() end) end
@@ -456,10 +676,8 @@ local function UpdateHighlight(ItemInstance, TargetRoot, Settings)
         MinDistance = settings.ESP_MIN_DISTANCE,
         Color = Color3.new(1,1,1)
     }
-
     local entry = espTracked[ItemInstance]
     local Highlight = entry and entry.highlight
-
     if not Highlight or not Highlight.Parent then
         Highlight = Instance.new("Highlight")
         Highlight.Name = HttpService:GenerateGUID(false):sub(1,7)
@@ -469,18 +687,14 @@ local function UpdateHighlight(ItemInstance, TargetRoot, Settings)
         Highlight.Adornee = ItemInstance
         Highlight.DepthMode = Enum.HighlightDepthMode[settings.ESP_HIGHLIGHT_DEPTH_MODE] or Enum.HighlightDepthMode.AlwaysOnTop
         table.insert(espHighlights, Highlight)
-
         if not espTracked[ItemInstance] then espTracked[ItemInstance] = {} end
         espTracked[ItemInstance].highlight = Highlight
     end
-
     local baseFillTransparency = 1 - settings.ESP_FILL_TRANSPARENCY
     local baseOutlineTransparency = 1 - settings.ESP_OUTLINE_TRANSPARENCY
-
     local H, S, V = Settings.Color:ToHSV()
     Highlight.FillColor = Color3.fromHSV(H, S, V * 0.8)
     Highlight.OutlineColor = Color3.fromHSV(H, S, V * 1.1)
-
     if settings.ESP_RENDER_DISTANCE_FADE and TargetRoot and TargetRoot.Parent then
         local dist = (Camera.CFrame.Position - TargetRoot.Position).Magnitude
         local minD = Settings.MinDistance or settings.ESP_MIN_DISTANCE
@@ -500,14 +714,11 @@ local function UpdateText(ItemInstance, TargetRoot, Settings)
         Color = Color3.new(1,1,1),
         Text = "Unknown"
     }
-
     local entry = espTracked[ItemInstance]
     local BillboardGui = entry and entry.billboard
-
     if not BillboardGui or not BillboardGui.Parent then
         BillboardGui = Instance.new("BillboardGui")
         local TextLabel = Instance.new("TextLabel")
-
         BillboardGui.Name = HttpService:GenerateGUID(false):sub(1,7)
         BillboardGui.Archivable = false
         BillboardGui.Size = ItemInstance:IsA("Tool") and UDim2.new(1.5, 30, 0.75, 30) or UDim2.new(1.5,60,0.75,25)
@@ -517,7 +728,6 @@ local function UpdateText(ItemInstance, TargetRoot, Settings)
         BillboardGui.Adornee = TargetRoot
         BillboardGui:SetAttribute("Dynamic", true)
         table.insert(espBillboards, BillboardGui)
-
         TextLabel.AnchorPoint = Vector2.new(0.5, 0.5)
         TextLabel.Position = UDim2.fromScale(0.5, 0.5)
         TextLabel.Size = UDim2.fromScale(1, 1)
@@ -527,13 +737,10 @@ local function UpdateText(ItemInstance, TargetRoot, Settings)
         TextLabel.TextStrokeTransparency = 0
         TextLabel.TextStrokeColor3 = Color3.new(0,0,0)
         TextLabel.Parent = BillboardGui
-
         BillboardGui.Parent = TargetRoot
-
         if not espTracked[ItemInstance] then espTracked[ItemInstance] = {} end
         espTracked[ItemInstance].billboard = BillboardGui
     end
-
     local TextLabel = BillboardGui:FindFirstChildOfClass("TextLabel")
     if TextLabel then
         local displayText = Settings.Text or "Unknown"
@@ -545,11 +752,10 @@ local function UpdateText(ItemInstance, TargetRoot, Settings)
         TextLabel.TextSize = settings.ESP_TEXT_SIZE
         local H, S, V = Settings.Color:ToHSV()
         TextLabel.TextColor3 = Color3.fromHSV(H, S, V * 1.1)
-
         if TargetRoot and TargetRoot.Parent then
             local dist = (Camera.CFrame.Position - TargetRoot.Position).Magnitude
             local minD = Settings.MinDistance or settings.ESP_TEXT_MIN_DISTANCE
-            local maxD = settings.ESP_TEXT_MAX_DISTANCE
+            local maxD = Settings.MaxDistance or settings.ESP_TEXT_MAX_DISTANCE
             if dist > minD and dist < maxD then
                 TextLabel.TextTransparency = 0
                 TextLabel.TextStrokeTransparency = 0
@@ -563,10 +769,8 @@ end
 
 local function UpdateBox(ItemInstance, TargetRoot, Settings)
     Settings = type(Settings) == "table" and Settings or { Color = Color3.new(1,1,1) }
-
     local entry = espTracked[ItemInstance]
     local Box = entry and entry.box
-
     if not Box or not Box.Parent then
         Box = Instance.new("BoxHandleAdornment")
         Box.Name = HttpService:GenerateGUID(false):sub(1,7)
@@ -579,11 +783,9 @@ local function UpdateBox(ItemInstance, TargetRoot, Settings)
         Box.Color3 = Settings.Color
         Box.Parent = TargetRoot
         table.insert(espBoxes, Box)
-
         if not espTracked[ItemInstance] then espTracked[ItemInstance] = {} end
         espTracked[ItemInstance].box = Box
     end
-
     if Box and TargetRoot then
         Box.Size = TargetRoot:IsA("BasePart") and TargetRoot.Size or Vector3.new(2,2,2)
         Box.Color3 = Settings.Color
@@ -593,10 +795,8 @@ end
 
 local function UpdateTracer(ItemInstance, TargetRoot, Settings)
     Settings = type(Settings) == "table" and Settings or { Color = Color3.new(1,1,1) }
-
     local entry = espTracked[ItemInstance]
     local Tracer = entry and entry.tracer
-
     if not Tracer or not Tracer.Parent then
         Tracer = Instance.new("LineHandleAdornment")
         Tracer.Name = HttpService:GenerateGUID(false):sub(1,7)
@@ -610,11 +810,9 @@ local function UpdateTracer(ItemInstance, TargetRoot, Settings)
         Tracer.Length = 0
         Tracer.Parent = TargetRoot
         table.insert(espTracers, Tracer)
-
         if not espTracked[ItemInstance] then espTracked[ItemInstance] = {} end
         espTracked[ItemInstance].tracer = Tracer
     end
-
     if Tracer and TargetRoot then
         Tracer.Color3 = Settings.Color
         Tracer.Transparency = settings.ESP_TRACER_TRANSPARENCY
@@ -636,13 +834,8 @@ task.spawn(function()
     while true do
         task.wait(settings.ESP_UPDATE_INTERVAL)
         pcall(function()
-            if not settings.ESP_ENABLED then
-                clearAllESP()
-                return
-            end
-
+            if not settings.ESP_ENABLED then clearAllESP() return end
             local alive = {}
-
             for _, plr in ipairs(Players:GetPlayers()) do
                 if plr == player then continue end
                 local char = plr.Character
@@ -652,37 +845,22 @@ task.spawn(function()
                         local isKiller = false
                         local team = plr.Team
                         if settings.ESP_TEAM_CHECK and team then
-                            local teamName = team.Name:lower()
-                            if teamName:find("killer") or teamName:find("monster") or teamName:find("enemy") then
-                                isKiller = true
-                            end
+                            local tn = team.Name:lower()
+                            if tn:find("killer") or tn:find("monster") or tn:find("enemy") then isKiller = true end
                         end
-
                         if isKiller and settings.KILLERS_ESP then
                             local color = getColorFromSettings("Killers")
                             UpdateHighlight(char, TargetRoot, {MaxDistance = settings.ESP_MAX_DISTANCE, MinDistance = settings.ESP_MIN_DISTANCE, Color = color})
-                            if settings.SHOW_TEXT then
-                                UpdateText(char, TargetRoot, {MinDistance = settings.ESP_TEXT_MIN_DISTANCE, Text = plr.Name, Color = color})
-                            end
-                            if settings.ESP_BOX_ENABLED then
-                                UpdateBox(char, TargetRoot, {Color = getColorFromSettings("Box")})
-                            end
-                            if settings.ESP_TRACER_ENABLED then
-                                UpdateTracer(char, TargetRoot, {Color = getColorFromSettings("Tracer")})
-                            end
+                            if settings.SHOW_TEXT then UpdateText(char, TargetRoot, {MinDistance = settings.ESP_TEXT_MIN_DISTANCE, Text = plr.Name, Color = color}) end
+                            if settings.ESP_BOX_ENABLED then UpdateBox(char, TargetRoot, {Color = getColorFromSettings("Box")}) end
+                            if settings.ESP_TRACER_ENABLED then UpdateTracer(char, TargetRoot, {Color = getColorFromSettings("Tracer")}) end
                             alive[char] = true
                         elseif not isKiller and settings.SURVIVORS_ESP then
                             local color = getColorFromSettings("Survivors")
                             UpdateHighlight(char, TargetRoot, {MaxDistance = settings.ESP_MAX_DISTANCE, MinDistance = settings.ESP_MIN_DISTANCE, Color = color})
-                            if settings.SHOW_TEXT then
-                                UpdateText(char, TargetRoot, {MinDistance = settings.ESP_TEXT_MIN_DISTANCE, Text = plr.Name, Color = color})
-                            end
-                            if settings.ESP_BOX_ENABLED then
-                                UpdateBox(char, TargetRoot, {Color = getColorFromSettings("Box")})
-                            end
-                            if settings.ESP_TRACER_ENABLED then
-                                UpdateTracer(char, TargetRoot, {Color = getColorFromSettings("Tracer")})
-                            end
+                            if settings.SHOW_TEXT then UpdateText(char, TargetRoot, {MinDistance = settings.ESP_TEXT_MIN_DISTANCE, Text = plr.Name, Color = color}) end
+                            if settings.ESP_BOX_ENABLED then UpdateBox(char, TargetRoot, {Color = getColorFromSettings("Box")}) end
+                            if settings.ESP_TRACER_ENABLED then UpdateTracer(char, TargetRoot, {Color = getColorFromSettings("Tracer")}) end
                             alive[char] = true
                         else
                             RemoveESP(char)
@@ -690,7 +868,6 @@ task.spawn(function()
                     end
                 end
             end
-
             if settings.GENERATORS_ESP then
                 for _, obj in ipairs(Workspace:GetDescendants()) do
                     if obj:IsA("Model") and obj.Parent then
@@ -703,620 +880,132 @@ task.spawn(function()
                                 local TargetRoot = obj:FindFirstChild("Main") or obj:FindFirstChild("HumanoidRootPart") or obj
                                 local color = getColorFromSettings("Generators")
                                 UpdateHighlight(obj, TargetRoot, {MaxDistance = settings.ESP_MAX_DISTANCE, MinDistance = settings.ESP_MIN_DISTANCE, Color = color})
-                                if settings.SHOW_TEXT then
-                                    UpdateText(obj, TargetRoot, {MinDistance = settings.ESP_TEXT_MIN_DISTANCE, Text = obj.Name, Color = color})
-                                end
-                                if settings.ESP_BOX_ENABLED then
-                                    UpdateBox(obj, TargetRoot, {Color = getColorFromSettings("Box")})
-                                end
+                                if settings.SHOW_TEXT then UpdateText(obj, TargetRoot, {MinDistance = settings.ESP_TEXT_MIN_DISTANCE, Text = obj.Name, Color = color}) end
+                                if settings.ESP_BOX_ENABLED then UpdateBox(obj, TargetRoot, {Color = getColorFromSettings("Box")}) end
                                 alive[obj] = true
                             end
                         end
                     end
                 end
             end
-
             if settings.ITEMS_ESP then
                 for _, obj in ipairs(Workspace:GetDescendants()) do
                     if obj:IsA("Tool") and obj.Parent then
                         local TargetRoot = obj:FindFirstChildWhichIsA("BasePart") or obj
                         local color = getColorFromSettings("Items")
                         UpdateHighlight(obj, TargetRoot, {MaxDistance = settings.ESP_MAX_DISTANCE, MinDistance = settings.ESP_MIN_DISTANCE, Color = color})
-                        if settings.SHOW_TEXT then
-                            UpdateText(obj, TargetRoot, {MinDistance = settings.ESP_TEXT_MIN_DISTANCE, Text = obj.Name, Color = color})
-                        end
-                        if settings.ESP_BOX_ENABLED then
-                            UpdateBox(obj, TargetRoot, {Color = getColorFromSettings("Box")})
-                        end
+                        if settings.SHOW_TEXT then UpdateText(obj, TargetRoot, {MinDistance = settings.ESP_TEXT_MIN_DISTANCE, Text = obj.Name, Color = color}) end
+                        if settings.ESP_BOX_ENABLED then UpdateBox(obj, TargetRoot, {Color = getColorFromSettings("Box")}) end
                         alive[obj] = true
                     end
                 end
             end
-
             for inst, _ in pairs(espTracked) do
-                if not alive[inst] or not inst.Parent then
-                    RemoveESP(inst)
-                end
+                if not alive[inst] or not inst.Parent then RemoveESP(inst) end
             end
         end)
-    end
-end)
-
-player.CharacterAdded:Connect(function(char)
-    task.wait(0.5)
-    updateCharacterReferences()
-end)
-
--- ==========================================
--- HELPER FUNCTIONS
--- ==========================================
-local function projectToPlane(v, n)
-    return v - n * v:Dot(n)
-end
-
-local function makeCFrame(pos, forward, up)
-    local f = forward.Unit
-    local r = f:Cross(up)
-    if r.Magnitude < 1e-5 then r = Vector3.new(1, 0, 0) end
-    r = r.Unit
-    local u = r:Cross(f).Unit
-    return CFrame.new(pos.X, pos.Y, pos.Z,
-        r.X, r.Y, r.Z,
-        u.X, u.Y, u.Z,
-        -f.X, -f.Y, -f.Z)
-end
-
-local function slerp(a, b, t)
-    local au, bu = a.Unit, b.Unit
-    local dot = math.clamp(au:Dot(bu), -1, 1)
-    if dot > 0.9999 then return bu end
-    local angle = math.acos(dot)
-    local sin = math.sin(angle)
-    return (au * math.sin((1 - t) * angle) + bu * math.sin(t * angle)) / sin
-end
-
-local function showNotification(title, text)
-    if not settings.NOTIFICATIONS_ENABLED then return end
-    pcall(function()
-        Luna:Notify({ Title = title, Description = text, Duration = 3 })
-    end)
-    print(string.format("[%s] %s", title, text))
-end
-
--- ==========================================
--- 🎯 AIMBOT SYSTEM (HEAVILY OPTIMIZED)
--- ==========================================
-local function createFovCircle()
-    if fovCircle and fovCircle.gui then fovCircle.gui:Destroy() end
-
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "ForsakenSurge_FOV"
-    gui.ResetOnSpawn = false
-    gui.IgnoreGuiInset = true
-    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    gui.Parent = player:WaitForChild("PlayerGui")
-
-    local circle = Instance.new("Frame")
-    circle.Name = "FovCircle"
-    circle.AnchorPoint = Vector2.new(0.5, 0.5)
-    circle.Position = UDim2.fromScale(0.5, 0.5)
-    circle.Size = UDim2.fromOffset(settings.AIMBOT_FOV * 2, settings.AIMBOT_FOV * 2)
-    circle.BackgroundTransparency = 1
-    circle.BorderSizePixel = 0
-    circle.Visible = false
-    circle.Parent = gui
-
-    local stroke = Instance.new("UIStroke")
-    stroke.Thickness = 1.5
-    stroke.Color = Color3.fromRGB(
-        settings.AIMBOT_FOV_COLOR_R,
-        settings.AIMBOT_FOV_COLOR_G,
-        settings.AIMBOT_FOV_COLOR_B
-    )
-    stroke.Transparency = 0.3
-    stroke.Parent = circle
-
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(1, 0)
-    corner.Parent = circle
-
-    fovCircle = { gui = gui, circle = circle, stroke = stroke }
-end
-
-local function createTargetIndicator()
-    if targetIndicator and targetIndicator.gui then targetIndicator.gui:Destroy() end
-
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "ForsakenSurge_Target"
-    gui.ResetOnSpawn = false
-    gui.IgnoreGuiInset = true
-    gui.Parent = player:WaitForChild("PlayerGui")
-
-    local dot = Instance.new("Frame")
-    dot.Name = "TargetDot"
-    dot.AnchorPoint = Vector2.new(0.5, 0.5)
-    dot.Size = UDim2.fromOffset(10, 10)
-    dot.BackgroundColor3 = Color3.fromRGB(
-        settings.AIMBOT_TARGET_COLOR_R,
-        settings.AIMBOT_TARGET_COLOR_G,
-        settings.AIMBOT_TARGET_COLOR_B
-    )
-    dot.BorderSizePixel = 0
-    dot.Visible = false
-    dot.ZIndex = 999
-    dot.Parent = gui
-
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(1, 0)
-    corner.Parent = dot
-
-    local stroke = Instance.new("UIStroke")
-    stroke.Thickness = 2
-    stroke.Color = Color3.new(1, 1, 1)
-    stroke.Parent = dot
-
-    targetIndicator = { gui = gui, dot = dot, stroke = stroke }
-end
-
-createFovCircle()
-createTargetIndicator()
-
-local function getPlayerRole(plr)
-    if not plr or not plr.Team then return "Unknown" end
-    local teamName = plr.Team.Name:lower()
-    if teamName:find("killer") or teamName:find("monster") or teamName:find("enemy") then
-        return "Killer"
-    end
-    return "Survivor"
-end
-
--- Быстрая проверка hitbox
-local function getHitboxFast(target, hitboxName)
-    local char = target:IsA("Player") and target.Character or target
-    if not char then return nil end
-    if hitboxName == "Head" then
-        return char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
-    elseif hitboxName == "Torso" then
-        return char:FindFirstChild("Torso")
-            or char:FindFirstChild("UpperTorso")
-            or char:FindFirstChild("LowerTorso")
-            or char:FindFirstChild("HumanoidRootPart")
-    end
-    return char:FindFirstChild("HumanoidRootPart")
-end
-
--- Проверка видимости (только для одной цели, вызывается редко)
-local function isVisible(targetPart)
-    if not settings.AIMBOT_WALL_CHECK then return true end
-    if not targetPart then return false end
-
-    local origin = Camera.CFrame.Position
-    local dir = targetPart.Position - origin
-
-    aimbotRayFilter.FilterDescendantsInstances = { character }
-
-    local result = Workspace:Raycast(origin, dir, aimbotRayFilter)
-    if result then
-        if result.Instance and targetPart.Parent and result.Instance:IsDescendantOf(targetPart.Parent) then
-            return true
-        end
-        return false
-    end
-    return true
-end
-
--- 🚀 ОПТИМИЗИРОВАННЫЙ поиск кандидатов (вызывается не чаще, чем SCAN_INTERVAL)
-local function scanCandidates()
-    local candidates = {}
-    local mode = settings.AIMBOT_MODE
-    local myPos = Camera.CFrame.Position
-
-    -- Игроки (PVP)
-    if settings.AIMBOT_TARGET_PLAYERS and (mode == "PVP" or mode == "Both") then
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= player then
-                local char = plr.Character
-                if char then
-                    local hum = char:FindFirstChildOfClass("Humanoid")
-                    local root = char:FindFirstChild("HumanoidRootPart")
-                    if hum and root and (not settings.AIMBOT_IGNORE_DEAD or hum.Health > 0) then
-                        local dist = (root.Position - myPos).Magnitude
-                        if dist <= settings.AIMBOT_MAX_DISTANCE and dist >= settings.AIMBOT_MIN_DISTANCE then
-                            -- Team check
-                            local skip = false
-                            if settings.AIMBOT_TEAM_CHECK and plr.Team and plr.Team == player.Team then
-                                skip = true
-                            end
-                            if not skip then
-                                local role = getPlayerRole(plr)
-                                if (role == "Killer" and settings.AIMBOT_TARGET_KILLERS)
-                                    or (role ~= "Killer" and settings.AIMBOT_TARGET_SURVIVORS)
-                                    or role == "Unknown" then
-                                    table.insert(candidates, {
-                                        target = plr,
-                                        root = root,
-                                        char = char,
-                                        dist = dist,
-                                        health = hum.Health,
-                                    })
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    -- NPC (PVE) — используем GetPartBoundsInRadius для эффективности
-    if settings.AIMBOT_TARGET_NPCS and (mode == "PVE" or mode == "Both") then
-        local params = OverlapParams.new()
-        params.FilterType = Enum.RaycastFilterType.Exclude
-        params.FilterDescendantsInstances = { character }
-        params.MaxParts = 200
-
-        local parts = Workspace:GetPartBoundsInRadius(myPos, settings.AIMBOT_PVE_RADIUS, params)
-
-        local seenModels = {}
-        local npcCount = 0
-
-        for _, part in ipairs(parts) do
-            if npcCount >= settings.AIMBOT_MAX_NPC_CANDIDATES then break end
-
-            local model = part:FindFirstAncestorOfClass("Model")
-            if model and not seenModels[model] then
-                seenModels[model] = true
-
-                -- Пропускаем персонажей игроков
-                local isPlayerChar = false
-                for _, plr in ipairs(Players:GetPlayers()) do
-                    if plr.Character == model then
-                        isPlayerChar = true
-                        break
-                    end
-                end
-
-                if not isPlayerChar then
-                    local hum = model:FindFirstChildOfClass("Humanoid")
-                    local root = model:FindFirstChild("HumanoidRootPart")
-                    if hum and root and (not settings.AIMBOT_IGNORE_DEAD or hum.Health > 0) then
-                        local dist = (root.Position - myPos).Magnitude
-                        if dist <= settings.AIMBOT_MAX_DISTANCE and dist >= settings.AIMBOT_MIN_DISTANCE then
-                            npcCount = npcCount + 1
-                            table.insert(candidates, {
-                                target = model,
-                                root = root,
-                                char = model,
-                                dist = dist,
-                                health = hum.Health,
-                            })
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    return candidates
-end
-
--- Выбор лучшей цели из кандидатов (без raycast)
-local function pickBestTarget(candidates)
-    if #candidates == 0 then return nil end
-
-    local mouse = player:GetMouse()
-    local mousePos = Vector2.new(mouse.X, mouse.Y)
-    local myPos = Camera.CFrame.Position
-
-    local valid = {}
-    for _, c in ipairs(candidates) do
-        local part = getHitboxFast(c.target, settings.AIMBOT_HITBOX)
-        if part then
-            local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
-            if onScreen then
-                local screenVec = Vector2.new(screenPos.X, screenPos.Y)
-                local distToMouse = (screenVec - mousePos).Magnitude
-
-                if not settings.AIMBOT_FOV_ENABLED or distToMouse <= settings.AIMBOT_FOV then
-                    table.insert(valid, {
-                        target = c.target,
-                        part = part,
-                        dist = c.dist,
-                        screenDist = distToMouse,
-                        health = c.health,
-                    })
-                end
-            end
-        end
-    end
-
-    if #valid == 0 then return nil end
-
-    local mode = settings.AIMBOT_LOCK_MODE
-    if mode == "Closest" then
-        table.sort(valid, function(a, b) return a.dist < b.dist end)
-    elseif mode == "NearestCenter" then
-        table.sort(valid, function(a, b) return a.screenDist < b.screenDist end)
-    elseif mode == "LowestHealth" then
-        table.sort(valid, function(a, b) return a.health < b.health end)
-    elseif mode == "HighestHealth" then
-        table.sort(valid, function(a, b) return a.health > b.health end)
-    end
-
-    return valid[1]
-end
-
-local function getAimPosition(targetPart)
-    if not targetPart then return nil end
-    local pos = targetPart.Position + Vector3.new(0, settings.AIMBOT_HITBOX_OFFSET_Y, 0)
-
-    if settings.AIMBOT_PREDICTION then
-        local vel = targetPart.AssemblyLinearVelocity
-        if vel.Magnitude > 0.1 then
-            pos = pos + Vector3.new(
-                vel.X * settings.AIMBOT_PREDICTION_X,
-                vel.Y * settings.AIMBOT_PREDICTION_Y,
-                vel.Z * settings.AIMBOT_PREDICTION_Z
-            )
-        end
-    end
-    return pos
-end
-
--- Кэш цвета FOV (обновляем только когда меняется)
-local lastFovColor = Color3.new()
-local lastFovSize = 0
-
--- 🚀 ОСНОВНОЙ ЦИКЛ AIMBOT (RenderStepped) — максимально лёгкий
-RunService.RenderStepped:Connect(function(dt)
-    -- Ранний выход, если аимбот выключен
-    if not settings.AIMBOT_ENABLED then
-        if fovCircle and fovCircle.circle and fovCircle.circle.Visible then
-            fovCircle.circle.Visible = false
-        end
-        if targetIndicator and targetIndicator.dot and targetIndicator.dot.Visible then
-            targetIndicator.dot.Visible = false
-        end
-        return
-    end
-
-    -- Обновляем FOV круг ТОЛЬКО если значения изменились
-    if fovCircle and fovCircle.circle then
-        if not fovCircle.circle.Visible then
-            fovCircle.circle.Visible = settings.AIMBOT_SHOW_FOV
-        end
-        local newSize = settings.AIMBOT_FOV * 2
-        if newSize ~= lastFovSize then
-            fovCircle.circle.Size = UDim2.fromOffset(newSize, newSize)
-            lastFovSize = newSize
-        end
-        local newColor = Color3.fromRGB(
-            settings.AIMBOT_FOV_COLOR_R,
-            settings.AIMBOT_FOV_COLOR_G,
-            settings.AIMBOT_FOV_COLOR_B
-        )
-        if newColor ~= lastFovColor then
-            fovCircle.stroke.Color = newColor
-            lastFovColor = newColor
-        end
-    end
-
-    -- Проверка активации
-    local shouldAim = settings.AIMBOT_TOGGLE_MODE and aimbotActive or (not settings.AIMBOT_TOGGLE_MODE and aimbotHolding)
-    if not shouldAim then
-        if targetIndicator and targetIndicator.dot and targetIndicator.dot.Visible then
-            targetIndicator.dot.Visible = false
-        end
-        return
-    end
-
-    -- 🚀 Сканирование целей раз в SCAN_INTERVAL (не каждый кадр!)
-    local now = tick()
-    if now - aimbotLastScan >= settings.AIMBOT_SCAN_INTERVAL then
-        aimbotLastScan = now
-        aimbotCachedCandidates = scanCandidates()
-    end
-
-    -- Выбор цели из кэша
-    local best = pickBestTarget(aimbotCachedCandidates)
-    if not best then
-        aimbotTarget = nil
-        aimbotTargetPart = nil
-        if targetIndicator and targetIndicator.dot and targetIndicator.dot.Visible then
-            targetIndicator.dot.Visible = false
-        end
-        return
-    end
-
-    -- 🚀 Wall-check ТОЛЬКО для выбранной цели (1 raycast на кадр, а не N)
-    if settings.AIMBOT_WALL_CHECK and not isVisible(best.part) then
-        aimbotTarget = nil
-        aimbotTargetPart = nil
-        if targetIndicator and targetIndicator.dot and targetIndicator.dot.Visible then
-            targetIndicator.dot.Visible = false
-        end
-        return
-    end
-
-    aimbotTarget = best.target
-    aimbotTargetPart = best.part
-
-    -- Индикатор цели
-    if targetIndicator and targetIndicator.dot then
-        local screenPos, onScreen = Camera:WorldToViewportPoint(best.part.Position)
-        if onScreen and settings.AIMBOT_SHOW_TARGET then
-            targetIndicator.dot.Visible = true
-            targetIndicator.dot.Position = UDim2.fromOffset(screenPos.X, screenPos.Y)
-            targetIndicator.dot.BackgroundColor3 = Color3.fromRGB(
-                settings.AIMBOT_TARGET_COLOR_R,
-                settings.AIMBOT_TARGET_COLOR_G,
-                settings.AIMBOT_TARGET_COLOR_B
-            )
-        elseif targetIndicator.dot.Visible then
-            targetIndicator.dot.Visible = false
-        end
-    end
-
-    -- Наведение
-    local aimPos = getAimPosition(best.part)
-    if aimPos then
-        local currentCF = Camera.CFrame
-        local targetCF = CFrame.lookAt(currentCF.Position, aimPos)
-        local smooth = math.clamp(settings.AIMBOT_SMOOTHNESS, 0, 0.99)
-        Camera.CFrame = currentCF:Lerp(targetCF, 1 - smooth)
-    end
-
-    -- Auto-shoot throttled
-    if settings.AIMBOT_AUTO_SHOOT then
-        if now - lastAutoShoot >= settings.AIMBOT_AUTO_SHOOT_DELAY then
-            if not settings.AIMBOT_AUTO_SHOOT_ONLY_VISIBLE or isVisible(best.part) then
-                lastAutoShoot = now
-                pcall(function()
-                    local tool = character and character:FindFirstChildOfClass("Tool")
-                    if tool then
-                        tool:Activate()
-                    else
-                        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
-                        task.wait(0.03)
-                        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
-                    end
-                end)
-            end
-        end
     end
 end)
 
 -- ==========================================
 -- WALL WALK
 -- ==========================================
-local function toggleClimb()
-    if flying or noClipActive or turboActive then
-        disableAllModes("climb")
+local function disableAllModes(except)
+    if except ~= "climb" and climbing then
+        climbing = false
+        if humanoid then humanoid.AutoRotate = true humanoid.PlatformStand = false end
+        gravityDir = Vector3.new(0, -1, 0) upDir = Vector3.new(0, 1, 0)
+        fallSpeed = 0 isGrounded = false isOnCeiling = false ceilingTime = 0
     end
-    if not hrp or not humanoid then
-        updateCharacterReferences()
-        if not hrp or not humanoid then return end
+    if except ~= "fly" and flying then
+        flying = false
+        if humanoid then humanoid.AutoRotate = true humanoid.PlatformStand = false end
+        flyVelocity = Vector3.zero
+        if hrp then hrp.AssemblyLinearVelocity = Vector3.zero end
     end
+    if except ~= "noclip" and noClipActive then
+        noClipActive = false
+        for _, part in ipairs(character and character:GetDescendants() or {}) do
+            if part:IsA("BasePart") then part.CanCollide = true end
+        end
+    end
+    if except ~= "turbo" and turboActive then
+        turboActive = false
+        if hrp then hrp.AssemblyLinearVelocity = Vector3.zero end
+    end
+end
 
+local function toggleClimb()
+    if flying or noClipActive or turboActive then disableAllModes("climb") end
+    if not hrp or not humanoid then updateCharacterReferences() if not hrp then return end end
     climbing = not climbing
     if climbing then
         disableAllModes("climb")
-        humanoid.AutoRotate = false
-        humanoid.PlatformStand = true
+        humanoid.AutoRotate = false humanoid.PlatformStand = true
         facing = hrp.CFrame.LookVector
         upDir = hrp.CFrame.UpVector
         gravityDir = -upDir
-        isOnCeiling = false
-        ceilingTime = 0
+        isOnCeiling = false ceilingTime = 0
         showNotification("🕷️ Wall Walk", "Включена")
     else
-        humanoid.AutoRotate = true
-        humanoid.PlatformStand = false
-        gravityDir = Vector3.new(0, -1, 0)
-        upDir = Vector3.new(0, 1, 0)
-        fallSpeed = 0
-        isGrounded = false
-        isOnCeiling = false
-        ceilingTime = 0
-        if hrp then
-            hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + facing)
-        end
+        humanoid.AutoRotate = true humanoid.PlatformStand = false
+        gravityDir = Vector3.new(0, -1, 0) upDir = Vector3.new(0, 1, 0)
+        fallSpeed = 0 isGrounded = false isOnCeiling = false ceilingTime = 0
+        if hrp then hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + facing) end
         showNotification("🕷️ Wall Walk", "Выключена")
     end
 end
 
--- ==========================================
--- FLY
--- ==========================================
 local function toggleFly()
-    if climbing or noClipActive or turboActive then
-        disableAllModes("fly")
-    end
-    if not hrp or not humanoid then
-        updateCharacterReferences()
-        if not hrp or not humanoid then return end
-    end
-
+    if climbing or noClipActive or turboActive then disableAllModes("fly") end
+    if not hrp or not humanoid then updateCharacterReferences() if not hrp then return end end
     flying = not flying
     if flying then
         disableAllModes("fly")
-        humanoid.AutoRotate = false
-        humanoid.PlatformStand = true
+        humanoid.AutoRotate = false humanoid.PlatformStand = true
         if hrp then hrp.AssemblyLinearVelocity = Vector3.zero end
         flyVelocity = Vector3.zero
         showNotification("✈️ Fly", "Активирован")
     else
-        humanoid.AutoRotate = true
-        humanoid.PlatformStand = false
+        humanoid.AutoRotate = true humanoid.PlatformStand = false
         if hrp then hrp.AssemblyLinearVelocity = Vector3.zero end
         flyVelocity = Vector3.zero
-        gravityDir = Vector3.new(0, -1, 0)
-        upDir = Vector3.new(0, 1, 0)
+        gravityDir = Vector3.new(0, -1, 0) upDir = Vector3.new(0, 1, 0)
         showNotification("✈️ Fly", "Деактивирован")
     end
 end
 
--- ==========================================
--- NO CLIP
--- ==========================================
 local function toggleNoClip()
-    if climbing or flying or turboActive then
-        disableAllModes("noclip")
-    end
-    if not hrp or not humanoid then
-        updateCharacterReferences()
-        if not hrp or not humanoid then return end
-    end
-
+    if climbing or flying or turboActive then disableAllModes("noclip") end
+    if not hrp or not humanoid then updateCharacterReferences() if not hrp then return end end
     noClipActive = not noClipActive
-
     if noClipActive then
         disableAllModes("noclip")
-        humanoid.AutoRotate = true
-        humanoid.PlatformStand = false
-
+        humanoid.AutoRotate = true humanoid.PlatformStand = false
         local detector = character:FindFirstChild("NoclipDetector")
         if detector then detector:Destroy() end
-
         for _, part in ipairs(character:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.CanCollide = false
-            end
+            if part:IsA("BasePart") then part.CanCollide = false end
         end
-
         hrp.AssemblyLinearVelocity = Vector3.zero
         hrp.AssemblyAngularVelocity = Vector3.zero
         showNotification("🌀 No Clip", "Активирован")
     else
         for _, part in ipairs(character:GetDescendants()) do
-            if part:IsA("BasePart") and part.Name ~= "NoclipDetector" then
-                part.CanCollide = true
-            end
+            if part:IsA("BasePart") and part.Name ~= "NoclipDetector" then part.CanCollide = true end
         end
-        gravityDir = Vector3.new(0, -1, 0)
-        upDir = Vector3.new(0, 1, 0)
+        gravityDir = Vector3.new(0, -1, 0) upDir = Vector3.new(0, 1, 0)
         showNotification("🌀 No Clip", "Деактивирован")
     end
 end
 
--- ==========================================
--- TURBO
--- ==========================================
 local function toggleTurbo()
-    if climbing or flying or noClipActive then
-        disableAllModes("turbo")
-    end
-    if not hrp or not humanoid then
-        updateCharacterReferences()
-        if not hrp or not humanoid then return end
-    end
-
+    if climbing or flying or noClipActive then disableAllModes("turbo") end
+    if not hrp or not humanoid then updateCharacterReferences() if not hrp then return end end
     turboActive = not turboActive
-
     if turboActive then
         disableAllModes("turbo")
-        humanoid.AutoRotate = true
-        humanoid.PlatformStand = false
+        humanoid.AutoRotate = true humanoid.PlatformStand = false
         humanoid.WalkSpeed = 16
         showNotification("⚡ Turbo", "Активирован")
     else
@@ -1325,28 +1014,21 @@ local function toggleTurbo()
     end
 end
 
--- ==========================================
--- TURBO LOOP
--- ==========================================
+-- Turbo loop
 task.spawn(function()
     while true do
         task.wait()
         if turboActive and hrp and humanoid then
             local camLook = Camera.CFrame.LookVector
             local camRight = Camera.CFrame.RightVector
-
             camLook = Vector3.new(camLook.X, 0, camLook.Z).Unit
             camRight = Vector3.new(camRight.X, 0, camRight.Z).Unit
-
             local moveDir = Vector3.zero
-
             if pressed[Enum.KeyCode.W] then moveDir = moveDir + camLook end
             if pressed[Enum.KeyCode.S] then moveDir = moveDir - camLook end
             if pressed[Enum.KeyCode.A] then moveDir = moveDir - camRight end
             if pressed[Enum.KeyCode.D] then moveDir = moveDir + camRight end
-
             if moveDir.Magnitude > 0 then moveDir = moveDir.Unit end
-
             local speed = settings.TURBO_SPEED
             local mode = settings.TURBO_MODE
             if mode == "Velocity" then
@@ -1366,76 +1048,168 @@ task.spawn(function()
 end)
 
 -- ==========================================
--- KILLER WALLS REMOVER
+-- FULLBRIGHT
 -- ==========================================
-local function removeKillerWalls()
-    if not settings.REMOVE_KILLER_WALLS then return end
-
-    local paths = {
-        "Map.Ingame.Map.MapBoundaries.KillerDoors",
-        "Map.Ingame.Map.MapBoundaries.KillerOnly",
+local function enableFullbright()
+    savedLighting = {
+        Ambient = Lighting.Ambient, OutdoorAmbient = Lighting.OutdoorAmbient,
+        Brightness = Lighting.Brightness, ClockTime = Lighting.ClockTime,
+        FogEnd = Lighting.FogEnd, FogStart = Lighting.FogStart,
+        GlobalShadows = Lighting.GlobalShadows,
+        EnvironmentDiffuseScale = Lighting.EnvironmentDiffuseScale,
+        EnvironmentSpecularScale = Lighting.EnvironmentSpecularScale,
+        ExposureCompensation = Lighting.ExposureCompensation,
+        ColorShift_Top = Lighting.ColorShift_Top, ColorShift_Bottom = Lighting.ColorShift_Bottom,
     }
-
-    for _, path in ipairs(paths) do
-        local current = Workspace
-        local parts = {}
-        for part in string.gmatch(path, "[^%.]+") do
-            table.insert(parts, part)
-        end
-
-        local success = true
-        for _, partName in ipairs(parts) do
-            if current then
-                current = current:FindFirstChild(partName)
-                if not current then success = false break end
-            else
-                success = false
-                break
-            end
-        end
-
-        if success and current then
-            for _, child in ipairs(current:GetChildren()) do
-                pcall(function()
-                    if child:IsA("BasePart") or child:IsA("Model") then
-                        child:Destroy()
-                    end
-                end)
-            end
+    Lighting.Ambient = Color3.fromRGB(255, 255, 255)
+    Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+    Lighting.Brightness = settings.FULLBRIGHT_BRIGHTNESS
+    Lighting.ClockTime = settings.FULLBRIGHT_CLOCKTIME
+    Lighting.GlobalShadows = false
+    Lighting.EnvironmentDiffuseScale = 0
+    Lighting.EnvironmentSpecularScale = 0
+    Lighting.ExposureCompensation = 1
+    Lighting.ColorShift_Top = Color3.new(0,0,0)
+    Lighting.ColorShift_Bottom = Color3.new(0,0,0)
+    if settings.FULLBRIGHT_REMOVE_FOG then
+        Lighting.FogEnd = 100000
+        Lighting.FogStart = 100000
+    end
+    for _, child in ipairs(Lighting:GetChildren()) do
+        if child:IsA("Atmosphere") or child:IsA("BloomEffect") or child:IsA("BlurEffect")
+            or child:IsA("ColorCorrectionEffect") or child:IsA("SunRaysEffect") or child:IsA("DepthOfFieldEffect") then
+            pcall(function() child.Enabled = false end)
         end
     end
 end
 
-task.spawn(function()
-    while true do
-        task.wait(2)
-        if settings.REMOVE_KILLER_WALLS then
-            pcall(removeKillerWalls)
-        end
+local function disableFullbright()
+    if savedLighting then
+        for k, v in pairs(savedLighting) do pcall(function() Lighting[k] = v end) end
     end
-end)
+end
+
+local function toggleFullbright()
+    fullbrightActive = not fullbrightActive
+    if fullbrightActive then enableFullbright() showNotification("☀️ Fullbright", "Включён")
+    else disableFullbright() showNotification("☀️ Fullbright", "Выключен") end
+end
 
 -- ==========================================
--- WAYPOINT SYSTEM 📍
+-- CLICK TP
+-- ==========================================
+local function toggleClickTP(state)
+    if state ~= nil then clickTPActive = state else clickTPActive = not clickTPActive end
+    settings.CLICKTP_ENABLED = clickTPActive
+    SaveSettings(settings)
+    showNotification("🖱️ Click TP", clickTPActive and "Включён (ЛКМ по точке)" or "Выключен")
+end
+
+local function performClickTP()
+    if not hrp or not humanoid then
+        updateCharacterReferences()
+        if not hrp then return end
+    end
+    local unitRay = Camera:ScreenPointToRay(mouse.X, mouse.Y)
+    local filter = RaycastParams.new()
+    filter.FilterType = Enum.RaycastFilterType.Exclude
+    filter.FilterDescendantsInstances = {character}
+    filter.RespectCanCollide = true
+    local hit = Workspace:Raycast(unitRay.Origin, unitRay.Direction * settings.CLICKTP_DISTANCE, filter)
+    if hit then
+        local targetPos = hit.Position + Vector3.new(0, settings.CLICKTP_OFFSET_Y, 0)
+        hrp.CFrame = CFrame.new(targetPos)
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        showNotification("🖱️ Click TP", "ТП на " .. tostring(math.floor(hit.Position.X)) .. ", " .. tostring(math.floor(hit.Position.Y)) .. ", " .. tostring(math.floor(hit.Position.Z)))
+    else
+        showNotification("🖱️ Click TP", "Не найдено цели под курсором")
+    end
+end
+
+-- ==========================================
+-- FREECAM
+-- ==========================================
+local freecamConnection = nil
+
+local function startFreecam()
+    if freecamActive then return end
+    if not Camera then return end
+    freecamActive = true
+    settings.FREECAM_ENABLED = true
+    SaveSettings(settings)
+    freecamSavedCamType = Camera.CameraType
+    freecamSavedCamSubject = Camera.CameraSubject
+    Camera.CameraType = Enum.CameraType.Scriptable
+    freecamPos = Camera.CFrame.Position
+    freecamRot = Camera.CFrame
+    if settings.FREECAM_HIDE_CHAR and character then
+        for _, part in ipairs(character:GetDescendants()) do
+            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                part.LocalTransparencyModifier = 1
+                part.Transparency = 1
+            elseif part:IsA("Decal") or part:IsA("Texture") then
+                part.Transparency = 1
+            end
+        end
+    end
+    showNotification("🎥 Freecam", "Включён")
+    freecamConnection = RunService.RenderStepped:Connect(function(dt)
+        if not freecamActive then return end
+        local camForward = freecamRot.LookVector
+        local camRight = freecamRot.RightVector
+        local camUp = Vector3.new(0, 1, 0)
+        local fwd = (pressed[Enum.KeyCode.W] and 1 or 0) - (pressed[Enum.KeyCode.S] and 1 or 0)
+        local str = (pressed[Enum.KeyCode.D] and 1 or 0) - (pressed[Enum.KeyCode.A] and 1 or 0)
+        local up = (pressed[Enum.KeyCode.Space] and 1 or 0) - (pressed[Enum.KeyCode.LeftControl] and 1 or 0)
+        local move = camForward * fwd + camRight * str + camUp * up
+        if move.Magnitude > 0 then move = move.Unit end
+        local speed = settings.FREECAM_SPEED
+        if pressed[Enum.KeyCode.LeftShift] then speed = speed * settings.FREECAM_SPRINT_MULT end
+        freecamPos = freecamPos + move * speed * dt
+        freecamRot = CFrame.new(freecamPos) * (freecamRot - freecamRot.Position)
+        Camera.CFrame = freecamRot
+    end)
+end
+
+local function stopFreecam()
+    if not freecamActive then return end
+    freecamActive = false
+    settings.FREECAM_ENABLED = false
+    SaveSettings(settings)
+    if freecamConnection then freecamConnection:Disconnect() freecamConnection = nil end
+    if settings.FREECAM_HIDE_CHAR and character then
+        for _, part in ipairs(character:GetDescendants()) do
+            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                part.LocalTransparencyModifier = 0
+                part.Transparency = 0
+            elseif part:IsA("Decal") or part:IsA("Texture") then
+                part.Transparency = 0
+            end
+        end
+    end
+    if freecamSavedCamType then Camera.CameraType = freecamSavedCamType else Camera.CameraType = Enum.CameraType.Custom end
+    if freecamSavedCamSubject then Camera.CameraSubject = freecamSavedCamSubject end
+    showNotification("🎥 Freecam", "Выключен")
+end
+
+local function toggleFreecam()
+    if freecamActive then stopFreecam() else startFreecam() end
+end
+
+-- ==========================================
+-- WAYPOINTS
 -- ==========================================
 local waypoints = {}
 local MAX_WAYPOINTS = 8
 local WaypointFolder = MyDataFolder .. "/Waypoints"
-if not isfolder(WaypointFolder) then
-    makefolder(WaypointFolder)
-end
+if not isfolder(WaypointFolder) then makefolder(WaypointFolder) end
 
 local function saveWaypoints()
     local data = {}
     for i, wp in ipairs(waypoints) do
-        data[i] = {
-            Name = wp.Name,
-            Position = {wp.Position.X, wp.Position.Y, wp.Position.Z}
-        }
+        data[i] = { Name = wp.Name, Position = {wp.Position.X, wp.Position.Y, wp.Position.Z} }
     end
-    pcall(function()
-        writefile(WaypointFolder .. "/wp_" .. tostring(game.PlaceId) .. ".json", HttpService:JSONEncode(data))
-    end)
+    pcall(function() writefile(WaypointFolder .. "/wp_" .. tostring(game.PlaceId) .. ".json", HttpService:JSONEncode(data)) end)
 end
 
 local function loadWaypoints()
@@ -1446,16 +1220,12 @@ local function loadWaypoints()
             waypoints = {}
             for _, wp in ipairs(data) do
                 if wp.Position and #wp.Position == 3 then
-                    table.insert(waypoints, {
-                        Name = wp.Name or "WP",
-                        Position = Vector3.new(wp.Position[1], wp.Position[2], wp.Position[3])
-                    })
+                    table.insert(waypoints, { Name = wp.Name or "WP", Position = Vector3.new(wp.Position[1], wp.Position[2], wp.Position[3]) })
                 end
             end
         end
     end
 end
-
 loadWaypoints()
 
 local waypointBeacons = {}
@@ -1474,13 +1244,11 @@ local function createBeacon(position, name, color)
     part.Color = color or Color3.fromRGB(255, 100, 255)
     part.Transparency = 0.3
     part.Parent = Workspace
-
     local bg = Instance.new("BillboardGui")
     bg.Size = UDim2.new(0, 150, 0, 40)
     bg.StudsOffset = Vector3.new(0, 2.5, 0)
     bg.AlwaysOnTop = true
     bg.Parent = part
-
     local lbl = Instance.new("TextLabel")
     lbl.Size = UDim2.fromScale(1, 1)
     lbl.BackgroundTransparency = 1
@@ -1490,7 +1258,6 @@ local function createBeacon(position, name, color)
     lbl.TextScaled = true
     lbl.Font = Enum.Font.GothamBold
     lbl.Parent = bg
-
     task.spawn(function()
         local t0 = tick()
         while part.Parent do
@@ -1500,14 +1267,11 @@ local function createBeacon(position, name, color)
             task.wait()
         end
     end)
-
     return part
 end
 
 local function refreshBeacons()
-    for _, b in ipairs(waypointBeacons) do
-        pcall(function() b:Destroy() end)
-    end
+    for _, b in ipairs(waypointBeacons) do pcall(function() b:Destroy() end) end
     waypointBeacons = {}
     for i, wp in ipairs(waypoints) do
         local hue = (i - 1) / math.max(MAX_WAYPOINTS, 1)
@@ -1517,51 +1281,33 @@ local function refreshBeacons()
 end
 
 local function addWaypoint(name)
-    if not hrp then
-        updateCharacterReferences()
-        if not hrp then return end
-    end
-    if #waypoints >= MAX_WAYPOINTS then
-        showNotification("📍 Waypoint", "Максимум " .. MAX_WAYPOINTS .. " точек!")
-        return
-    end
-    table.insert(waypoints, {
-        Name = name or ("WP" .. (#waypoints + 1)),
-        Position = hrp.Position
-    })
-    saveWaypoints()
-    refreshBeacons()
+    if not hrp then updateCharacterReferences() if not hrp then return end end
+    if #waypoints >= MAX_WAYPOINTS then showNotification("📍 Waypoint", "Максимум " .. MAX_WAYPOINTS .. " точек!") return end
+    table.insert(waypoints, { Name = name or ("WP" .. (#waypoints + 1)), Position = hrp.Position })
+    saveWaypoints() refreshBeacons()
     showNotification("📍 Waypoint", "Сохранён: " .. (name or ("WP" .. #waypoints)))
 end
 
 local function removeWaypoint(index)
     if waypoints[index] then
-        table.remove(waypoints, index)
-        saveWaypoints()
-        refreshBeacons()
+        table.remove(waypoints, index) saveWaypoints() refreshBeacons()
         showNotification("📍 Waypoint", "Удалён #" .. index)
     end
 end
 
 local function teleportToWaypoint(index)
     if not waypoints[index] then return end
-    if not hrp then
-        updateCharacterReferences()
-        if not hrp then return end
-    end
+    if not hrp then updateCharacterReferences() if not hrp then return end end
     local wp = waypoints[index]
-
     if settings.WP_SWAP_ENABLED then
         local oldPos = hrp.Position
         hrp.CFrame = CFrame.new(wp.Position + Vector3.new(0, 3, 0))
         hrp.AssemblyLinearVelocity = Vector3.zero
         waypoints[index].Position = oldPos
-        saveWaypoints()
-        refreshBeacons()
-        showNotification("🔁 Waypoint SWAP", "ТП → " .. wp.Name .. " (точка на старом месте)")
+        saveWaypoints() refreshBeacons()
+        showNotification("🔁 Waypoint SWAP", "ТП → " .. wp.Name)
         return
     end
-
     hrp.CFrame = CFrame.new(wp.Position + Vector3.new(0, 3, 0))
     hrp.AssemblyLinearVelocity = Vector3.zero
     showNotification("📍 Waypoint", "ТП → " .. wp.Name)
@@ -1570,21 +1316,13 @@ end
 local function teleportToPlayer(targetName)
     local target
     for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= player and plr.Name:lower():find(targetName:lower(), 1, true) then
-            target = plr
-            break
-        end
+        if plr ~= player and plr.Name:lower():find(targetName:lower(), 1, true) then target = plr break end
     end
-    if not target then
-        showNotification("📍 TP", "Игрок не найден: " .. targetName)
-        return
-    end
+    if not target then showNotification("📍 TP", "Игрок не найден: " .. targetName) return end
     if not target.Character or not target.Character:FindFirstChild("HumanoidRootPart") then
-        showNotification("📍 TP", "У игрока нет персонажа")
-        return
+        showNotification("📍 TP", "У игрока нет персонажа") return
     end
     if not hrp then return end
-
     local targetPos = target.Character.HumanoidRootPart.Position
     hrp.CFrame = CFrame.new(targetPos + Vector3.new(0, 3, 0))
     hrp.AssemblyLinearVelocity = Vector3.zero
@@ -1594,224 +1332,44 @@ end
 refreshBeacons()
 
 -- ==========================================
--- FULLBRIGHT ☀️
+-- KILLER WALLS REMOVER
 -- ==========================================
-local function enableFullbright()
-    savedLighting = {
-        Ambient = Lighting.Ambient,
-        OutdoorAmbient = Lighting.OutdoorAmbient,
-        Brightness = Lighting.Brightness,
-        ClockTime = Lighting.ClockTime,
-        FogEnd = Lighting.FogEnd,
-        FogStart = Lighting.FogStart,
-        GlobalShadows = Lighting.GlobalShadows,
-        EnvironmentDiffuseScale = Lighting.EnvironmentDiffuseScale,
-        EnvironmentSpecularScale = Lighting.EnvironmentSpecularScale,
-        ExposureCompensation = Lighting.ExposureCompensation,
-        ColorShift_Top = Lighting.ColorShift_Top,
-        ColorShift_Bottom = Lighting.ColorShift_Bottom,
+local function removeKillerWalls()
+    if not settings.REMOVE_KILLER_WALLS then return end
+    local paths = {
+        "Map.Ingame.Map.MapBoundaries.KillerDoors",
+        "Map.Ingame.Map.MapBoundaries.KillerOnly",
     }
-
-    Lighting.Ambient = Color3.fromRGB(255, 255, 255)
-    Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
-    Lighting.Brightness = settings.FULLBRIGHT_BRIGHTNESS
-    Lighting.ClockTime = settings.FULLBRIGHT_CLOCKTIME
-    Lighting.GlobalShadows = false
-    Lighting.EnvironmentDiffuseScale = 0
-    Lighting.EnvironmentSpecularScale = 0
-    Lighting.ExposureCompensation = 1
-    Lighting.ColorShift_Top = Color3.new(0,0,0)
-    Lighting.ColorShift_Bottom = Color3.new(0,0,0)
-
-    if settings.FULLBRIGHT_REMOVE_FOG then
-        Lighting.FogEnd = 100000
-        Lighting.FogStart = 100000
-    end
-
-    for _, child in ipairs(Lighting:GetChildren()) do
-        if child:IsA("Atmosphere")
-        or child:IsA("BloomEffect")
-        or child:IsA("BlurEffect")
-        or child:IsA("ColorCorrectionEffect")
-        or child:IsA("SunRaysEffect")
-        or child:IsA("DepthOfFieldEffect") then
-            pcall(function() child.Enabled = false end)
+    for _, path in ipairs(paths) do
+        local current = Workspace
+        local parts = {}
+        for part in string.gmatch(path, "[^%.]+") do table.insert(parts, part) end
+        local success = true
+        for _, partName in ipairs(parts) do
+            if current then current = current:FindFirstChild(partName) if not current then success = false break end
+            else success = false break end
         end
-    end
-end
-
-local function disableFullbright()
-    if savedLighting then
-        for k, v in pairs(savedLighting) do
-            pcall(function() Lighting[k] = v end)
-        end
-    end
-end
-
-local function toggleFullbright()
-    fullbrightActive = not fullbrightActive
-    if fullbrightActive then
-        enableFullbright()
-        showNotification("☀️ Fullbright", "Включён")
-    else
-        disableFullbright()
-        showNotification("☀️ Fullbright", "Выключен")
-    end
-end
-
--- ==========================================
--- CLICK TP 🖱️
--- ==========================================
-local function toggleClickTP(state)
-    if state ~= nil then
-        clickTPActive = state
-    else
-        clickTPActive = not clickTPActive
-    end
-    settings.CLICKTP_ENABLED = clickTPActive
-    SaveSettings(settings)
-    showNotification("🖱️ Click TP", clickTPActive and "Включён (ЛКМ по точке)" or "Выключен")
-end
-
-local function performClickTP()
-    if not hrp or not humanoid then
-        updateCharacterReferences()
-        if not hrp then return end
-    end
-
-    local mouse = player:GetMouse()
-    if not mouse then return end
-
-    local unitRay = Camera:ScreenPointToRay(mouse.X, mouse.Y)
-
-    local filter = RaycastParams.new()
-    filter.FilterType = Enum.RaycastFilterType.Exclude
-    filter.FilterDescendantsInstances = {character}
-    filter.RespectCanCollide = true
-
-    local hit = Workspace:Raycast(unitRay.Origin, unitRay.Direction * settings.CLICKTP_DISTANCE, filter)
-
-    if hit then
-        local targetPos = hit.Position + Vector3.new(0, settings.CLICKTP_OFFSET_Y, 0)
-        hrp.CFrame = CFrame.new(targetPos)
-        hrp.AssemblyLinearVelocity = Vector3.zero
-        showNotification("🖱️ Click TP", "ТП на " .. tostring(math.floor(hit.Position.X)) .. ", " .. tostring(math.floor(hit.Position.Y)) .. ", " .. tostring(math.floor(hit.Position.Z)))
-    else
-        showNotification("🖱️ Click TP", "Не найдено цели под курсором")
-    end
-end
-
--- ==========================================
--- FREECAM 🎥
--- ==========================================
-local freecamConnection = nil
-
-local function startFreecam()
-    if freecamActive then return end
-    if not Camera then return end
-
-    freecamActive = true
-    settings.FREECAM_ENABLED = true
-    SaveSettings(settings)
-
-    freecamSavedCamType = Camera.CameraType
-    freecamSavedCamSubject = Camera.CameraSubject
-    freecamSavedCamCFrame = Camera.CFrame
-
-    Camera.CameraType = Enum.CameraType.Scriptable
-    freecamPos = Camera.CFrame.Position
-    freecamRot = Camera.CFrame
-
-    if settings.FREECAM_HIDE_CHAR and character then
-        for _, part in ipairs(character:GetDescendants()) do
-            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                part.LocalTransparencyModifier = 1
-                part.Transparency = 1
-            elseif part:IsA("Decal") or part:IsA("Texture") then
-                part.Transparency = 1
+        if success and current then
+            for _, child in ipairs(current:GetChildren()) do
+                pcall(function() if child:IsA("BasePart") or child:IsA("Model") then child:Destroy() end end)
             end
         end
     end
-
-    showNotification("🎥 Freecam", "Включён (WASD + Space/Ctrl, Shift = ускорение)")
-
-    freecamConnection = RunService.RenderStepped:Connect(function(dt)
-        if not freecamActive then return end
-
-        local camForward = freecamRot.LookVector
-        local camRight = freecamRot.RightVector
-        local camUp = Vector3.new(0, 1, 0)
-
-        local fwd = (pressed[Enum.KeyCode.W] and 1 or 0) - (pressed[Enum.KeyCode.S] and 1 or 0)
-        local str = (pressed[Enum.KeyCode.D] and 1 or 0) - (pressed[Enum.KeyCode.A] and 1 or 0)
-        local up = (pressed[Enum.KeyCode.Space] and 1 or 0) - (pressed[Enum.KeyCode.LeftControl] and 1 or 0)
-
-        local move = camForward * fwd + camRight * str + camUp * up
-        if move.Magnitude > 0 then move = move.Unit end
-
-        local speed = settings.FREECAM_SPEED
-        if pressed[Enum.KeyCode.LeftShift] then
-            speed = speed * settings.FREECAM_SPRINT_MULT
-        end
-
-        freecamPos = freecamPos + move * speed * dt
-        freecamRot = CFrame.new(freecamPos) * (freecamRot - freecamRot.Position)
-
-        Camera.CFrame = freecamRot
-    end)
 end
 
-local function stopFreecam()
-    if not freecamActive then return end
-    freecamActive = false
-    settings.FREECAM_ENABLED = false
-    SaveSettings(settings)
-
-    if freecamConnection then
-        freecamConnection:Disconnect()
-        freecamConnection = nil
+task.spawn(function()
+    while true do
+        task.wait(2)
+        if settings.REMOVE_KILLER_WALLS then pcall(removeKillerWalls) end
     end
-
-    if settings.FREECAM_HIDE_CHAR and character then
-        for _, part in ipairs(character:GetDescendants()) do
-            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                part.LocalTransparencyModifier = 0
-                part.Transparency = 0
-            elseif part:IsA("Decal") or part:IsA("Texture") then
-                part.Transparency = 0
-            end
-        end
-    end
-
-    if freecamSavedCamType then
-        Camera.CameraType = freecamSavedCamType
-    else
-        Camera.CameraType = Enum.CameraType.Custom
-    end
-    if freecamSavedCamSubject then
-        Camera.CameraSubject = freecamSavedCamSubject
-    end
-
-    showNotification("🎥 Freecam", "Выключен")
-end
-
-local function toggleFreecam()
-    if freecamActive then
-        stopFreecam()
-    else
-        startFreecam()
-    end
-end
+end)
 
 -- ==========================================
 -- INPUT HANDLING
 -- ==========================================
 local function getAimbotKey()
     local keyMap = {
-        E = Enum.KeyCode.E,
-        Q = Enum.KeyCode.Q,
-        R = Enum.KeyCode.R,
-        X = Enum.KeyCode.X,
+        E = Enum.KeyCode.E, Q = Enum.KeyCode.Q, R = Enum.KeyCode.R, X = Enum.KeyCode.X,
         MouseButton2 = Enum.UserInputType.MouseButton2,
     }
     return keyMap[settings.AIMBOT_KEY] or Enum.KeyCode.E
@@ -1820,32 +1378,14 @@ end
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
     pressed[input.KeyCode] = true
+    if input.KeyCode == Enum.KeyCode.C and settings.HOTKEY_WALLWALK_ENABLED then toggleClimb() end
+    if input.KeyCode == Enum.KeyCode.V and settings.HOTKEY_FLY_ENABLED then toggleFly() end
+    if input.KeyCode == Enum.KeyCode.B and settings.HOTKEY_NOCLIP_ENABLED then toggleNoClip() end
+    if input.KeyCode == Enum.KeyCode.Z and settings.HOTKEY_TURBO_ENABLED then toggleTurbo() end
+    if input.KeyCode == Enum.KeyCode.F and settings.HOTKEY_FULLBRIGHT_ENABLED then toggleFullbright() end
+    if input.KeyCode == Enum.KeyCode.G and settings.HOTKEY_FREECAM_ENABLED then toggleFreecam() end
 
-    if input.KeyCode == Enum.KeyCode.C and isHotkeyAllowed("HOTKEY_WALLWALK_ENABLED") then
-        toggleClimb()
-    end
-
-    if input.KeyCode == Enum.KeyCode.V and isHotkeyAllowed("HOTKEY_FLY_ENABLED") then
-        toggleFly()
-    end
-
-    if input.KeyCode == Enum.KeyCode.B and isHotkeyAllowed("HOTKEY_NOCLIP_ENABLED") then
-        toggleNoClip()
-    end
-
-    if input.KeyCode == Enum.KeyCode.Z and isHotkeyAllowed("HOTKEY_TURBO_ENABLED") then
-        toggleTurbo()
-    end
-
-    if input.KeyCode == Enum.KeyCode.F and isHotkeyAllowed("HOTKEY_FULLBRIGHT_ENABLED") then
-        toggleFullbright()
-    end
-
-    if input.KeyCode == Enum.KeyCode.G and isHotkeyAllowed("HOTKEY_FREECAM_ENABLED") then
-        toggleFreecam()
-    end
-
-    -- 🎯 AIMBOT активация
+    -- AIMBOT activation
     if settings.HOTKEY_AIMBOT_ENABLED and settings.AIMBOT_ENABLED then
         local targetKey = getAimbotKey()
         if input.KeyCode == targetKey or input.UserInputType == targetKey then
@@ -1859,12 +1399,10 @@ UserInputService.InputBegan:Connect(function(input, gp)
     end
 
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        if clickTPActive and settings.HOTKEY_CLICKTP_ENABLED and not freecamActive then
-            performClickTP()
-        end
+        if clickTPActive and settings.HOTKEY_CLICKTP_ENABLED and not freecamActive then performClickTP() end
     end
 
-    if isHotkeyAllowed("HOTKEY_WAYPOINTS_ENABLED") then
+    if settings.HOTKEY_WAYPOINTS_ENABLED then
         if input.KeyCode == Enum.KeyCode.P then addWaypoint("WP" .. (#waypoints + 1)) end
         if input.KeyCode == Enum.KeyCode.L then removeWaypoint(#waypoints) end
         if input.KeyCode == Enum.KeyCode.T then teleportToWaypoint(1) end
@@ -1877,17 +1415,14 @@ UserInputService.InputEnded:Connect(function(input, gp)
     if gp then return end
     pressed[input.KeyCode] = false
     if input.KeyCode == Enum.KeyCode.LeftShift then isSprinting = false end
-
     if settings.HOTKEY_AIMBOT_ENABLED and not settings.AIMBOT_TOGGLE_MODE then
         local targetKey = getAimbotKey()
-        if input.KeyCode == targetKey or input.UserInputType == targetKey then
-            aimbotHolding = false
-        end
+        if input.KeyCode == targetKey or input.UserInputType == targetKey then aimbotHolding = false end
     end
 end)
 
 -- ==========================================
--- LUNA INTERFACE
+-- LUNA UI
 -- ==========================================
 Window:CreateHomeTab({
     SupportedExecutors = {"Synapse X", "Krnl", "ScriptWare", "Fluxus", "Oxygen U"},
@@ -1895,1160 +1430,218 @@ Window:CreateHomeTab({
     Icon = 2,
 })
 
--- ==========================================
--- 🔑 HOTKEY PERMISSIONS TAB
--- ==========================================
-local HotkeysTab = Window:CreateTab({
-    Name = "Hotkeys",
-    Icon = "keyboard",
-    ImageSource = "Material",
-    ShowTitle = true
-})
+-- HOTKEYS TAB
+local HotkeysTab = Window:CreateTab({ Name = "Hotkeys", Icon = "keyboard", ImageSource = "Material", ShowTitle = true })
+HotkeysTab:CreateParagraph({ Title = "🔑 HOTKEY PERMISSIONS", Text = "Включи тумблер — клавиша работает." })
+HotkeysTab:CreateToggle({ Name = "🕷️ Wall Walk (C)", CurrentValue = settings.HOTKEY_WALLWALK_ENABLED, Callback = function(v) settings.HOTKEY_WALLWALK_ENABLED = v SaveSettings(settings) if not v and climbing then toggleClimb() end end })
+HotkeysTab:CreateToggle({ Name = "✈️ Fly (V)", CurrentValue = settings.HOTKEY_FLY_ENABLED, Callback = function(v) settings.HOTKEY_FLY_ENABLED = v SaveSettings(settings) if not v and flying then toggleFly() end end })
+HotkeysTab:CreateToggle({ Name = "🌀 No Clip (B)", CurrentValue = settings.HOTKEY_NOCLIP_ENABLED, Callback = function(v) settings.HOTKEY_NOCLIP_ENABLED = v SaveSettings(settings) if not v and noClipActive then toggleNoClip() end end })
+HotkeysTab:CreateToggle({ Name = "⚡ Turbo (Z)", CurrentValue = settings.HOTKEY_TURBO_ENABLED, Callback = function(v) settings.HOTKEY_TURBO_ENABLED = v SaveSettings(settings) if not v and turboActive then toggleTurbo() end end })
+HotkeysTab:CreateToggle({ Name = "☀️ Fullbright (F)", CurrentValue = settings.HOTKEY_FULLBRIGHT_ENABLED, Callback = function(v) settings.HOTKEY_FULLBRIGHT_ENABLED = v SaveSettings(settings) if not v and fullbrightActive then toggleFullbright() end end })
+HotkeysTab:CreateToggle({ Name = "🎥 Freecam (G)", CurrentValue = settings.HOTKEY_FREECAM_ENABLED, Callback = function(v) settings.HOTKEY_FREECAM_ENABLED = v SaveSettings(settings) if not v and freecamActive then stopFreecam() end end })
+HotkeysTab:CreateToggle({ Name = "🖱️ Click TP (ЛКМ)", CurrentValue = settings.HOTKEY_CLICKTP_ENABLED, Callback = function(v) settings.HOTKEY_CLICKTP_ENABLED = v SaveSettings(settings) if not v then clickTPActive = false settings.CLICKTP_ENABLED = false SaveSettings(settings) end end })
+HotkeysTab:CreateToggle({ Name = "📍 Waypoints (P/L/T)", CurrentValue = settings.HOTKEY_WAYPOINTS_ENABLED, Callback = function(v) settings.HOTKEY_WAYPOINTS_ENABLED = v SaveSettings(settings) end })
+HotkeysTab:CreateToggle({ Name = "🎯 Aimbot Hotkey", CurrentValue = settings.HOTKEY_AIMBOT_ENABLED, Callback = function(v) settings.HOTKEY_AIMBOT_ENABLED = v SaveSettings(settings) if not v then aimbotActive = false aimbotHolding = false end end })
 
-HotkeysTab:CreateParagraph({
-    Title = "🔑 HOTKEY PERMISSIONS",
-    Text = "Включи тумблер — и соответствующая клавиша начнёт работать.\nВыключи — клавиша будет полностью игнорироваться."
-})
+-- AIMBOT TAB
+local AimbotTab = Window:CreateTab({ Name = "Aimbot", Icon = "my_location", ImageSource = "Material", ShowTitle = true })
+AimbotTab:CreateParagraph({ Title = "🎯 WORKING AIMBOT v14.2", Text = "Камера переходит в Scriptable, наведение работает стабильно." })
 
-HotkeysTab:CreateToggle({
-    Name = "🕷️ Enable Wall Walk Hotkey (C)",
-    CurrentValue = settings.HOTKEY_WALLWALK_ENABLED,
-    Callback = function(Value)
-        settings.HOTKEY_WALLWALK_ENABLED = Value
-        SaveSettings(settings)
-        if not Value and climbing then toggleClimb() end
-    end
-})
+AimbotTab:CreateToggle({ Name = "🎯 Enable Aimbot", CurrentValue = settings.AIMBOT_ENABLED, Callback = function(v)
+    if v and not settings.HOTKEY_AIMBOT_ENABLED then showNotification("🔒 Hotkey Lock", "Разреши Aimbot в Hotkeys!") return end
+    settings.AIMBOT_ENABLED = v SaveSettings(settings)
+    if fovCircle and fovCircle.circle then fovCircle.circle.Visible = v and settings.AIMBOT_SHOW_FOV end
+    showNotification("🎯 Aimbot", v and "Включён" or "Выключен")
+end })
 
-HotkeysTab:CreateToggle({
-    Name = "✈️ Enable Fly Hotkey (V)",
-    CurrentValue = settings.HOTKEY_FLY_ENABLED,
-    Callback = function(Value)
-        settings.HOTKEY_FLY_ENABLED = Value
-        SaveSettings(settings)
-        if not Value and flying then toggleFly() end
-    end
-})
+AimbotTab:CreateDropdown({ Name = "🎮 Режим", Options = {"PVP", "PVE", "Both"}, CurrentOption = {settings.AIMBOT_MODE}, MultipleOptions = false, Callback = function(o) settings.AIMBOT_MODE = o SaveSettings(settings) end })
+AimbotTab:CreateDropdown({ Name = "🔑 Клавиша", Options = {"E", "Q", "R", "X", "MouseButton2"}, CurrentOption = {settings.AIMBOT_KEY}, MultipleOptions = false, Callback = function(o) settings.AIMBOT_KEY = o SaveSettings(settings) end })
+AimbotTab:CreateToggle({ Name = "🔄 Toggle Mode", CurrentValue = settings.AIMBOT_TOGGLE_MODE, Callback = function(v) settings.AIMBOT_TOGGLE_MODE = v SaveSettings(settings) end })
 
-HotkeysTab:CreateToggle({
-    Name = "🌀 Enable No Clip Hotkey (B)",
-    CurrentValue = settings.HOTKEY_NOCLIP_ENABLED,
-    Callback = function(Value)
-        settings.HOTKEY_NOCLIP_ENABLED = Value
-        SaveSettings(settings)
-        if not Value and noClipActive then toggleNoClip() end
-    end
-})
-
-HotkeysTab:CreateToggle({
-    Name = "⚡ Enable Turbo Hotkey (Z)",
-    CurrentValue = settings.HOTKEY_TURBO_ENABLED,
-    Callback = function(Value)
-        settings.HOTKEY_TURBO_ENABLED = Value
-        SaveSettings(settings)
-        if not Value and turboActive then toggleTurbo() end
-    end
-})
-
-HotkeysTab:CreateToggle({
-    Name = "☀️ Enable Fullbright Hotkey (F)",
-    CurrentValue = settings.HOTKEY_FULLBRIGHT_ENABLED,
-    Callback = function(Value)
-        settings.HOTKEY_FULLBRIGHT_ENABLED = Value
-        SaveSettings(settings)
-        if not Value and fullbrightActive then toggleFullbright() end
-    end
-})
-
-HotkeysTab:CreateToggle({
-    Name = "🎥 Enable Freecam Hotkey (G)",
-    CurrentValue = settings.HOTKEY_FREECAM_ENABLED,
-    Callback = function(Value)
-        settings.HOTKEY_FREECAM_ENABLED = Value
-        SaveSettings(settings)
-        if not Value and freecamActive then stopFreecam() end
-    end
-})
-
-HotkeysTab:CreateToggle({
-    Name = "🖱️ Enable Click TP (ЛКМ)",
-    CurrentValue = settings.HOTKEY_CLICKTP_ENABLED,
-    Callback = function(Value)
-        settings.HOTKEY_CLICKTP_ENABLED = Value
-        SaveSettings(settings)
-        if not Value then
-            clickTPActive = false
-            settings.CLICKTP_ENABLED = false
-            SaveSettings(settings)
-        end
-    end
-})
-
-HotkeysTab:CreateToggle({
-    Name = "📍 Enable Waypoint Hotkeys (P/L/T)",
-    CurrentValue = settings.HOTKEY_WAYPOINTS_ENABLED,
-    Callback = function(Value)
-        settings.HOTKEY_WAYPOINTS_ENABLED = Value
-        SaveSettings(settings)
-    end
-})
-
-HotkeysTab:CreateToggle({
-    Name = "🎯 Enable Aimbot Hotkey",
-    CurrentValue = settings.HOTKEY_AIMBOT_ENABLED,
-    Callback = function(Value)
-        settings.HOTKEY_AIMBOT_ENABLED = Value
-        SaveSettings(settings)
-        if not Value then
-            aimbotActive = false
-            aimbotHolding = false
-        end
-    end
-})
-
-HotkeysTab:CreateParagraph({
-    Title = "ℹ️ КАК ЭТО РАБОТАЕТ",
-    Text = "Выключи тумблер — и клавиша перестанет работать."
-})
-
--- ==========================================
--- 🎯 AIMBOT TAB
--- ==========================================
-local AimbotTab = Window:CreateTab({
-    Name = "Aimbot",
-    Icon = "my_location",
-    ImageSource = "Material",
-    ShowTitle = true
-})
-
-AimbotTab:CreateParagraph({
-    Title = "🎯 OPTIMIZED AIMBOT (PVP + PVE)",
-    Text = "v14.1: цели сканируются не каждый кадр, NPC ищутся через spatial query, wall-check только для выбранной цели."
-})
-
-AimbotTab:CreateToggle({
-    Name = "🎯 Enable Aimbot",
-    CurrentValue = settings.AIMBOT_ENABLED,
-    Callback = function(Value)
-        if Value and not settings.HOTKEY_AIMBOT_ENABLED then
-            showNotification("🔒 Hotkey Lock", "Сначала разреши Aimbot в табе Hotkeys!")
-            return
-        end
-        settings.AIMBOT_ENABLED = Value
-        SaveSettings(settings)
-        if fovCircle and fovCircle.circle then
-            fovCircle.circle.Visible = Value and settings.AIMBOT_SHOW_FOV
-        end
-        showNotification("🎯 Aimbot", Value and "Включён" or "Выключен")
-    end
-})
-
-AimbotTab:CreateDropdown({
-    Name = "🎮 Режим",
-    Options = {"PVP", "PVE", "Both"},
-    CurrentOption = {settings.AIMBOT_MODE},
-    MultipleOptions = false,
-    Callback = function(Options)
-        settings.AIMBOT_MODE = Options
-        SaveSettings(settings)
-        showNotification("🎯 Aimbot", "Режим: " .. Options)
-    end
-})
-
-AimbotTab:CreateDropdown({
-    Name = "🔑 Клавиша активации",
-    Options = {"E", "Q", "R", "X", "MouseButton2"},
-    CurrentOption = {settings.AIMBOT_KEY},
-    MultipleOptions = false,
-    Callback = function(Options)
-        settings.AIMBOT_KEY = Options
-        SaveSettings(settings)
-    end
-})
-
-AimbotTab:CreateToggle({
-    Name = "🔄 Toggle Mode (вместо Hold)",
-    CurrentValue = settings.AIMBOT_TOGGLE_MODE,
-    Callback = function(Value)
-        settings.AIMBOT_TOGGLE_MODE = Value
-        SaveSettings(settings)
-    end
-})
-
--- 🚀 ОПТИМИЗАЦИЯ
 AimbotTab:CreateLabel({ Text = "🚀 ПРОИЗВОДИТЕЛЬНОСТЬ", Style = 1 })
-
-AimbotTab:CreateSlider({
-    Name = "Интервал сканирования целей (сек)",
-    Range = {0.02, 0.5},
-    Increment = 0.01,
-    CurrentValue = settings.AIMBOT_SCAN_INTERVAL,
-    Callback = function(Value)
-        settings.AIMBOT_SCAN_INTERVAL = Value
-        SaveSettings(settings)
-    end
-})
-
-AimbotTab:CreateSlider({
-    Name = "Радиус поиска NPC (studs)",
-    Range = {30, 1000},
-    Increment = 10,
-    CurrentValue = settings.AIMBOT_PVE_RADIUS,
-    Callback = function(Value)
-        settings.AIMBOT_PVE_RADIUS = Value
-        SaveSettings(settings)
-    end
-})
-
-AimbotTab:CreateSlider({
-    Name = "Макс. NPC для проверки",
-    Range = {5, 100},
-    Increment = 1,
-    CurrentValue = settings.AIMBOT_MAX_NPC_CANDIDATES,
-    Callback = function(Value)
-        settings.AIMBOT_MAX_NPC_CANDIDATES = Value
-        SaveSettings(settings)
-    end
-})
+AimbotTab:CreateSlider({ Name = "Интервал сканирования (сек)", Range = {0.02, 0.5}, Increment = 0.01, CurrentValue = settings.AIMBOT_SCAN_INTERVAL, Callback = function(v) settings.AIMBOT_SCAN_INTERVAL = v SaveSettings(settings) end })
+AimbotTab:CreateSlider({ Name = "Радиус NPC", Range = {30, 1000}, Increment = 10, CurrentValue = settings.AIMBOT_PVE_RADIUS, Callback = function(v) settings.AIMBOT_PVE_RADIUS = v SaveSettings(settings) end })
+AimbotTab:CreateSlider({ Name = "Макс. NPC", Range = {5, 100}, Increment = 1, CurrentValue = settings.AIMBOT_MAX_NPC_CANDIDATES, Callback = function(v) settings.AIMBOT_MAX_NPC_CANDIDATES = v SaveSettings(settings) end })
 
 AimbotTab:CreateLabel({ Text = "🎯 ЦЕЛИ", Style = 1 })
+AimbotTab:CreateToggle({ Name = "Игроки (PVP)", CurrentValue = settings.AIMBOT_TARGET_PLAYERS, Callback = function(v) settings.AIMBOT_TARGET_PLAYERS = v SaveSettings(settings) end })
+AimbotTab:CreateToggle({ Name = "NPC (PVE)", CurrentValue = settings.AIMBOT_TARGET_NPCS, Callback = function(v) settings.AIMBOT_TARGET_NPCS = v SaveSettings(settings) end })
+AimbotTab:CreateToggle({ Name = "Killers", CurrentValue = settings.AIMBOT_TARGET_KILLERS, Callback = function(v) settings.AIMBOT_TARGET_KILLERS = v SaveSettings(settings) end })
+AimbotTab:CreateToggle({ Name = "Survivors", CurrentValue = settings.AIMBOT_TARGET_SURVIVORS, Callback = function(v) settings.AIMBOT_TARGET_SURVIVORS = v SaveSettings(settings) end })
+AimbotTab:CreateToggle({ Name = "Team Check", CurrentValue = settings.AIMBOT_TEAM_CHECK, Callback = function(v) settings.AIMBOT_TEAM_CHECK = v SaveSettings(settings) end })
+AimbotTab:CreateToggle({ Name = "Игнорировать мёртвых", CurrentValue = settings.AIMBOT_IGNORE_DEAD, Callback = function(v) settings.AIMBOT_IGNORE_DEAD = v SaveSettings(settings) end })
+AimbotTab:CreateToggle({ Name = "Проверка стен", CurrentValue = settings.AIMBOT_WALL_CHECK, Callback = function(v) settings.AIMBOT_WALL_CHECK = v SaveSettings(settings) end })
 
-AimbotTab:CreateToggle({
-    Name = "Игроки (PVP)",
-    CurrentValue = settings.AIMBOT_TARGET_PLAYERS,
-    Callback = function(Value) settings.AIMBOT_TARGET_PLAYERS = Value SaveSettings(settings) end
-})
-
-AimbotTab:CreateToggle({
-    Name = "NPC / Монстры (PVE)",
-    CurrentValue = settings.AIMBOT_TARGET_NPCS,
-    Callback = function(Value) settings.AIMBOT_TARGET_NPCS = Value SaveSettings(settings) end
-})
-
-AimbotTab:CreateToggle({
-    Name = "Killers",
-    CurrentValue = settings.AIMBOT_TARGET_KILLERS,
-    Callback = function(Value) settings.AIMBOT_TARGET_KILLERS = Value SaveSettings(settings) end
-})
-
-AimbotTab:CreateToggle({
-    Name = "Survivors",
-    CurrentValue = settings.AIMBOT_TARGET_SURVIVORS,
-    Callback = function(Value) settings.AIMBOT_TARGET_SURVIVORS = Value SaveSettings(settings) end
-})
-
-AimbotTab:CreateToggle({
-    Name = "Team Check (не бить своих)",
-    CurrentValue = settings.AIMBOT_TEAM_CHECK,
-    Callback = function(Value) settings.AIMBOT_TEAM_CHECK = Value SaveSettings(settings) end
-})
-
-AimbotTab:CreateToggle({
-    Name = "Игнорировать мёртвых",
-    CurrentValue = settings.AIMBOT_IGNORE_DEAD,
-    Callback = function(Value) settings.AIMBOT_IGNORE_DEAD = Value SaveSettings(settings) end
-})
-
-AimbotTab:CreateToggle({
-    Name = "Проверка стен (медленнее, но точнее)",
-    CurrentValue = settings.AIMBOT_WALL_CHECK,
-    Callback = function(Value) settings.AIMBOT_WALL_CHECK = Value SaveSettings(settings) end
-})
-
-AimbotTab:CreateLabel({ Text = "👁️ FOV / РАДИУС", Style = 1 })
-
-AimbotTab:CreateToggle({
-    Name = "Ограничение FOV",
-    CurrentValue = settings.AIMBOT_FOV_ENABLED,
-    Callback = function(Value) settings.AIMBOT_FOV_ENABLED = Value SaveSettings(settings) end
-})
-
-AimbotTab:CreateSlider({
-    Name = "FOV (пиксели)",
-    Range = {10, 800}, Increment = 5,
-    CurrentValue = settings.AIMBOT_FOV,
-    Callback = function(Value)
-        settings.AIMBOT_FOV = Value
-        SaveSettings(settings)
-    end
-})
-
-AimbotTab:CreateToggle({
-    Name = "Показывать FOV-круг",
-    CurrentValue = settings.AIMBOT_SHOW_FOV,
-    Callback = function(Value)
-        settings.AIMBOT_SHOW_FOV = Value
-        SaveSettings(settings)
-        if fovCircle and fovCircle.circle then
-            fovCircle.circle.Visible = Value and settings.AIMBOT_ENABLED
-        end
-    end
-})
-
-AimbotTab:CreateSlider({
-    Name = "FOV R", Range = {0, 255}, Increment = 1,
-    CurrentValue = settings.AIMBOT_FOV_COLOR_R,
-    Callback = function(Value) settings.AIMBOT_FOV_COLOR_R = Value SaveSettings(settings) end
-})
-
-AimbotTab:CreateSlider({
-    Name = "FOV G", Range = {0, 255}, Increment = 1,
-    CurrentValue = settings.AIMBOT_FOV_COLOR_G,
-    Callback = function(Value) settings.AIMBOT_FOV_COLOR_G = Value SaveSettings(settings) end
-})
-
-AimbotTab:CreateSlider({
-    Name = "FOV B", Range = {0, 255}, Increment = 1,
-    CurrentValue = settings.AIMBOT_FOV_COLOR_B,
-    Callback = function(Value) settings.AIMBOT_FOV_COLOR_B = Value SaveSettings(settings) end
-})
+AimbotTab:CreateLabel({ Text = "👁️ FOV", Style = 1 })
+AimbotTab:CreateToggle({ Name = "Ограничение FOV", CurrentValue = settings.AIMBOT_FOV_ENABLED, Callback = function(v) settings.AIMBOT_FOV_ENABLED = v SaveSettings(settings) end })
+AimbotTab:CreateSlider({ Name = "FOV (пиксели)", Range = {10, 800}, Increment = 5, CurrentValue = settings.AIMBOT_FOV, Callback = function(v) settings.AIMBOT_FOV = v SaveSettings(settings) end })
+AimbotTab:CreateToggle({ Name = "Показывать FOV-круг", CurrentValue = settings.AIMBOT_SHOW_FOV, Callback = function(v) settings.AIMBOT_SHOW_FOV = v SaveSettings(settings) if fovCircle and fovCircle.circle then fovCircle.circle.Visible = v and settings.AIMBOT_ENABLED end end })
+AimbotTab:CreateSlider({ Name = "FOV R", Range = {0, 255}, Increment = 1, CurrentValue = settings.AIMBOT_FOV_COLOR_R, Callback = function(v) settings.AIMBOT_FOV_COLOR_R = v SaveSettings(settings) end })
+AimbotTab:CreateSlider({ Name = "FOV G", Range = {0, 255}, Increment = 1, CurrentValue = settings.AIMBOT_FOV_COLOR_G, Callback = function(v) settings.AIMBOT_FOV_COLOR_G = v SaveSettings(settings) end })
+AimbotTab:CreateSlider({ Name = "FOV B", Range = {0, 255}, Increment = 1, CurrentValue = settings.AIMBOT_FOV_COLOR_B, Callback = function(v) settings.AIMBOT_FOV_COLOR_B = v SaveSettings(settings) end })
 
 AimbotTab:CreateLabel({ Text = "🎯 НАВЕДЕНИЕ", Style = 1 })
-
-AimbotTab:CreateSlider({
-    Name = "Плавность (0 = мгновенно)",
-    Range = {0, 0.95}, Increment = 0.05,
-    CurrentValue = settings.AIMBOT_SMOOTHNESS,
-    Callback = function(Value) settings.AIMBOT_SMOOTHNESS = Value SaveSettings(settings) end
-})
-
-AimbotTab:CreateSlider({
-    Name = "Макс. дистанция",
-    Range = {10, 5000}, Increment = 10,
-    CurrentValue = settings.AIMBOT_MAX_DISTANCE,
-    Callback = function(Value) settings.AIMBOT_MAX_DISTANCE = Value SaveSettings(settings) end
-})
-
-AimbotTab:CreateSlider({
-    Name = "Мин. дистанция",
-    Range = {0, 500}, Increment = 1,
-    CurrentValue = settings.AIMBOT_MIN_DISTANCE,
-    Callback = function(Value) settings.AIMBOT_MIN_DISTANCE = Value SaveSettings(settings) end
-})
-
-AimbotTab:CreateDropdown({
-    Name = "Режим выбора цели",
-    Options = {"Closest", "NearestCenter", "LowestHealth", "HighestHealth"},
-    CurrentOption = {settings.AIMBOT_LOCK_MODE},
-    MultipleOptions = false,
-    Callback = function(Options) settings.AIMBOT_LOCK_MODE = Options SaveSettings(settings) end
-})
+AimbotTab:CreateSlider({ Name = "Плавность (0 = мгновенно)", Range = {0, 0.95}, Increment = 0.05, CurrentValue = settings.AIMBOT_SMOOTHNESS, Callback = function(v) settings.AIMBOT_SMOOTHNESS = v SaveSettings(settings) end })
+AimbotTab:CreateSlider({ Name = "Макс. дистанция", Range = {10, 5000}, Increment = 10, CurrentValue = settings.AIMBOT_MAX_DISTANCE, Callback = function(v) settings.AIMBOT_MAX_DISTANCE = v SaveSettings(settings) end })
+AimbotTab:CreateSlider({ Name = "Мин. дистанция", Range = {0, 500}, Increment = 1, CurrentValue = settings.AIMBOT_MIN_DISTANCE, Callback = function(v) settings.AIMBOT_MIN_DISTANCE = v SaveSettings(settings) end })
+AimbotTab:CreateDropdown({ Name = "Режим выбора цели", Options = {"Closest", "NearestCenter", "LowestHealth", "HighestHealth"}, CurrentOption = {settings.AIMBOT_LOCK_MODE}, MultipleOptions = false, Callback = function(o) settings.AIMBOT_LOCK_MODE = o SaveSettings(settings) end })
 
 AimbotTab:CreateLabel({ Text = "🎯 HITBOX / PREDICTION", Style = 1 })
-
-AimbotTab:CreateDropdown({
-    Name = "Hitbox",
-    Options = {"Head", "Torso", "HumanoidRootPart"},
-    CurrentOption = {settings.AIMBOT_HITBOX},
-    MultipleOptions = false,
-    Callback = function(Options) settings.AIMBOT_HITBOX = Options SaveSettings(settings) end
-})
-
-AimbotTab:CreateSlider({
-    Name = "Смещение hitbox по Y",
-    Range = {-5, 5}, Increment = 0.1,
-    CurrentValue = settings.AIMBOT_HITBOX_OFFSET_Y,
-    Callback = function(Value) settings.AIMBOT_HITBOX_OFFSET_Y = Value SaveSettings(settings) end
-})
-
-AimbotTab:CreateToggle({
-    Name = "🎯 Prediction (упреждение)",
-    CurrentValue = settings.AIMBOT_PREDICTION,
-    Callback = function(Value) settings.AIMBOT_PREDICTION = Value SaveSettings(settings) end
-})
-
-AimbotTab:CreateSlider({
-    Name = "Prediction X", Range = {0, 1}, Increment = 0.005,
-    CurrentValue = settings.AIMBOT_PREDICTION_X,
-    Callback = function(Value) settings.AIMBOT_PREDICTION_X = Value SaveSettings(settings) end
-})
-
-AimbotTab:CreateSlider({
-    Name = "Prediction Y", Range = {0, 1}, Increment = 0.005,
-    CurrentValue = settings.AIMBOT_PREDICTION_Y,
-    Callback = function(Value) settings.AIMBOT_PREDICTION_Y = Value SaveSettings(settings) end
-})
-
-AimbotTab:CreateSlider({
-    Name = "Prediction Z", Range = {0, 1}, Increment = 0.005,
-    CurrentValue = settings.AIMBOT_PREDICTION_Z,
-    Callback = function(Value) settings.AIMBOT_PREDICTION_Z = Value SaveSettings(settings) end
-})
+AimbotTab:CreateDropdown({ Name = "Hitbox", Options = {"Head", "Torso", "HumanoidRootPart"}, CurrentOption = {settings.AIMBOT_HITBOX}, MultipleOptions = false, Callback = function(o) settings.AIMBOT_HITBOX = o SaveSettings(settings) end })
+AimbotTab:CreateSlider({ Name = "Смещение Y", Range = {-5, 5}, Increment = 0.1, CurrentValue = settings.AIMBOT_HITBOX_OFFSET_Y, Callback = function(v) settings.AIMBOT_HITBOX_OFFSET_Y = v SaveSettings(settings) end })
+AimbotTab:CreateToggle({ Name = "🎯 Prediction", CurrentValue = settings.AIMBOT_PREDICTION, Callback = function(v) settings.AIMBOT_PREDICTION = v SaveSettings(settings) end })
+AimbotTab:CreateSlider({ Name = "Prediction X", Range = {0, 1}, Increment = 0.005, CurrentValue = settings.AIMBOT_PREDICTION_X, Callback = function(v) settings.AIMBOT_PREDICTION_X = v SaveSettings(settings) end })
+AimbotTab:CreateSlider({ Name = "Prediction Y", Range = {0, 1}, Increment = 0.005, CurrentValue = settings.AIMBOT_PREDICTION_Y, Callback = function(v) settings.AIMBOT_PREDICTION_Y = v SaveSettings(settings) end })
+AimbotTab:CreateSlider({ Name = "Prediction Z", Range = {0, 1}, Increment = 0.005, CurrentValue = settings.AIMBOT_PREDICTION_Z, Callback = function(v) settings.AIMBOT_PREDICTION_Z = v SaveSettings(settings) end })
 
 AimbotTab:CreateLabel({ Text = "🔫 АВТО-СТРЕЛЬБА", Style = 1 })
+AimbotTab:CreateToggle({ Name = "Auto Shoot", CurrentValue = settings.AIMBOT_AUTO_SHOOT, Callback = function(v) settings.AIMBOT_AUTO_SHOOT = v SaveSettings(settings) end })
+AimbotTab:CreateSlider({ Name = "Задержка", Range = {0.01, 1.0}, Increment = 0.01, CurrentValue = settings.AIMBOT_AUTO_SHOOT_DELAY, Callback = function(v) settings.AIMBOT_AUTO_SHOOT_DELAY = v SaveSettings(settings) end })
+AimbotTab:CreateToggle({ Name = "Только по видимым", CurrentValue = settings.AIMBOT_AUTO_SHOOT_ONLY_VISIBLE, Callback = function(v) settings.AIMBOT_AUTO_SHOOT_ONLY_VISIBLE = v SaveSettings(settings) end })
 
-AimbotTab:CreateToggle({
-    Name = "Auto Shoot",
-    CurrentValue = settings.AIMBOT_AUTO_SHOOT,
-    Callback = function(Value) settings.AIMBOT_AUTO_SHOOT = Value SaveSettings(settings) end
-})
+AimbotTab:CreateLabel({ Text = "🎨 ИНДИКАТОР", Style = 1 })
+AimbotTab:CreateToggle({ Name = "Показывать точку цели", CurrentValue = settings.AIMBOT_SHOW_TARGET, Callback = function(v) settings.AIMBOT_SHOW_TARGET = v SaveSettings(settings) end })
+AimbotTab:CreateSlider({ Name = "Цель R", Range = {0, 255}, Increment = 1, CurrentValue = settings.AIMBOT_TARGET_COLOR_R, Callback = function(v) settings.AIMBOT_TARGET_COLOR_R = v SaveSettings(settings) end })
+AimbotTab:CreateSlider({ Name = "Цель G", Range = {0, 255}, Increment = 1, CurrentValue = settings.AIMBOT_TARGET_COLOR_G, Callback = function(v) settings.AIMBOT_TARGET_COLOR_G = v SaveSettings(settings) end })
+AimbotTab:CreateSlider({ Name = "Цель B", Range = {0, 255}, Increment = 1, CurrentValue = settings.AIMBOT_TARGET_COLOR_B, Callback = function(v) settings.AIMBOT_TARGET_COLOR_B = v SaveSettings(settings) end })
+AimbotTab:CreateButton({ Name = "🧹 Сбросить цель", Callback = function() aimbotTarget = nil aimbotTargetPart = nil aimbotCachedCandidates = {} showNotification("🎯 Aimbot", "Цель сброшена") end })
 
-AimbotTab:CreateSlider({
-    Name = "Задержка выстрелов",
-    Range = {0.01, 1.0}, Increment = 0.01,
-    CurrentValue = settings.AIMBOT_AUTO_SHOOT_DELAY,
-    Callback = function(Value) settings.AIMBOT_AUTO_SHOOT_DELAY = Value SaveSettings(settings) end
-})
-
-AimbotTab:CreateToggle({
-    Name = "Стрелять только по видимым",
-    CurrentValue = settings.AIMBOT_AUTO_SHOOT_ONLY_VISIBLE,
-    Callback = function(Value) settings.AIMBOT_AUTO_SHOOT_ONLY_VISIBLE = Value SaveSettings(settings) end
-})
-
-AimbotTab:CreateLabel({ Text = "🎨 ИНДИКАТОР ЦЕЛИ", Style = 1 })
-
-AimbotTab:CreateToggle({
-    Name = "Показывать точку цели",
-    CurrentValue = settings.AIMBOT_SHOW_TARGET,
-    Callback = function(Value) settings.AIMBOT_SHOW_TARGET = Value SaveSettings(settings) end
-})
-
-AimbotTab:CreateSlider({
-    Name = "Цель R", Range = {0, 255}, Increment = 1,
-    CurrentValue = settings.AIMBOT_TARGET_COLOR_R,
-    Callback = function(Value) settings.AIMBOT_TARGET_COLOR_R = Value SaveSettings(settings) end
-})
-
-AimbotTab:CreateSlider({
-    Name = "Цель G", Range = {0, 255}, Increment = 1,
-    CurrentValue = settings.AIMBOT_TARGET_COLOR_G,
-    Callback = function(Value) settings.AIMBOT_TARGET_COLOR_G = Value SaveSettings(settings) end
-})
-
-AimbotTab:CreateSlider({
-    Name = "Цель B", Range = {0, 255}, Increment = 1,
-    CurrentValue = settings.AIMBOT_TARGET_COLOR_B,
-    Callback = function(Value) settings.AIMBOT_TARGET_COLOR_B = Value SaveSettings(settings) end
-})
-
-AimbotTab:CreateButton({
-    Name = "🧹 Сбросить текущую цель",
-    Callback = function()
-        aimbotTarget = nil
-        aimbotTargetPart = nil
-        aimbotCachedCandidates = {}
-        showNotification("🎯 Aimbot", "Цель сброшена")
-    end
-})
-
--- ==========================================
 -- WALL WALK TAB
--- ==========================================
-local WallWalkTab = Window:CreateTab({
-    Name = "Wall Walk",
-    Icon = "directions_walk",
-    ImageSource = "Material",
-    ShowTitle = true
-})
-
-WallWalkTab:CreateParagraph({
-    Title = "🕷️ SURFACE WALK PRO",
-    Text = "Нажми C для включения (если хоткей разрешён в табе Hotkeys)"
-})
-
-WallWalkTab:CreateToggle({
-    Name = "⚡ Безграничный режим (Unlimited)",
-    CurrentValue = settings.UNLIMITED_MODE,
-    Callback = function(Value)
-        settings.UNLIMITED_MODE = Value
-        SaveSettings(settings)
-        showNotification("⚡ Unlimited", Value and "Включен!" or "Выключен")
-    end
-})
-
+local WallWalkTab = Window:CreateTab({ Name = "Wall Walk", Icon = "directions_walk", ImageSource = "Material", ShowTitle = true })
+WallWalkTab:CreateParagraph({ Title = "🕷️ SURFACE WALK PRO", Text = "Хоткей: C" })
+WallWalkTab:CreateToggle({ Name = "⚡ Unlimited", CurrentValue = settings.UNLIMITED_MODE, Callback = function(v) settings.UNLIMITED_MODE = v SaveSettings(settings) showNotification("⚡ Unlimited", v and "Вкл" or "Выкл") end })
 WallWalkTab:CreateLabel({ Text = "ДВИЖЕНИЕ", Style = 1 })
-
-WallWalkTab:CreateSlider({
-    Name = "Скорость ходьбы",
-    Range = {1, getMaxValue("WALK_SPEED", 50)},
-    Increment = 1,
-    CurrentValue = settings.WALK_SPEED,
-    Callback = function(Value) settings.WALK_SPEED = Value SaveSettings(settings) end
-})
-
-WallWalkTab:CreateSlider({
-    Name = "Множитель спринта",
-    Range = {1.0, getMaxValue("SPRINT_MULTIPLIER", 3.0)},
-    Increment = 0.1,
-    CurrentValue = settings.SPRINT_MULTIPLIER,
-    Callback = function(Value) settings.SPRINT_MULTIPLIER = Value SaveSettings(settings) end
-})
-
-WallWalkTab:CreateSlider({
-    Name = "Гравитация",
-    Range = {1, getMaxValue("GRAVITY", 60)},
-    Increment = 1,
-    CurrentValue = settings.GRAVITY,
-    Callback = function(Value) settings.GRAVITY = Value SaveSettings(settings) end
-})
-
-WallWalkTab:CreateLabel({ Text = "ДАЛЬНОСТЬ", Style = 1 })
-
-WallWalkTab:CreateSlider({
-    Name = "Дальность захвата",
-    Range = {1, getMaxValue("WALL_RANGE", 10)},
-    Increment = 0.5,
-    CurrentValue = settings.WALL_RANGE,
-    Callback = function(Value) settings.WALL_RANGE = Value SaveSettings(settings) end
-})
-
-WallWalkTab:CreateSlider({
-    Name = "Плавность поворота",
-    Range = {1, 15},
-    Increment = 1,
-    CurrentValue = settings.ALIGN_SPEED,
-    Callback = function(Value) settings.ALIGN_SPEED = Value SaveSettings(settings) end
-})
-
-WallWalkTab:CreateLabel({ Text = "ПОТОЛОК", Style = 1 })
-
-WallWalkTab:CreateToggle({
-    Name = "Фиксация на потолке",
-    CurrentValue = settings.CEILING_GRIP,
-    Callback = function(Value) settings.CEILING_GRIP = Value SaveSettings(settings) end
-})
-
-WallWalkTab:CreateSlider({
-    Name = "Сила прижатия",
-    Range = {1, 20},
-    Increment = 0.5,
-    CurrentValue = settings.CEILING_GRIP_FORCE,
-    Callback = function(Value) settings.CEILING_GRIP_FORCE = Value SaveSettings(settings) end
-})
-
-WallWalkTab:CreateSlider({
-    Name = "Макс. время на потолке",
-    Range = {1, 10},
-    Increment = 0.5,
-    CurrentValue = settings.CEILING_MAX_TIME,
-    Callback = function(Value) settings.CEILING_MAX_TIME = Value SaveSettings(settings) end
-})
-
-WallWalkTab:CreateToggle({
-    Name = "Прилипание к поверхности",
-    CurrentValue = settings.STICK_TO_SURFACE,
-    Callback = function(Value) settings.STICK_TO_SURFACE = Value SaveSettings(settings) end
-})
-
-WallWalkTab:CreateToggle({
-    Name = "Авто-сброс при падении",
-    CurrentValue = settings.AUTO_RESET_ON_FALL,
-    Callback = function(Value) settings.AUTO_RESET_ON_FALL = Value SaveSettings(settings) end
-})
+WallWalkTab:CreateSlider({ Name = "Скорость", Range = {1, settings.UNLIMITED_MODE and 400 or 50}, Increment = 1, CurrentValue = settings.WALK_SPEED, Callback = function(v) settings.WALK_SPEED = v SaveSettings(settings) end })
+WallWalkTab:CreateSlider({ Name = "Множитель спринта", Range = {1.0, settings.UNLIMITED_MODE and 10 or 3.0}, Increment = 0.1, CurrentValue = settings.SPRINT_MULTIPLIER, Callback = function(v) settings.SPRINT_MULTIPLIER = v SaveSettings(settings) end })
+WallWalkTab:CreateSlider({ Name = "Гравитация", Range = {1, settings.UNLIMITED_MODE and 400 or 60}, Increment = 1, CurrentValue = settings.GRAVITY, Callback = function(v) settings.GRAVITY = v SaveSettings(settings) end })
+WallWalkTab:CreateSlider({ Name = "Дальность захвата", Range = {1, settings.UNLIMITED_MODE and 100 or 10}, Increment = 0.5, CurrentValue = settings.WALL_RANGE, Callback = function(v) settings.WALL_RANGE = v SaveSettings(settings) end })
+WallWalkTab:CreateSlider({ Name = "Плавность поворота", Range = {1, 15}, Increment = 1, CurrentValue = settings.ALIGN_SPEED, Callback = function(v) settings.ALIGN_SPEED = v SaveSettings(settings) end })
+WallWalkTab:CreateToggle({ Name = "Фиксация на потолке", CurrentValue = settings.CEILING_GRIP, Callback = function(v) settings.CEILING_GRIP = v SaveSettings(settings) end })
+WallWalkTab:CreateSlider({ Name = "Сила прижатия", Range = {1, 20}, Increment = 0.5, CurrentValue = settings.CEILING_GRIP_FORCE, Callback = function(v) settings.CEILING_GRIP_FORCE = v SaveSettings(settings) end })
+WallWalkTab:CreateSlider({ Name = "Макс. время на потолке", Range = {1, 10}, Increment = 0.5, CurrentValue = settings.CEILING_MAX_TIME, Callback = function(v) settings.CEILING_MAX_TIME = v SaveSettings(settings) end })
+WallWalkTab:CreateToggle({ Name = "Прилипание", CurrentValue = settings.STICK_TO_SURFACE, Callback = function(v) settings.STICK_TO_SURFACE = v SaveSettings(settings) end })
+WallWalkTab:CreateToggle({ Name = "Авто-сброс", CurrentValue = settings.AUTO_RESET_ON_FALL, Callback = function(v) settings.AUTO_RESET_ON_FALL = v SaveSettings(settings) end })
 
 -- ESP TAB
-local ESPTab = Window:CreateTab({
-    Name = "ESP",
-    Icon = "visibility",
-    ImageSource = "Material",
-    ShowTitle = true
-})
+local ESPTab = Window:CreateTab({ Name = "ESP", Icon = "visibility", ImageSource = "Material", ShowTitle = true })
+ESPTab:CreateToggle({ Name = "Enable ESP", CurrentValue = settings.ESP_ENABLED, Callback = function(v) settings.ESP_ENABLED = v SaveSettings(settings) if not v then clearAllESP() end end })
+ESPTab:CreateSlider({ Name = "Интервал обновления", Range = {0.01, 1.0}, Increment = 0.01, CurrentValue = settings.ESP_UPDATE_INTERVAL, Callback = function(v) settings.ESP_UPDATE_INTERVAL = v SaveSettings(settings) end })
+ESPTab:CreateSlider({ Name = "Макс. дистанция", Range = {50, 2000}, Increment = 10, CurrentValue = settings.ESP_MAX_DISTANCE, Callback = function(v) settings.ESP_MAX_DISTANCE = v SaveSettings(settings) end })
+ESPTab:CreateSlider({ Name = "Мин. дистанция", Range = {1, 100}, Increment = 1, CurrentValue = settings.ESP_MIN_DISTANCE, Callback = function(v) settings.ESP_MIN_DISTANCE = v SaveSettings(settings) end })
+ESPTab:CreateSlider({ Name = "Прозрачность заливки", Range = {0.0, 1.0}, Increment = 0.05, CurrentValue = settings.ESP_FILL_TRANSPARENCY, Callback = function(v) settings.ESP_FILL_TRANSPARENCY = v SaveSettings(settings) end })
+ESPTab:CreateSlider({ Name = "Прозрачность контура", Range = {0.0, 1.0}, Increment = 0.05, CurrentValue = settings.ESP_OUTLINE_TRANSPARENCY, Callback = function(v) settings.ESP_OUTLINE_TRANSPARENCY = v SaveSettings(settings) end })
+ESPTab:CreateToggle({ Name = "Показывать имена", CurrentValue = settings.SHOW_TEXT, Callback = function(v) settings.SHOW_TEXT = v SaveSettings(settings) end })
+ESPTab:CreateToggle({ Name = "Box ESP", CurrentValue = settings.ESP_BOX_ENABLED, Callback = function(v) settings.ESP_BOX_ENABLED = v SaveSettings(settings) end })
+ESPTab:CreateToggle({ Name = "Tracer", CurrentValue = settings.ESP_TRACER_ENABLED, Callback = function(v) settings.ESP_TRACER_ENABLED = v SaveSettings(settings) end })
+ESPTab:CreateToggle({ Name = "Team Check", CurrentValue = settings.ESP_TEAM_CHECK, Callback = function(v) settings.ESP_TEAM_CHECK = v SaveSettings(settings) end })
+ESPTab:CreateToggle({ Name = "Killers ESP", CurrentValue = settings.KILLERS_ESP, Callback = function(v) settings.KILLERS_ESP = v SaveSettings(settings) end })
+ESPTab:CreateDropdown({ Name = "Killers Color", Options = {"Red", "Orange", "Purple", "Gold", "White", "Pink"}, CurrentOption = {settings.KILLERS_COLOR or "Red"}, MultipleOptions = false, Callback = function(o) settings.KILLERS_COLOR = o SaveSettings(settings) end })
+ESPTab:CreateToggle({ Name = "Survivors ESP", CurrentValue = settings.SURVIVORS_ESP, Callback = function(v) settings.SURVIVORS_ESP = v SaveSettings(settings) end })
+ESPTab:CreateDropdown({ Name = "Survivors Color", Options = {"Green", "Cyan", "Blue", "Lime"}, CurrentOption = {settings.SURVIVORS_COLOR or "Green"}, MultipleOptions = false, Callback = function(o) settings.SURVIVORS_COLOR = o SaveSettings(settings) end })
+ESPTab:CreateToggle({ Name = "Generators ESP", CurrentValue = settings.GENERATORS_ESP, Callback = function(v) settings.GENERATORS_ESP = v SaveSettings(settings) end })
+ESPTab:CreateToggle({ Name = "Items ESP", CurrentValue = settings.ITEMS_ESP, Callback = function(v) settings.ITEMS_ESP = v SaveSettings(settings) end })
 
-ESPTab:CreateParagraph({
-    Title = "ADVANCED ESP PRO",
-    Text = "Полная настройка подсветки"
-})
-
-ESPTab:CreateToggle({
-    Name = "Enable ESP",
-    CurrentValue = settings.ESP_ENABLED,
-    Callback = function(Value)
-        settings.ESP_ENABLED = Value
-        SaveSettings(settings)
-        if not Value then clearAllESP() end
-    end
-})
-
-ESPTab:CreateLabel({ Text = "⚙️ ОБНОВЛЕНИЕ И ДАЛЬНОСТЬ", Style = 1 })
-
-ESPTab:CreateSlider({
-    Name = "Интервал обновления ESP (сек)",
-    Range = {0.01, 1.0}, Increment = 0.01,
-    CurrentValue = settings.ESP_UPDATE_INTERVAL,
-    Callback = function(Value) settings.ESP_UPDATE_INTERVAL = Value SaveSettings(settings) end
-})
-
-ESPTab:CreateSlider({
-    Name = "Максимальная дистанция ESP",
-    Range = {50, 2000}, Increment = 10,
-    CurrentValue = settings.ESP_MAX_DISTANCE,
-    Callback = function(Value) settings.ESP_MAX_DISTANCE = Value SaveSettings(settings) end
-})
-
-ESPTab:CreateSlider({
-    Name = "Минимальная дистанция",
-    Range = {1, 100}, Increment = 1,
-    CurrentValue = settings.ESP_MIN_DISTANCE,
-    Callback = function(Value) settings.ESP_MIN_DISTANCE = Value SaveSettings(settings) end
-})
-
-ESPTab:CreateToggle({
-    Name = "Затухание по дистанции",
-    CurrentValue = settings.ESP_RENDER_DISTANCE_FADE,
-    Callback = function(Value) settings.ESP_RENDER_DISTANCE_FADE = Value SaveSettings(settings) end
-})
-
-ESPTab:CreateSlider({
-    Name = "Минимальная яркость",
-    Range = {0.0, 1.0}, Increment = 0.05,
-    CurrentValue = settings.ESP_FADE_MIN_ALPHA,
-    Callback = function(Value) settings.ESP_FADE_MIN_ALPHA = Value SaveSettings(settings) end
-})
-
-ESPTab:CreateLabel({ Text = "🎨 ПРОЗРАЧНОСТЬ", Style = 1 })
-
-ESPTab:CreateSlider({
-    Name = "Прозрачность заливки",
-    Range = {0.0, 1.0}, Increment = 0.05,
-    CurrentValue = settings.ESP_FILL_TRANSPARENCY,
-    Callback = function(Value) settings.ESP_FILL_TRANSPARENCY = Value SaveSettings(settings) end
-})
-
-ESPTab:CreateSlider({
-    Name = "Прозрачность контура",
-    Range = {0.0, 1.0}, Increment = 0.05,
-    CurrentValue = settings.ESP_OUTLINE_TRANSPARENCY,
-    Callback = function(Value) settings.ESP_OUTLINE_TRANSPARENCY = Value SaveSettings(settings) end
-})
-
-ESPTab:CreateLabel({ Text = "📝 ТЕКСТ", Style = 1 })
-
-ESPTab:CreateToggle({
-    Name = "Показывать имена",
-    CurrentValue = settings.SHOW_TEXT,
-    Callback = function(Value) settings.SHOW_TEXT = Value SaveSettings(settings) end
-})
-
-ESPTab:CreateSlider({
-    Name = "Размер текста",
-    Range = {8, 48}, Increment = 1,
-    CurrentValue = settings.ESP_TEXT_SIZE,
-    Callback = function(Value) settings.ESP_TEXT_SIZE = Value SaveSettings(settings) end
-})
-
-ESPTab:CreateToggle({
-    Name = "Показывать дистанцию",
-    CurrentValue = settings.ESP_SHOW_DISTANCE_TEXT,
-    Callback = function(Value) settings.ESP_SHOW_DISTANCE_TEXT = Value SaveSettings(settings) end
-})
-
-ESPTab:CreateLabel({ Text = "📦 BOX / 📏 TRACER", Style = 1 })
-
-ESPTab:CreateToggle({
-    Name = "Включить Box ESP",
-    CurrentValue = settings.ESP_BOX_ENABLED,
-    Callback = function(Value) settings.ESP_BOX_ENABLED = Value SaveSettings(settings) end
-})
-
-ESPTab:CreateToggle({
-    Name = "Включить Tracer",
-    CurrentValue = settings.ESP_TRACER_ENABLED,
-    Callback = function(Value) settings.ESP_TRACER_ENABLED = Value SaveSettings(settings) end
-})
-
-ESPTab:CreateLabel({ Text = "🎯 ФИЛЬТРЫ", Style = 1 })
-
-ESPTab:CreateToggle({
-    Name = "Team Check",
-    CurrentValue = settings.ESP_TEAM_CHECK,
-    Callback = function(Value) settings.ESP_TEAM_CHECK = Value SaveSettings(settings) end
-})
-
-ESPTab:CreateLabel({ Text = "👥 ИГРОКИ", Style = 1 })
-
-ESPTab:CreateToggle({
-    Name = "Killers ESP",
-    CurrentValue = settings.KILLERS_ESP,
-    Callback = function(Value) settings.KILLERS_ESP = Value SaveSettings(settings) end
-})
-
-ESPTab:CreateDropdown({
-    Name = "Killers Color",
-    Options = {"Red", "Orange", "Purple", "Gold", "White", "Pink", "Magenta", "Yellow"},
-    CurrentOption = {settings.KILLERS_COLOR or "Red"},
-    MultipleOptions = false,
-    Callback = function(Options) settings.KILLERS_COLOR = Options SaveSettings(settings) end
-})
-
-ESPTab:CreateToggle({
-    Name = "Survivors ESP",
-    CurrentValue = settings.SURVIVORS_ESP,
-    Callback = function(Value) settings.SURVIVORS_ESP = Value SaveSettings(settings) end
-})
-
-ESPTab:CreateDropdown({
-    Name = "Survivors Color",
-    Options = {"Green", "Cyan", "Blue", "Lime", "Teal", "White", "Yellow"},
-    CurrentOption = {settings.SURVIVORS_COLOR or "Green"},
-    MultipleOptions = false,
-    Callback = function(Options) settings.SURVIVORS_COLOR = Options SaveSettings(settings) end
-})
-
-ESPTab:CreateLabel({ Text = "🏭 ОБЪЕКТЫ", Style = 1 })
-
-ESPTab:CreateToggle({
-    Name = "Generators ESP",
-    CurrentValue = settings.GENERATORS_ESP,
-    Callback = function(Value) settings.GENERATORS_ESP = Value SaveSettings(settings) end
-})
-
-ESPTab:CreateToggle({
-    Name = "Items ESP",
-    CurrentValue = settings.ITEMS_ESP,
-    Callback = function(Value) settings.ITEMS_ESP = Value SaveSettings(settings) end
-})
-
-ESPTab:CreateDropdown({
-    Name = "Режим глубины Highlight",
-    Options = {"AlwaysOnTop", "Occluded"},
-    CurrentOption = {settings.ESP_HIGHLIGHT_DEPTH_MODE or "AlwaysOnTop"},
-    MultipleOptions = false,
-    Callback = function(Options) settings.ESP_HIGHLIGHT_DEPTH_MODE = Options SaveSettings(settings) end
-})
-
--- ==========================================
 -- CLICK TP TAB
--- ==========================================
-local ClickTPTab = Window:CreateTab({
-    Name = "Click TP",
-    Icon = "mouse",
-    ImageSource = "Material",
-    ShowTitle = true
-})
+local ClickTPTab = Window:CreateTab({ Name = "Click TP", Icon = "mouse", ImageSource = "Material", ShowTitle = true })
+ClickTPTab:CreateToggle({ Name = "Enable Click TP", CurrentValue = settings.CLICKTP_ENABLED, Callback = function(v)
+    if v and not settings.HOTKEY_CLICKTP_ENABLED then showNotification("🔒", "Разреши Click TP в Hotkeys!") return end
+    toggleClickTP(v)
+end })
+ClickTPTab:CreateSlider({ Name = "Макс. дистанция", Range = {50, 5000}, Increment = 50, CurrentValue = settings.CLICKTP_DISTANCE, Callback = function(v) settings.CLICKTP_DISTANCE = v SaveSettings(settings) end })
+ClickTPTab:CreateSlider({ Name = "Смещение Y", Range = {0, 20}, Increment = 0.5, CurrentValue = settings.CLICKTP_OFFSET_Y, Callback = function(v) settings.CLICKTP_OFFSET_Y = v SaveSettings(settings) end })
+ClickTPTab:CreateButton({ Name = "🖱️ ТП к курсору", Callback = function() performClickTP() end })
 
-ClickTPTab:CreateParagraph({
-    Title = "🖱️ CLICK TELEPORT",
-    Text = "ЛКМ по поверхности — телепорт."
-})
-
-ClickTPTab:CreateToggle({
-    Name = "Enable Click TP",
-    CurrentValue = settings.CLICKTP_ENABLED,
-    Callback = function(Value)
-        if Value and not settings.HOTKEY_CLICKTP_ENABLED then
-            showNotification("🔒 Hotkey Lock", "Сначала разреши Click TP в табе Hotkeys!")
-            return
-        end
-        toggleClickTP(Value)
-    end
-})
-
-ClickTPTab:CreateSlider({
-    Name = "Макс. дистанция рейкаста",
-    Range = {50, 5000}, Increment = 50,
-    CurrentValue = settings.CLICKTP_DISTANCE,
-    Callback = function(Value) settings.CLICKTP_DISTANCE = Value SaveSettings(settings) end
-})
-
-ClickTPTab:CreateSlider({
-    Name = "Смещение по Y (высота)",
-    Range = {0, 20}, Increment = 0.5,
-    CurrentValue = settings.CLICKTP_OFFSET_Y,
-    Callback = function(Value) settings.CLICKTP_OFFSET_Y = Value SaveSettings(settings) end
-})
-
-ClickTPTab:CreateButton({
-    Name = "🖱️ Телепорт в точку под курсором",
-    Callback = function() performClickTP() end
-})
-
--- ==========================================
 -- FREECAM TAB
--- ==========================================
-local FreecamTab = Window:CreateTab({
-    Name = "Freecam",
-    Icon = "videocam",
-    ImageSource = "Material",
-    ShowTitle = true
-})
-
-FreecamTab:CreateParagraph({
-    Title = "🎥 FREECAM",
-    Text = "WASD — движение, Space/Ctrl — вверх/вниз, Shift — ускорение."
-})
-
-FreecamTab:CreateToggle({
-    Name = "Enable Freecam",
-    CurrentValue = settings.FREECAM_ENABLED,
-    Callback = function(Value)
-        if Value and not settings.HOTKEY_FREECAM_ENABLED then
-            showNotification("🔒 Hotkey Lock", "Сначала разреши Freecam в табе Hotkeys!")
-            return
-        end
-        if Value and not freecamActive then startFreecam()
-        elseif not Value and freecamActive then stopFreecam() end
-    end
-})
-
-FreecamTab:CreateSlider({
-    Name = "Скорость Freecam",
-    Range = {5, 500}, Increment = 5,
-    CurrentValue = settings.FREECAM_SPEED,
-    Callback = function(Value) settings.FREECAM_SPEED = Value SaveSettings(settings) end
-})
-
-FreecamTab:CreateSlider({
-    Name = "Множитель спринта",
-    Range = {1, 10}, Increment = 0.5,
-    CurrentValue = settings.FREECAM_SPRINT_MULT,
-    Callback = function(Value) settings.FREECAM_SPRINT_MULT = Value SaveSettings(settings) end
-})
-
-FreecamTab:CreateToggle({
-    Name = "Скрывать персонажа",
-    CurrentValue = settings.FREECAM_HIDE_CHAR,
-    Callback = function(Value)
-        settings.FREECAM_HIDE_CHAR = Value
-        SaveSettings(settings)
-        if freecamActive and character then
-            for _, part in ipairs(character:GetDescendants()) do
-                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                    part.LocalTransparencyModifier = Value and 1 or 0
-                    part.Transparency = Value and 1 or 0
-                elseif part:IsA("Decal") or part:IsA("Texture") then
-                    part.Transparency = Value and 1 or 0
-                end
+local FreecamTab = Window:CreateTab({ Name = "Freecam", Icon = "videocam", ImageSource = "Material", ShowTitle = true })
+FreecamTab:CreateToggle({ Name = "Enable Freecam", CurrentValue = settings.FREECAM_ENABLED, Callback = function(v)
+    if v and not settings.HOTKEY_FREECAM_ENABLED then showNotification("🔒", "Разреши Freecam в Hotkeys!") return end
+    if v and not freecamActive then startFreecam() elseif not v and freecamActive then stopFreecam() end
+end })
+FreecamTab:CreateSlider({ Name = "Скорость", Range = {5, 500}, Increment = 5, CurrentValue = settings.FREECAM_SPEED, Callback = function(v) settings.FREECAM_SPEED = v SaveSettings(settings) end })
+FreecamTab:CreateSlider({ Name = "Множитель спринта", Range = {1, 10}, Increment = 0.5, CurrentValue = settings.FREECAM_SPRINT_MULT, Callback = function(v) settings.FREECAM_SPRINT_MULT = v SaveSettings(settings) end })
+FreecamTab:CreateToggle({ Name = "Скрывать персонажа", CurrentValue = settings.FREECAM_HIDE_CHAR, Callback = function(v)
+    settings.FREECAM_HIDE_CHAR = v SaveSettings(settings)
+    if freecamActive and character then
+        for _, part in ipairs(character:GetDescendants()) do
+            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                part.LocalTransparencyModifier = v and 1 or 0
+                part.Transparency = v and 1 or 0
+            elseif part:IsA("Decal") or part:IsA("Texture") then
+                part.Transparency = v and 1 or 0
             end
         end
     end
-})
+end })
 
--- ==========================================
 -- TURBO TAB
--- ==========================================
-local TurboTab = Window:CreateTab({
-    Name = "Turbo",
-    Icon = "speed",
-    ImageSource = "Material",
-    ShowTitle = true
-})
-
-TurboTab:CreateParagraph({
-    Title = "TURBO",
-    Text = "Хоткей: Z (если разрешён в Hotkeys)"
-})
-
-TurboTab:CreateToggle({
-    Name = "Activate Turbo",
-    CurrentValue = false,
-    Callback = function(Value)
-        if Value and not settings.HOTKEY_TURBO_ENABLED then
-            showNotification("🔒 Hotkey Lock", "Сначала разреши Turbo в табе Hotkeys!")
-            return
-        end
-        if Value and not turboActive then toggleTurbo()
-        elseif not Value and turboActive then toggleTurbo() end
-    end
-})
-
-TurboTab:CreateSlider({
-    Name = "Turbo Speed",
-    Range = {5, getMaxValue("TURBO_SPEED", 100)},
-    Increment = 5,
-    CurrentValue = settings.TURBO_SPEED,
-    Callback = function(Value) settings.TURBO_SPEED = Value SaveSettings(settings) end
-})
-
-TurboTab:CreateButton({
-    Name = "Mode: Velocity",
-    Callback = function()
-        settings.TURBO_MODE = "Velocity"
-        SaveSettings(settings)
-        showNotification("⚡ Turbo", "Mode: Velocity")
-    end
-})
-
-TurboTab:CreateButton({
-    Name = "Mode: Teleport",
-    Callback = function()
-        settings.TURBO_MODE = "Teleport"
-        SaveSettings(settings)
-        showNotification("⚡ Turbo", "Mode: Teleport")
-    end
-})
-
-TurboTab:CreateButton({
-    Name = "Mode: Combo",
-    Callback = function()
-        settings.TURBO_MODE = "Combo"
-        SaveSettings(settings)
-        showNotification("⚡ Turbo", "Mode: Combo")
-    end
-})
+local TurboTab = Window:CreateTab({ Name = "Turbo", Icon = "speed", ImageSource = "Material", ShowTitle = true })
+TurboTab:CreateToggle({ Name = "Activate Turbo", CurrentValue = false, Callback = function(v)
+    if v and not settings.HOTKEY_TURBO_ENABLED then showNotification("🔒", "Разреши Turbo в Hotkeys!") return end
+    if v and not turboActive then toggleTurbo() elseif not v and turboActive then toggleTurbo() end
+end })
+TurboTab:CreateSlider({ Name = "Turbo Speed", Range = {5, settings.UNLIMITED_MODE and 400 or 100}, Increment = 5, CurrentValue = settings.TURBO_SPEED, Callback = function(v) settings.TURBO_SPEED = v SaveSettings(settings) end })
+TurboTab:CreateButton({ Name = "Mode: Velocity", Callback = function() settings.TURBO_MODE = "Velocity" SaveSettings(settings) showNotification("⚡", "Mode: Velocity") end })
+TurboTab:CreateButton({ Name = "Mode: Teleport", Callback = function() settings.TURBO_MODE = "Teleport" SaveSettings(settings) showNotification("⚡", "Mode: Teleport") end })
+TurboTab:CreateButton({ Name = "Mode: Combo", Callback = function() settings.TURBO_MODE = "Combo" SaveSettings(settings) showNotification("⚡", "Mode: Combo") end })
 
 -- NO CLIP TAB
-local NoClipTab = Window:CreateTab({
-    Name = "No Clip",
-    Icon = "open_with",
-    ImageSource = "Material",
-    ShowTitle = true
-})
-
-NoClipTab:CreateParagraph({
-    Title = "NO CLIP",
-    Text = "Хоткей: B (если разрешён в Hotkeys)"
-})
-
-NoClipTab:CreateToggle({
-    Name = "Activate No Clip",
-    CurrentValue = false,
-    Callback = function(Value)
-        if Value and not settings.HOTKEY_NOCLIP_ENABLED then
-            showNotification("🔒 Hotkey Lock", "Сначала разреши No Clip в табе Hotkeys!")
-            return
-        end
-        if Value and not noClipActive then toggleNoClip()
-        elseif not Value and noClipActive then toggleNoClip() end
-    end
-})
+local NoClipTab = Window:CreateTab({ Name = "No Clip", Icon = "open_with", ImageSource = "Material", ShowTitle = true })
+NoClipTab:CreateToggle({ Name = "Activate No Clip", CurrentValue = false, Callback = function(v)
+    if v and not settings.HOTKEY_NOCLIP_ENABLED then showNotification("🔒", "Разреши No Clip в Hotkeys!") return end
+    if v and not noClipActive then toggleNoClip() elseif not v and noClipActive then toggleNoClip() end
+end })
 
 -- FLY TAB
-local FlyTab = Window:CreateTab({
-    Name = "Fly",
-    Icon = "flight",
-    ImageSource = "Material",
-    ShowTitle = true
-})
-
-FlyTab:CreateParagraph({
-    Title = "FLIGHT MODE",
-    Text = "Хоткей: V (если разрешён в Hotkeys)"
-})
-
-FlyTab:CreateToggle({
-    Name = "Enable Flight",
-    CurrentValue = false,
-    Callback = function(Value)
-        if Value and not settings.HOTKEY_FLY_ENABLED then
-            showNotification("🔒 Hotkey Lock", "Сначала разреши Fly в табе Hotkeys!")
-            return
-        end
-        if Value and not flying then toggleFly()
-        elseif not Value and flying then toggleFly() end
-    end
-})
-
-FlyTab:CreateSlider({
-    Name = "Flight Speed",
-    Range = {10, getMaxValue("FLY_SPEED", 100)},
-    Increment = 1,
-    CurrentValue = settings.FLY_SPEED,
-    Callback = function(Value) settings.FLY_SPEED = Value SaveSettings(settings) end
-})
-
-FlyTab:CreateSlider({
-    Name = "Max Speed",
-    Range = {50, getMaxValue("FLY_MAX_SPEED", 300)},
-    Increment = 5,
-    CurrentValue = settings.FLY_MAX_SPEED,
-    Callback = function(Value) settings.FLY_MAX_SPEED = Value SaveSettings(settings) end
-})
-
-FlyTab:CreateToggle({
-    Name = "Hover",
-    CurrentValue = settings.FLY_HOVER,
-    Callback = function(Value) settings.FLY_HOVER = Value SaveSettings(settings) end
-})
+local FlyTab = Window:CreateTab({ Name = "Fly", Icon = "flight", ImageSource = "Material", ShowTitle = true })
+FlyTab:CreateToggle({ Name = "Enable Flight", CurrentValue = false, Callback = function(v)
+    if v and not settings.HOTKEY_FLY_ENABLED then showNotification("🔒", "Разреши Fly в Hotkeys!") return end
+    if v and not flying then toggleFly() elseif not v and flying then toggleFly() end
+end })
+FlyTab:CreateSlider({ Name = "Flight Speed", Range = {10, settings.UNLIMITED_MODE and 400 or 100}, Increment = 1, CurrentValue = settings.FLY_SPEED, Callback = function(v) settings.FLY_SPEED = v SaveSettings(settings) end })
+FlyTab:CreateSlider({ Name = "Max Speed", Range = {50, settings.UNLIMITED_MODE and 800 or 300}, Increment = 5, CurrentValue = settings.FLY_MAX_SPEED, Callback = function(v) settings.FLY_MAX_SPEED = v SaveSettings(settings) end })
+FlyTab:CreateToggle({ Name = "Hover", CurrentValue = settings.FLY_HOVER, Callback = function(v) settings.FLY_HOVER = v SaveSettings(settings) end })
 
 -- WAYPOINTS TAB
-local WaypointTab = Window:CreateTab({
-    Name = "Waypoints",
-    Icon = "place",
-    ImageSource = "Material",
-    ShowTitle = true
-})
-
-WaypointTab:CreateParagraph({
-    Title = "📍 WAYPOINT SYSTEM",
-    Text = "P — сохранить точку\nL — удалить последнюю\nT — ТП к #1"
-})
-
-WaypointTab:CreateToggle({
-    Name = "🔁 SWAP MODE",
-    CurrentValue = settings.WP_SWAP_ENABLED,
-    Callback = function(Value)
-        settings.WP_SWAP_ENABLED = Value
-        SaveSettings(settings)
-        refreshBeacons()
-    end
-})
-
-WaypointTab:CreateInput({
-    Name = "Название точки",
-    CurrentValue = "",
-    PlaceholderText = "Введи имя...",
-    RemoveTextAfterFocusLost = false,
-    Callback = function(Text) _G.__wpName = Text end
-})
-
-WaypointTab:CreateButton({
-    Name = "➕ Сохранить текущую позицию",
-    Callback = function()
-        addWaypoint(_G.__wpName and _G.__wpName ~= "" and _G.__wpName or nil)
-    end
-})
-
-WaypointTab:CreateButton({
-    Name = "🧹 Удалить все точки",
-    Callback = function()
-        for i = #waypoints, 1, -1 do
-            table.remove(waypoints, i)
-        end
-        saveWaypoints()
-        refreshBeacons()
-        showNotification("📍 Waypoint", "Все точки удалены")
-    end
-})
-
-WaypointTab:CreateLabel({ Text = "ТЕЛЕПОРТ К ТОЧКЕ", Style = 1 })
-
+local WaypointTab = Window:CreateTab({ Name = "Waypoints", Icon = "place", ImageSource = "Material", ShowTitle = true })
+WaypointTab:CreateParagraph({ Title = "📍 WAYPOINT SYSTEM", Text = "P — сохранить, L — удалить, T — ТП к #1" })
+WaypointTab:CreateToggle({ Name = "🔁 SWAP MODE", CurrentValue = settings.WP_SWAP_ENABLED, Callback = function(v) settings.WP_SWAP_ENABLED = v SaveSettings(settings) refreshBeacons() end })
+WaypointTab:CreateInput({ Name = "Название", CurrentValue = "", PlaceholderText = "Имя...", RemoveTextAfterFocusLost = false, Callback = function(t) _G.__wpName = t end })
+WaypointTab:CreateButton({ Name = "➕ Сохранить позицию", Callback = function() addWaypoint(_G.__wpName and _G.__wpName ~= "" and _G.__wpName or nil) end })
+WaypointTab:CreateButton({ Name = "🧹 Удалить все", Callback = function() for i = #waypoints, 1, -1 do table.remove(waypoints, i) end saveWaypoints() refreshBeacons() showNotification("📍", "Все точки удалены") end })
+WaypointTab:CreateLabel({ Text = "ТЕЛЕПОРТ", Style = 1 })
 for i = 1, MAX_WAYPOINTS do
-    WaypointTab:CreateButton({
-        Name = "📍 ТП → #" .. i,
-        Callback = function() teleportToWaypoint(i) end
-    })
+    WaypointTab:CreateButton({ Name = "📍 ТП → #" .. i, Callback = function() teleportToWaypoint(i) end })
 end
-
-WaypointTab:CreateLabel({ Text = "ТЕЛЕПОРТ К ИГРОКУ", Style = 1 })
-
-WaypointTab:CreateInput({
-    Name = "Ник игрока",
-    CurrentValue = "",
-    PlaceholderText = "Например: Player1",
-    RemoveTextAfterFocusLost = false,
-    Callback = function(Text) _G.__tpPlayerName = Text end
-})
-
-WaypointTab:CreateButton({
-    Name = "🚀 ТП к игроку",
-    Callback = function()
-        if _G.__tpPlayerName and _G.__tpPlayerName ~= "" then
-            teleportToPlayer(_G.__tpPlayerName)
-        else
-            showNotification("📍 TP", "Введи ник игрока")
-        end
-    end
-})
+WaypointTab:CreateInput({ Name = "Ник игрока", CurrentValue = "", PlaceholderText = "Player1", RemoveTextAfterFocusLost = false, Callback = function(t) _G.__tpPlayerName = t end })
+WaypointTab:CreateButton({ Name = "🚀 ТП к игроку", Callback = function()
+    if _G.__tpPlayerName and _G.__tpPlayerName ~= "" then teleportToPlayer(_G.__tpPlayerName)
+    else showNotification("📍", "Введи ник") end
+end })
 
 -- FULLBRIGHT TAB
-local FullbrightTab = Window:CreateTab({
-    Name = "Fullbright",
-    Icon = "wb_sunny",
-    ImageSource = "Material",
-    ShowTitle = true
-})
-
-FullbrightTab:CreateParagraph({
-    Title = "☀️ FULLBRIGHT",
-    Text = "Хоткей: F (если разрешён в Hotkeys)"
-})
-
-FullbrightTab:CreateToggle({
-    Name = "Enable Fullbright",
-    CurrentValue = false,
-    Callback = function(Value)
-        if Value and not settings.HOTKEY_FULLBRIGHT_ENABLED then
-            showNotification("🔒 Hotkey Lock", "Сначала разреши Fullbright в табе Hotkeys!")
-            return
-        end
-        if Value ~= fullbrightActive then toggleFullbright() end
-        settings.FULLBRIGHT_ENABLED = Value
-        SaveSettings(settings)
+local FullbrightTab = Window:CreateTab({ Name = "Fullbright", Icon = "wb_sunny", ImageSource = "Material", ShowTitle = true })
+FullbrightTab:CreateToggle({ Name = "Enable Fullbright", CurrentValue = false, Callback = function(v)
+    if v and not settings.HOTKEY_FULLBRIGHT_ENABLED then showNotification("🔒", "Разреши Fullbright в Hotkeys!") return end
+    if v ~= fullbrightActive then toggleFullbright() end
+    settings.FULLBRIGHT_ENABLED = v SaveSettings(settings)
+end })
+FullbrightTab:CreateSlider({ Name = "Brightness", Range = {0, 10}, Increment = 0.5, CurrentValue = settings.FULLBRIGHT_BRIGHTNESS, Callback = function(v) settings.FULLBRIGHT_BRIGHTNESS = v SaveSettings(settings) if fullbrightActive then Lighting.Brightness = v end end })
+FullbrightTab:CreateSlider({ Name = "ClockTime", Range = {0, 24}, Increment = 0.5, CurrentValue = settings.FULLBRIGHT_CLOCKTIME, Callback = function(v) settings.FULLBRIGHT_CLOCKTIME = v SaveSettings(settings) if fullbrightActive then Lighting.ClockTime = v end end })
+FullbrightTab:CreateToggle({ Name = "Убирать туман", CurrentValue = settings.FULLBRIGHT_REMOVE_FOG, Callback = function(v)
+    settings.FULLBRIGHT_REMOVE_FOG = v SaveSettings(settings)
+    if fullbrightActive then
+        if v then Lighting.FogEnd = 100000 Lighting.FogStart = 100000
+        elseif savedLighting then Lighting.FogEnd = savedLighting.FogEnd or 1000 Lighting.FogStart = savedLighting.FogStart or 0 end
     end
-})
-
-FullbrightTab:CreateSlider({
-    Name = "Brightness",
-    Range = {0, 10}, Increment = 0.5,
-    CurrentValue = settings.FULLBRIGHT_BRIGHTNESS,
-    Callback = function(Value)
-        settings.FULLBRIGHT_BRIGHTNESS = Value
-        SaveSettings(settings)
-        if fullbrightActive then Lighting.Brightness = Value end
-    end
-})
-
-FullbrightTab:CreateSlider({
-    Name = "ClockTime",
-    Range = {0, 24}, Increment = 0.5,
-    CurrentValue = settings.FULLBRIGHT_CLOCKTIME,
-    Callback = function(Value)
-        settings.FULLBRIGHT_CLOCKTIME = Value
-        SaveSettings(settings)
-        if fullbrightActive then Lighting.ClockTime = Value end
-    end
-})
-
-FullbrightTab:CreateToggle({
-    Name = "Убирать туман",
-    CurrentValue = settings.FULLBRIGHT_REMOVE_FOG,
-    Callback = function(Value)
-        settings.FULLBRIGHT_REMOVE_FOG = Value
-        SaveSettings(settings)
-        if fullbrightActive then
-            if Value then
-                Lighting.FogEnd = 100000
-                Lighting.FogStart = 100000
-            elseif savedLighting then
-                Lighting.FogEnd = savedLighting.FogEnd or 1000
-                Lighting.FogStart = savedLighting.FogStart or 0
-            end
-        end
-    end
-})
+end })
 
 -- SETTINGS TAB
-local SettingsTab = Window:CreateTab({
-    Name = "Settings",
-    Icon = "settings",
-    ImageSource = "Material",
-    ShowTitle = true
-})
-
-SettingsTab:CreateToggle({
-    Name = "Remove Killer Walls",
-    CurrentValue = settings.REMOVE_KILLER_WALLS,
-    Callback = function(Value)
-        settings.REMOVE_KILLER_WALLS = Value
-        SaveSettings(settings)
-        if Value then pcall(removeKillerWalls) end
-    end
-})
-
-SettingsTab:CreateToggle({
-    Name = "Notifications",
-    CurrentValue = settings.NOTIFICATIONS_ENABLED,
-    Callback = function(Value)
-        settings.NOTIFICATIONS_ENABLED = Value
-        SaveSettings(settings)
-    end
-})
-
-SettingsTab:CreateParagraph({
-    Title = "CONTROLS",
-    Text = "🎯 AimBot - " .. settings.AIMBOT_KEY .. "\nC - Wall Walk\nV - Fly\nB - No Clip\nZ - Turbo\nF - Fullbright\nG - Freecam\nP/L/T - Waypoints\nShift - Sprint\nЛКМ - Click TP"
-})
-
-SettingsTab:CreateButton({
-    Name = "Reset Settings",
-    Callback = function()
-        for key, value in pairs(DefaultSettings) do
-            settings[key] = value
-        end
-        SaveSettings(settings)
-        clearAllESP()
-        showNotification("⚙️ Settings", "Сброшено")
-    end
-})
-
-SettingsTab:CreateButton({
-    Name = "Clear ESP Cache",
-    Callback = function()
-        clearAllESP()
-        showNotification("👁️ ESP", "Кеш очищен")
-    end
-})
+local SettingsTab = Window:CreateTab({ Name = "Settings", Icon = "settings", ImageSource = "Material", ShowTitle = true })
+SettingsTab:CreateToggle({ Name = "Remove Killer Walls", CurrentValue = settings.REMOVE_KILLER_WALLS, Callback = function(v) settings.REMOVE_KILLER_WALLS = v SaveSettings(settings) if v then pcall(removeKillerWalls) end end })
+SettingsTab:CreateToggle({ Name = "Notifications", CurrentValue = settings.NOTIFICATIONS_ENABLED, Callback = function(v) settings.NOTIFICATIONS_ENABLED = v SaveSettings(settings) end })
+SettingsTab:CreateParagraph({ Title = "CONTROLS", Text = "🎯 Aimbot - " .. settings.AIMBOT_KEY .. "\nC - Wall Walk\nV - Fly\nB - No Clip\nZ - Turbo\nF - Fullbright\nG - Freecam\nP/L/T - Waypoints\nShift - Sprint\nЛКМ - Click TP" })
+SettingsTab:CreateButton({ Name = "Reset Settings", Callback = function() for k, v in pairs(DefaultSettings) do settings[k] = v end SaveSettings(settings) clearAllESP() showNotification("⚙️", "Сброшено") end })
+SettingsTab:CreateButton({ Name = "Clear ESP Cache", Callback = function() clearAllESP() showNotification("👁️", "Кеш очищен") end })
 
 -- ==========================================
 -- MAIN WALL WALK LOOP
@@ -3061,22 +1654,16 @@ RunService.Heartbeat:Connect(function(dt)
 
     if noClipActive and hrp and humanoid then
         for _, part in ipairs(character:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.CanCollide = false
-            end
+            if part:IsA("BasePart") then part.CanCollide = false end
         end
-
         local camCFrame = Camera.CFrame
         local fwd = (pressed[Enum.KeyCode.W] and 1 or 0) - (pressed[Enum.KeyCode.S] and 1 or 0)
         local str = (pressed[Enum.KeyCode.D] and 1 or 0) - (pressed[Enum.KeyCode.A] and 1 or 0)
         local up = (pressed[Enum.KeyCode.Space] and 1 or 0) - (pressed[Enum.KeyCode.LeftControl] and 1 or 0)
-
         local moveDir = camCFrame.LookVector * fwd + camCFrame.RightVector * str + Vector3.new(0, 1, 0) * up
         if moveDir.Magnitude > 0 then moveDir = moveDir.Unit end
-
         local speed = settings.WALK_SPEED
         if isSprinting then speed = settings.WALK_SPEED * settings.SPRINT_MULTIPLIER * 2 end
-
         hrp.AssemblyLinearVelocity = moveDir * speed
         hrp.AssemblyAngularVelocity = Vector3.zero
         return
@@ -3085,16 +1672,9 @@ RunService.Heartbeat:Connect(function(dt)
     if settings.AUTO_RESET_ON_FALL and climbing and hrp then
         if hrp.Position.Y < settings.RESET_HEIGHT then
             climbing = false
-            if humanoid then
-                humanoid.AutoRotate = true
-                humanoid.PlatformStand = false
-            end
-            gravityDir = Vector3.new(0, -1, 0)
-            upDir = Vector3.new(0, 1, 0)
-            fallSpeed = 0
-            isGrounded = false
-            isOnCeiling = false
-            ceilingTime = 0
+            if humanoid then humanoid.AutoRotate = true humanoid.PlatformStand = false end
+            gravityDir = Vector3.new(0, -1, 0) upDir = Vector3.new(0, 1, 0)
+            fallSpeed = 0 isGrounded = false isOnCeiling = false ceilingTime = 0
             return
         end
     end
@@ -3104,24 +1684,16 @@ RunService.Heartbeat:Connect(function(dt)
         local camForward = camCFrame.LookVector
         local camRight = camCFrame.RightVector
         local camUp = camCFrame.UpVector
-
         local fwd = (pressed[Enum.KeyCode.W] and 1 or 0) - (pressed[Enum.KeyCode.S] and 1 or 0)
         local str = (pressed[Enum.KeyCode.D] and 1 or 0) - (pressed[Enum.KeyCode.A] and 1 or 0)
         local up = (pressed[Enum.KeyCode.Space] and 1 or 0) - (pressed[Enum.KeyCode.LeftControl] and 1 or 0)
-
         local moveDir = camForward * fwd + camRight * str + camUp * up
         if moveDir.Magnitude > 0 then moveDir = moveDir.Unit end
-
         local targetVel = moveDir * settings.FLY_SPEED
         if settings.FLY_HOVER and moveDir.Magnitude < 0.1 then targetVel = Vector3.zero end
-
         flyVelocity = flyVelocity:Lerp(targetVel, math.min(1, dt * settings.FLY_ACCELERATION))
-        if flyVelocity.Magnitude > settings.FLY_MAX_SPEED then
-            flyVelocity = flyVelocity.Unit * settings.FLY_MAX_SPEED
-        end
-
+        if flyVelocity.Magnitude > settings.FLY_MAX_SPEED then flyVelocity = flyVelocity.Unit * settings.FLY_MAX_SPEED end
         hrp.AssemblyLinearVelocity = flyVelocity
-
         if moveDir.Magnitude > 0.1 then
             local targetCF = CFrame.lookAt(hrp.Position, hrp.Position + moveDir, camUp)
             hrp.CFrame = hrp.CFrame:Lerp(targetCF, math.min(1, dt * settings.FLY_SMOOTHNESS))
@@ -3135,14 +1707,9 @@ RunService.Heartbeat:Connect(function(dt)
         ceilingTime = ceilingTime + dt
         if ceilingTime > settings.CEILING_MAX_TIME then
             climbing = false
-            humanoid.AutoRotate = true
-            humanoid.PlatformStand = false
-            gravityDir = Vector3.new(0, -1, 0)
-            upDir = Vector3.new(0, 1, 0)
-            fallSpeed = 0
-            isGrounded = false
-            isOnCeiling = false
-            ceilingTime = 0
+            humanoid.AutoRotate = true humanoid.PlatformStand = false
+            gravityDir = Vector3.new(0, -1, 0) upDir = Vector3.new(0, 1, 0)
+            fallSpeed = 0 isGrounded = false isOnCeiling = false ceilingTime = 0
             return
         end
     else
@@ -3151,110 +1718,72 @@ RunService.Heartbeat:Connect(function(dt)
 
     local pos = hrp.Position
     local camCFrame = Camera.CFrame
-
     local camForward = projectToPlane(camCFrame.LookVector, upDir)
-    if camForward.Magnitude > 0.001 then
-        camForward = camForward.Unit
-    else
-        camForward = projectToPlane(-camCFrame.UpVector, upDir).Unit
-    end
+    if camForward.Magnitude > 0.001 then camForward = camForward.Unit
+    else camForward = projectToPlane(-camCFrame.UpVector, upDir).Unit end
     local camRight = upDir:Cross(camForward).Unit
-
     local fwd = (pressed[Enum.KeyCode.W] and 1 or 0) - (pressed[Enum.KeyCode.S] and 1 or 0)
     local str = (pressed[Enum.KeyCode.D] and 1 or 0) - (pressed[Enum.KeyCode.A] and 1 or 0)
-
     local move = camForward * fwd + camRight * str
     if move.Magnitude > 0 then move = move.Unit end
-
     local wallHit = move.Magnitude > 0 and Workspace:Raycast(pos, move * settings.WALL_RANGE, rayParams) or nil
     local supportNear = Workspace:Raycast(pos, gravityDir * 2, rayParams) ~= nil
     local supportFar = Workspace:Raycast(pos, gravityDir * 3.5, rayParams) ~= nil
-
-    if isGrounded then
-        if not supportFar then isGrounded = false end
-    else
-        if supportNear then isGrounded = true end
-    end
-
+    if isGrounded then if not supportFar then isGrounded = false end
+    else if supportNear then isGrounded = true end end
     local targetGravity = gravityDir
-    if isGrounded and wallHit and wallHit.Normal then
-        targetGravity = -wallHit.Normal
+    if isGrounded and wallHit and wallHit.Normal then targetGravity = -wallHit.Normal
     elseif not isGrounded then
-        if wallHit and wallHit.Normal then
-            targetGravity = -wallHit.Normal
-        else
-            targetGravity = Vector3.new(0, -1, 0)
-        end
+        if wallHit and wallHit.Normal then targetGravity = -wallHit.Normal
+        else targetGravity = Vector3.new(0, -1, 0) end
     end
-
     gravityDir = slerp(gravityDir, targetGravity, math.min(1, dt * settings.GRAVITY_LERP_SPEED))
     upDir = -gravityDir
-
     isOnCeiling = false
     if isGrounded and wallHit and wallHit.Normal then
         if wallHit.Normal.Y < -0.5 then isOnCeiling = true end
     end
-
     local currentGravity = settings.GRAVITY
     local useGripForce = settings.FALL_OFFSET
     local currentSpeed = settings.WALK_SPEED
-
-    if isSprinting then
-        currentSpeed = settings.WALK_SPEED * settings.SPRINT_MULTIPLIER
-    end
-
+    if isSprinting then currentSpeed = settings.WALK_SPEED * settings.SPRINT_MULTIPLIER end
     if isOnCeiling and settings.CEILING_GRIP then
-        currentGravity = 0
-        useGripForce = settings.CEILING_GRIP_FORCE
-        fallSpeed = 0
+        currentGravity = 0 useGripForce = settings.CEILING_GRIP_FORCE fallSpeed = 0
     end
-
     local vel = projectToPlane(move * currentSpeed, gravityDir)
-
     if isGrounded then
         fallSpeed = 0
-        if settings.STICK_TO_SURFACE then
-            vel = vel + gravityDir * useGripForce
-        else
-            vel = vel + gravityDir * 0.1
-        end
+        if settings.STICK_TO_SURFACE then vel = vel + gravityDir * useGripForce
+        else vel = vel + gravityDir * 0.1 end
     else
         fallSpeed = fallSpeed + currentGravity * dt
         if fallSpeed > settings.FALL_LIMIT then fallSpeed = settings.FALL_LIMIT end
         vel = vel + gravityDir * fallSpeed
     end
-
     if not (isOnCeiling and settings.CEILING_GRIP) then
         vel = vel + Vector3.new(0, Workspace.Gravity, 0) * dt
     end
-
     local currentVel = hrp.AssemblyLinearVelocity
     local newVel = currentVel:Lerp(vel, math.min(1, dt * settings.SMOOTHNESS))
     hrp.AssemblyLinearVelocity = newVel
     hrp.AssemblyAngularVelocity = Vector3.zero
-
     local desiredFacing = move.Magnitude > 0 and projectToPlane(move, gravityDir).Unit or facing
     facing = facing:Lerp(desiredFacing, math.min(1, dt * settings.ALIGN_SPEED))
-
     hrp.CFrame = hrp.CFrame:Lerp(makeCFrame(pos, facing, upDir), math.min(1, dt * settings.ALIGN_SPEED))
 end)
 
 -- ==========================================
--- INITIALIZATION
+-- INIT
 -- ==========================================
 print("═══════════════════════════════════════════════════════")
-print("🎯 Forsaken Surge v14.1 (OPTIMIZED AIMBOT)")
+print("🎯 Forsaken Surge v14.2 (WORKING AIMBOT)")
 print("═══════════════════════════════════════════════════════")
-print("✅ Wall Walk | ✅ Fly | ✅ No Clip | ✅ Turbo")
-print("✅ ESP PRO | ✅ Waypoints + SWAP | ✅ Fullbright")
-print("✅ Killer Walls Remover | ✅ Unlimited Mode")
-print("✅ Click TP | ✅ Freecam | 🔑 Hotkey Permissions")
-print("🎯 AIMBOT OPTIMIZED: scan cache + spatial query + 1 raycast/frame")
+print("✅ AIMBOT: Scriptable camera + proper lerp + wall check")
+print("✅ Wall Walk | Fly | No Clip | Turbo | ESP | Waypoints")
+print("✅ Fullbright | Click TP | Freecam | Hotkey Permissions")
 print("═══════════════════════════════════════════════════════")
-print("🔑 C - Wall Walk | V - Fly | B - No Clip | Z - Turbo")
-print("🔑 F - Fullbright | G - Freecam | " .. settings.AIMBOT_KEY .. " - AIMBOT")
-print("🔑 P - Save WP | L - Del WP | T - TP WP#1")
-print("🔑 ЛКМ - Click TP (если разрешён)")
+print("🔑 C/V/B/Z/F/G - режимы | " .. settings.AIMBOT_KEY .. " - AIMBOT")
+print("🔑 P/L/T - Waypoints | ЛКМ - Click TP")
 print("═══════════════════════════════════════════════════════")
 
 task.wait(0.5)
