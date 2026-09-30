@@ -5,7 +5,7 @@ local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-S
 -- ==========================================
 local Window = Luna:CreateWindow({
     Name = "Forsaken Surge",
-    Subtitle = "v14.2 | WORKING AIMBOT (PVP+PVE) + WALL WALK + TURBO + FLY + NOCLIP + ESP + CLICKTP + FREECAM",
+    Subtitle = "v14.3 | FIXED AIMBOT + WALL WALK + TURBO + FLY + NOCLIP + ESP + CLICKTP + FREECAM",
     LogoID = nil,
     LoadingEnabled = true,
     LoadingTitle = "Forsaken Surge",
@@ -179,6 +179,10 @@ local lastAutoShoot = 0
 local fovCircle, targetIndicator
 local aimbotCachedCandidates = {}
 local aimbotLastScan = 0
+local npcModelCache = {}
+local npcCacheTime = 0
+local aimbotBindName = "ForsakenSurge_AimbotCam"
+local aimbotBindActive = false
 
 local rayParams = RaycastParams.new()
 rayParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -285,7 +289,7 @@ createFovCircle()
 createTargetIndicator()
 
 -- ==========================================
--- AIMBOT: CORE
+-- AIMBOT: CORE (FIXED)
 -- ==========================================
 local function getPlayerRole(plr)
     if not plr or not plr.Team then return "Unknown" end
@@ -313,6 +317,7 @@ end
 local function isVisible(targetPart)
     if not settings.AIMBOT_WALL_CHECK then return true end
     if not targetPart or not targetPart.Parent then return false end
+    if not character then return true end
     local origin = Camera.CFrame.Position
     local dir = targetPart.Position - origin
     aimbotRayFilter.FilterDescendantsInstances = { character }
@@ -362,34 +367,48 @@ local function scanCandidates()
     end
 
     if settings.AIMBOT_TARGET_NPCS and (mode == "PVE" or mode == "Both") then
-        local params = OverlapParams.new()
-        params.FilterType = Enum.RaycastFilterType.Exclude
-        params.FilterDescendantsInstances = { character }
-        params.MaxParts = 200
-        local parts = Workspace:GetPartBoundsInRadius(myPos, settings.AIMBOT_PVE_RADIUS, params)
-        local seenModels = {}
-        local npcCount = 0
-        for _, part in ipairs(parts) do
-            if npcCount >= settings.AIMBOT_MAX_NPC_CANDIDATES then break end
-            local model = part:FindFirstAncestorOfClass("Model")
-            if model and not seenModels[model] then
-                seenModels[model] = true
-                local isPlayerChar = false
-                for _, plr in ipairs(Players:GetPlayers()) do
-                    if plr.Character == model then isPlayerChar = true break end
-                end
-                if not isPlayerChar then
-                    local hum = model:FindFirstChildOfClass("Humanoid")
-                    local root = model:FindFirstChild("HumanoidRootPart")
-                    if hum and root and (not settings.AIMBOT_IGNORE_DEAD or hum.Health > 0) then
-                        local dist = (root.Position - myPos).Magnitude
-                        if dist <= settings.AIMBOT_MAX_DISTANCE and dist >= settings.AIMBOT_MIN_DISTANCE then
-                            npcCount = npcCount + 1
-                            table.insert(candidates, {
-                                target = model, root = root, char = model,
-                                dist = dist, health = hum.Health,
-                            })
+        -- Кэш моделей NPC обновляем раз в 0.5 секунды
+        local now = tick()
+        if now - npcCacheTime >= 0.5 then
+            npcCacheTime = now
+            npcModelCache = {}
+            local params = OverlapParams.new()
+            params.FilterType = Enum.RaycastFilterType.Exclude
+            params.FilterDescendantsInstances = { character }
+            params.MaxParts = 200
+            local parts = Workspace:GetPartBoundsInRadius(myPos, settings.AIMBOT_PVE_RADIUS, params)
+            local seen = {}
+            for _, part in ipairs(parts) do
+                local model = part:FindFirstAncestorOfClass("Model")
+                if model and not seen[model] then
+                    seen[model] = true
+                    local isPlayerChar = false
+                    for _, plr in ipairs(Players:GetPlayers()) do
+                        if plr.Character == model then isPlayerChar = true break end
+                    end
+                    if not isPlayerChar then
+                        local hum = model:FindFirstChildOfClass("Humanoid")
+                        if hum and hum.Health > 0 then
+                            table.insert(npcModelCache, model)
                         end
+                    end
+                end
+            end
+        end
+        local npcCount = 0
+        for _, model in ipairs(npcModelCache) do
+            if npcCount >= settings.AIMBOT_MAX_NPC_CANDIDATES then break end
+            if model and model.Parent then
+                local hum = model:FindFirstChildOfClass("Humanoid")
+                local root = model:FindFirstChild("HumanoidRootPart")
+                if hum and root and (not settings.AIMBOT_IGNORE_DEAD or hum.Health > 0) then
+                    local dist = (root.Position - myPos).Magnitude
+                    if dist <= settings.AIMBOT_MAX_DISTANCE and dist >= settings.AIMBOT_MIN_DISTANCE then
+                        npcCount = npcCount + 1
+                        table.insert(candidates, {
+                            target = model, root = root, char = model,
+                            dist = dist, health = hum.Health,
+                        })
                     end
                 end
             end
@@ -455,13 +474,14 @@ local function getAimPosition(targetPart)
     return pos
 end
 
+-- ==========================================
+-- AIMBOT: RENDER (правильная привязка через BindToRenderStep)
+-- Приоритет Camera.Value + 1 — наше обновление ПОСЛЕ движка
+-- ==========================================
 local lastFovColor = Color3.new()
 local lastFovSize = 0
 
--- ПРОСТО ПОВОРАЧИВАЕМ КАМЕРУ. Никакого Scriptable. Никаких отступов.
--- CameraType остаётся Custom, Roblox сам тащит камеру за персонажем.
--- Мы только меняем её CFrame orientation через lerp.
-RunService.RenderStepped:Connect(function(dt)
+local function aimbotRenderStep(dt)
     if not settings.AIMBOT_ENABLED then
         if fovCircle and fovCircle.circle and fovCircle.circle.Visible then
             fovCircle.circle.Visible = false
@@ -493,7 +513,8 @@ RunService.RenderStepped:Connect(function(dt)
         end
     end
 
-    local shouldAim = settings.AIMBOT_TOGGLE_MODE and aimbotActive or (not settings.AIMBOT_TOGGLE_MODE and aimbotHolding)
+    local shouldAim = settings.AIMBOT_TOGGLE_MODE and aimbotActive
+        or (not settings.AIMBOT_TOGGLE_MODE and aimbotHolding)
     if not shouldAim then
         if targetIndicator and targetIndicator.dot and targetIndicator.dot.Visible then
             targetIndicator.dot.Visible = false
@@ -501,7 +522,7 @@ RunService.RenderStepped:Connect(function(dt)
         return
     end
 
-    -- Сканирование целей
+    -- Сканирование целей с интервалом
     local now = tick()
     if now - aimbotLastScan >= settings.AIMBOT_SCAN_INTERVAL then
         aimbotLastScan = now
@@ -544,15 +565,30 @@ RunService.RenderStepped:Connect(function(dt)
         end
     end
 
-    -- ПРОСТОЙ ПОВОРОТ КАМЕРЫ
-    -- Позиция камеры не трогаем — Roblox сам держит её у персонажа.
-    -- Меняем только rotation через lerp к цели.
+    -- ====== ГЛАВНЫЙ ФИКС ======
+    -- Меняем ТОЛЬКО rotation, position камеры оставляем движку.
+    -- Экспоненциальное сглаживание не зависит от FPS.
     local aimPos = getAimPosition(best.part)
     if aimPos then
-        local currentCF = Camera.CFrame
-        local targetCF = CFrame.lookAt(currentCF.Position, aimPos)
-        local alpha = 1 - math.clamp(settings.AIMBOT_SMOOTHNESS, 0, 0.99)
-        Camera.CFrame = currentCF:Lerp(targetCF, math.clamp(alpha * (dt * 60), 0, 1))
+        local camPos = Camera.CFrame.Position
+        local dir = aimPos - camPos
+        if dir.Magnitude > 0.001 then
+            local targetLook = CFrame.lookAt(camPos, camPos + dir.Unit)
+            local targetRot = targetLook - targetLook.Position
+            local currentRot = Camera.CFrame - Camera.CFrame.Position
+
+            -- smooth: 0 = мгновенно, 0.95 = очень плавно
+            local smooth = math.clamp(settings.AIMBOT_SMOOTHNESS, 0, 0.99)
+            -- alpha = 1 - exp(-dt * k), k растёт при меньшей плавности
+            local k = (1 - smooth) * 30
+            if k < 1 then k = 1 end
+            local alpha = 1 - math.exp(-dt * k)
+            alpha = math.clamp(alpha, 0, 1)
+
+            local newRot = currentRot:Lerp(targetRot, alpha)
+            -- Сохраняем позицию от текущей камеры (движок её обновляет)
+            Camera.CFrame = CFrame.new(camPos) * newRot
+        end
     end
 
     -- Auto-shoot
@@ -573,7 +609,22 @@ RunService.RenderStepped:Connect(function(dt)
             end
         end
     end
-end)
+end
+
+-- Регистрируем с приоритетом выше камеры — наше обновление применяется ПОСЛЕ движка
+local function ensureAimbotBind()
+    if not aimbotBindActive then
+        RunService:BindToRenderStep(aimbotBindName, Enum.RenderPriority.Camera.Value + 1, aimbotRenderStep)
+        aimbotBindActive = true
+    end
+end
+local function unbindAimbot()
+    if aimbotBindActive then
+        pcall(function() RunService:UnbindFromRenderStep(aimbotBindName) end)
+        aimbotBindActive = false
+    end
+end
+ensureAimbotBind()
 
 -- ==========================================
 -- ESP SYSTEM
@@ -1416,7 +1467,7 @@ HotkeysTab:CreateToggle({ Name = "🎯 Aimbot Hotkey", CurrentValue = settings.H
 
 -- AIMBOT TAB
 local AimbotTab = Window:CreateTab({ Name = "Aimbot", Icon = "my_location", ImageSource = "Material", ShowTitle = true })
-AimbotTab:CreateParagraph({ Title = "🎯 WORKING AIMBOT v14.2", Text = "Камера остаётся у персонажа, мы просто поворачиваем её на цель." })
+AimbotTab:CreateParagraph({ Title = "🎯 AIMBOT v14.3 (FIXED)", Text = "BindToRenderStep с приоритетом выше камеры. Меняется только rotation." })
 
 AimbotTab:CreateToggle({ Name = "🎯 Enable Aimbot", CurrentValue = settings.AIMBOT_ENABLED, Callback = function(v)
     if v and not settings.HOTKEY_AIMBOT_ENABLED then showNotification("🔒 Hotkey Lock", "Разреши Aimbot в Hotkeys!") return end
@@ -1747,9 +1798,9 @@ end)
 -- INIT
 -- ==========================================
 print("═══════════════════════════════════════════════════════")
-print("🎯 Forsaken Surge v14.2 (WORKING AIMBOT)")
+print("🎯 Forsaken Surge v14.3 (FIXED AIMBOT)")
 print("═══════════════════════════════════════════════════════")
-print("✅ AIMBOT: камера остаётся у персонажа (CameraType = Custom)")
+print("✅ AIMBOT: BindToRenderStep Camera+1, rotation-only, exp-smoothing")
 print("✅ Wall Walk | Fly | No Clip | Turbo | ESP | Waypoints")
 print("✅ Fullbright | Click TP | Freecam | Hotkey Permissions")
 print("═══════════════════════════════════════════════════════")
