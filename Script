@@ -5,11 +5,11 @@ local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-S
 -- ==========================================
 local Window = Luna:CreateWindow({
     Name = "Forsaken Surge",
-    Subtitle = "v15.1 FINAL | AIMBOT (Team/Folder) + NPC ESP + WallWalk + Fly + Noclip + Turbo + ESP",
+    Subtitle = "v16.0 | WORKING AIMBOT + NPC ESP + WallWalk + Fly + Noclip + Turbo + ESP",
     LogoID = nil,
     LoadingEnabled = true,
     LoadingTitle = "Forsaken Surge",
-    LoadingSubtitle = "Loading v15.1...",
+    LoadingSubtitle = "Loading v16.0...",
     ConfigSettings = {
         RootFolder = nil,
         ConfigFolder = "ForsakenSurge"
@@ -51,7 +51,6 @@ updateCharacterReferences()
 
 -- ===== FORWARD DECLARATIONS =====
 local aimbotCameraOverride = false
-local smoothCameraCF = nil
 local setAimbotCameraOverride  -- forward
 
 player.CharacterAdded:Connect(function(char)
@@ -64,7 +63,6 @@ player.CharacterAdded:Connect(function(char)
         Camera.CameraType = Enum.CameraType.Custom
         Camera.CameraSubject = humanoid
     end
-    smoothCameraCF = nil
 end)
 
 -- ===== SAVE SYSTEM =====
@@ -97,12 +95,10 @@ local DefaultSettings = {
     SURVIVORS_COLOR_CUSTOM = false, SURVIVORS_COLOR_R = 0, SURVIVORS_COLOR_G = 255, SURVIVORS_COLOR_B = 0,
     GENERATORS_COLOR_CUSTOM = false, GENERATORS_COLOR_R = 0, GENERATORS_COLOR_G = 255, GENERATORS_COLOR_B = 255,
     ITEMS_COLOR_CUSTOM = false, ITEMS_COLOR_R = 255, ITEMS_COLOR_G = 215, ITEMS_COLOR_B = 0,
-
     OTHER_ESP = true, OTHER_COLOR = "Orange",
     OTHER_COLOR_CUSTOM = false, OTHER_COLOR_R = 255, OTHER_COLOR_G = 165, OTHER_COLOR_B = 0,
     NPC_ESP = true, NPC_COLOR = "Magenta",
     NPC_COLOR_CUSTOM = false, NPC_COLOR_R = 255, NPC_COLOR_G = 0, NPC_COLOR_B = 255,
-
     ROLE_FOLDER_KILLERS = "Killers",
     ROLE_FOLDER_SURVIVORS = "Survivors",
     ROLE_FOLDER_PLAYERS = "Players",
@@ -114,7 +110,6 @@ local DefaultSettings = {
     NPC_USE_TEXT = true,
     NPC_USE_BOX = true,
     NPC_USE_TRACER = true,
-
     TURBO_ACTIVE = false, TURBO_SPEED = 30, TURBO_MODE = "Velocity",
     UNLIMITED_MODE = false,
     WALK_SPEED_MAX = 50, SPRINT_MULTIPLIER_MAX = 3.0, GRAVITY_MAX = 100,
@@ -164,8 +159,6 @@ local DefaultSettings = {
     AIMBOT_SCAN_INTERVAL = 0.1,
     AIMBOT_PVE_RADIUS = 200,
     AIMBOT_MAX_NPC_CANDIDATES = 30,
-    AIMBOT_CAMERA_DISTANCE = 12,
-    AIMBOT_CAMERA_HEIGHT = 1.5,
 }
 
 local function LoadSettings()
@@ -303,7 +296,7 @@ local function getPlayerRole(plr)
 end
 
 -- ==========================================
--- NPC: СКАНИРОВАНИЕ (ПЕРЕПИСАНО)
+-- NPC: СКАНИРОВАНИЕ
 -- ==========================================
 local function isPlayerCharacter(model)
     if not model then return false end
@@ -313,21 +306,18 @@ local function isPlayerCharacter(model)
     return false
 end
 
--- Определяем, является ли модель NPC (Humanoid + не игрок + не эффект)
 local function isNPCModel(model)
     if not model or not model.Parent then return false end
     if not model:IsA("Model") then return false end
     if model == character then return false end
     if isPlayerCharacter(model) then return false end
 
-    -- Должен быть Humanoid и HumanoidRootPart или Head
     local hum = model:FindFirstChildOfClass("Humanoid")
     if not hum then return false end
     if hum.Health <= 0 then return false end
     local root = model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("Head") or model.PrimaryPart
     if not root then return false end
 
-    -- Исключаем пустышки/эффекты (нет ни одной BasePart)
     local hasPart = false
     for _, c in ipairs(model:GetChildren()) do
         if c:IsA("BasePart") then hasPart = true break end
@@ -337,7 +327,6 @@ local function isNPCModel(model)
     return true, hum, root
 end
 
--- Глубокий обход: Workspace, workspace.Players.*, любые вложенные папки с NPC
 local function scanNPCs()
     local list = {}
     local myPos = Camera.CFrame.Position
@@ -356,7 +345,6 @@ local function scanNPCs()
         end
     end
 
-    -- Обход дерева (максимум 3 уровня вглубь — достаточно)
     local function walk(container, depth)
         if depth > 3 then return end
         for _, obj in ipairs(container:GetChildren()) do
@@ -440,20 +428,18 @@ createFovCircle()
 createTargetIndicator()
 
 -- ==========================================
--- AIMBOT: CAMERA (ПРАВИЛЬНАЯ РАБОТА)
+-- AIMBOT: CAMERA OVERRIDE (рабочий)
 -- ==========================================
 local originalCameraType = Camera.CameraType
 local originalCameraSubject = Camera.CameraSubject
-local savedMouseBehavior = UserInputService.MouseBehavior
 
 setAimbotCameraOverride = function(on)
     if on and not aimbotCameraOverride then
         originalCameraType = Camera.CameraType
         originalCameraSubject = Camera.CameraSubject
-        savedMouseBehavior = UserInputService.MouseBehavior
-
         Camera.CameraType = Enum.CameraType.Scriptable
         aimbotCameraOverride = true
+        UserInputService.MouseBehavior = Enum.MouseBehavior.Default
     elseif not on and aimbotCameraOverride then
         Camera.CameraType = originalCameraType or Enum.CameraType.Custom
         if originalCameraSubject then
@@ -461,7 +447,6 @@ setAimbotCameraOverride = function(on)
         elseif humanoid then
             Camera.CameraSubject = humanoid
         end
-        UserInputService.MouseBehavior = savedMouseBehavior
         aimbotCameraOverride = false
     end
 end
@@ -614,13 +599,12 @@ local function getAimPosition(targetPart)
 end
 
 -- ==========================================
--- AIMBOT: RENDER LOOP (камера едет за персонажем)
+-- AIMBOT: RENDER LOOP (РАБОЧИЙ из v14.2)
 -- ==========================================
 local lastFovColor = Color3.new()
 local lastFovSize = 0
 
 RunService.RenderStepped:Connect(function(dt)
-    -- Аимбот выключен
     if not settings.AIMBOT_ENABLED then
         if fovCircle and fovCircle.circle and fovCircle.circle.Visible then
             fovCircle.circle.Visible = false
@@ -629,14 +613,14 @@ RunService.RenderStepped:Connect(function(dt)
             targetIndicator.dot.Visible = false
         end
         if aimbotCameraOverride then setAimbotCameraOverride(false) end
-        smoothCameraCF = nil
         return
     end
 
-    -- FOV circle
+    -- FOV circle updates
     if fovCircle and fovCircle.circle then
-        if fovCircle.circle.Visible ~= settings.AIMBOT_SHOW_FOV then
-            fovCircle.circle.Visible = settings.AIMBOT_SHOW_FOV
+        local show = settings.AIMBOT_ENABLED and settings.AIMBOT_SHOW_FOV
+        if fovCircle.circle.Visible ~= show then
+            fovCircle.circle.Visible = show
         end
         local newSize = settings.AIMBOT_FOV * 2
         if newSize ~= lastFovSize then
@@ -663,7 +647,6 @@ RunService.RenderStepped:Connect(function(dt)
         if targetIndicator and targetIndicator.dot and targetIndicator.dot.Visible then
             targetIndicator.dot.Visible = false
         end
-        smoothCameraCF = nil
         return
     end
 
@@ -672,7 +655,6 @@ RunService.RenderStepped:Connect(function(dt)
             targetIndicator.dot.Visible = false
         end
         if aimbotCameraOverride then setAimbotCameraOverride(false) end
-        smoothCameraCF = nil
         return
     end
 
@@ -691,7 +673,6 @@ RunService.RenderStepped:Connect(function(dt)
             targetIndicator.dot.Visible = false
         end
         if aimbotCameraOverride then setAimbotCameraOverride(false) end
-        smoothCameraCF = nil
         return
     end
 
@@ -701,7 +682,6 @@ RunService.RenderStepped:Connect(function(dt)
             targetIndicator.dot.Visible = false
         end
         if aimbotCameraOverride then setAimbotCameraOverride(false) end
-        smoothCameraCF = nil
         return
     end
 
@@ -724,40 +704,15 @@ RunService.RenderStepped:Connect(function(dt)
         end
     end
 
-    -- Включаем Scriptable
-    if not aimbotCameraOverride then
-        setAimbotCameraOverride(true)
-    end
-
-    -- Позиция камеры берётся от головы персонажа каждый кадр!
-    local head = character:FindFirstChild("Head") or hrp
-    local camPos
-    if head then
-        -- Смотрим через текущий "взгляд" камеры, чтобы камера не крутилась рывками
-        local lookDir = Camera.CFrame.LookVector
-        local flatLook = Vector3.new(lookDir.X, 0, lookDir.Z)
-        if flatLook.Magnitude < 0.001 then flatLook = Vector3.new(0, 0, 1) end
-        flatLook = flatLook.Unit
-        camPos = head.Position
-            + Vector3.new(0, settings.AIMBOT_CAMERA_HEIGHT, 0)
-            + flatLook * settings.AIMBOT_CAMERA_DISTANCE
-    else
-        camPos = Camera.CFrame.Position
-    end
+    -- РАБОЧЕЕ наведение камеры (v14.2)
+    if not aimbotCameraOverride then setAimbotCameraOverride(true) end
 
     local aimPos = getAimPosition(best.part)
     if aimPos then
-        local targetCF = CFrame.lookAt(camPos, aimPos)
+        local currentCF = Camera.CFrame
+        local targetCF = CFrame.lookAt(currentCF.Position, aimPos)
         local alpha = 1 - math.clamp(settings.AIMBOT_SMOOTHNESS, 0, 0.99)
-        local smoothFactor = math.clamp(alpha * (dt * 60), 0, 1)
-        if smoothCameraCF then
-            smoothCameraCF = smoothCameraCF:Lerp(targetCF, smoothFactor)
-            -- На случай если камера "уехала" — жёстко ставим позицию
-            smoothCameraCF = CFrame.new(camPos) * (smoothCameraCF - smoothCameraCF.Position)
-        else
-            smoothCameraCF = targetCF
-        end
-        Camera.CFrame = smoothCameraCF
+        Camera.CFrame = currentCF:Lerp(targetCF, math.clamp(alpha * (dt * 60), 0, 1))
     end
 
     -- Авто-стрельба
@@ -1680,7 +1635,7 @@ HotkeysTab:CreateToggle({ Name = "🎯 Aimbot Hotkey", CurrentValue = settings.H
 
 -- AIMBOT TAB
 local AimbotTab = Window:CreateTab({ Name = "Aimbot", Icon = "my_location", ImageSource = "Material", ShowTitle = true })
-AimbotTab:CreateParagraph({ Title = "🎯 AIMBOT v15.1", Text = "Камера едет за персонажем + Team/Folder detection" })
+AimbotTab:CreateParagraph({ Title = "🎯 AIMBOT v16.0", Text = "Рабочая камера из v14.2 + Team/Folder detection" })
 
 AimbotTab:CreateToggle({ Name = "🎯 Enable Aimbot", CurrentValue = settings.AIMBOT_ENABLED, Callback = function(v)
     if v and not settings.HOTKEY_AIMBOT_ENABLED then showNotification("🔒 Hotkey Lock", "Разреши Aimbot в Hotkeys!") return end
@@ -1702,10 +1657,6 @@ AimbotTab:CreateToggle({ Name = "Other / Unknown", CurrentValue = settings.AIMBO
 AimbotTab:CreateToggle({ Name = "Team Check", CurrentValue = settings.AIMBOT_TEAM_CHECK, Callback = function(v) settings.AIMBOT_TEAM_CHECK = v SaveSettings(settings) end })
 AimbotTab:CreateToggle({ Name = "Игнорировать мёртвых", CurrentValue = settings.AIMBOT_IGNORE_DEAD, Callback = function(v) settings.AIMBOT_IGNORE_DEAD = v SaveSettings(settings) end })
 AimbotTab:CreateToggle({ Name = "Проверка стен", CurrentValue = settings.AIMBOT_WALL_CHECK, Callback = function(v) settings.AIMBOT_WALL_CHECK = v SaveSettings(settings) end })
-
-AimbotTab:CreateLabel({ Text = "📷 КАМЕРА", Style = 1 })
-AimbotTab:CreateSlider({ Name = "Дистанция камеры", Range = {4, 30}, Increment = 1, CurrentValue = settings.AIMBOT_CAMERA_DISTANCE, Callback = function(v) settings.AIMBOT_CAMERA_DISTANCE = v SaveSettings(settings) end })
-AimbotTab:CreateSlider({ Name = "Высота камеры", Range = {-2, 5}, Increment = 0.1, CurrentValue = settings.AIMBOT_CAMERA_HEIGHT, Callback = function(v) settings.AIMBOT_CAMERA_HEIGHT = v SaveSettings(settings) end })
 
 AimbotTab:CreateLabel({ Text = "🚀 ПРОИЗВОДИТЕЛЬНОСТЬ", Style = 1 })
 AimbotTab:CreateSlider({ Name = "Интервал сканирования (сек)", Range = {0.02, 0.5}, Increment = 0.01, CurrentValue = settings.AIMBOT_SCAN_INTERVAL, Callback = function(v) settings.AIMBOT_SCAN_INTERVAL = v SaveSettings(settings) end })
@@ -2038,12 +1989,15 @@ end)
 -- INIT
 -- ==========================================
 print("═══════════════════════════════════════════════════════")
-print("🎯 Forsaken Surge v15.1 FINAL")
+print("🎯 Forsaken Surge v16.0")
 print("═══════════════════════════════════════════════════════")
-print("✅ NPC detection: walk(Workspace, depth 3) + Humanoid filter")
-print("✅ Aimbot camera follows character (no detach!)")
-print("✅ Role: Team → Folder → Attribute")
-print("✅ Categories: Killer / Survivor / Other / NPC")
+print("✅ AIMBOT: рабочая камера из v14.2 (Scriptable + lerp)")
+print("✅ NPC detection + роли Killer/Survivor/Other")
+print("✅ Wall Walk | Fly | No Clip | Turbo | ESP | Waypoints")
+print("✅ Fullbright | Click TP | Freecam | Hotkey Permissions")
+print("═══════════════════════════════════════════════════════")
+print("🔑 C/V/B/Z/F/G - режимы | " .. settings.AIMBOT_KEY .. " - AIMBOT")
+print("🔑 P/L/T - Waypoints | ЛКМ - Click TP")
 print("═══════════════════════════════════════════════════════")
 
 task.wait(0.5)
