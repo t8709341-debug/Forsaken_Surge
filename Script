@@ -5,7 +5,7 @@ local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-S
 -- ==========================================
 local Window = Luna:CreateWindow({
     Name = "Forsaken Surge",
-    Subtitle = "v16 | AIMBOT via workspace.Players + Fallback",
+    Subtitle = "v17 | AIMBOT + Fixed Roles + Player TP List",
     LogoID = nil,
     LoadingEnabled = true,
     LoadingTitle = "Forsaken Surge",
@@ -84,7 +84,6 @@ local DefaultSettings = {
     SURVIVORS_COLOR_CUSTOM = false, SURVIVORS_COLOR_R = 0, SURVIVORS_COLOR_G = 255, SURVIVORS_COLOR_B = 0,
     GENERATORS_COLOR_CUSTOM = false, GENERATORS_COLOR_R = 0, GENERATORS_COLOR_G = 255, GENERATORS_COLOR_B = 255,
     ITEMS_COLOR_CUSTOM = false, ITEMS_COLOR_R = 255, ITEMS_COLOR_G = 215, ITEMS_COLOR_B = 0,
-    -- NEW v16: Unknown / NPC подсветка
     UNKNOWN_ESP = true, UNKNOWN_COLOR = "White",
     NPC_ESP = true, NPC_COLOR = "Gray",
     TURBO_ACTIVE = false, TURBO_SPEED = 30, TURBO_MODE = "Velocity",
@@ -135,6 +134,9 @@ local DefaultSettings = {
     AIMBOT_SCAN_INTERVAL = 0.1,
     AIMBOT_PVE_RADIUS = 200,
     AIMBOT_MAX_NPC_CANDIDATES = 30,
+    -- TP Player
+    TP_PLAYER_SELECTED = "",
+    TP_PLAYER_OFFSET_Y = 3,
 }
 
 local function LoadSettings()
@@ -224,7 +226,7 @@ local function showNotification(title, text)
 end
 
 -- ==========================================
--- ROLE DETECTION (workspace.Players + fallback)
+-- ROLE DETECTION
 -- ==========================================
 local function getWorkspacePlayersFolder()
     return Workspace:FindFirstChild("Players")
@@ -407,6 +409,50 @@ local function isVisible(targetPart)
     return true
 end
 
+-- Проверка: модель принадлежит локальному игроку
+local function isLocalPlayerModel(model)
+    if not model then return false end
+    if model == character then return true end
+    local wsPlayers = getWorkspacePlayersFolder()
+    if wsPlayers then
+        for _, folderName in ipairs({"Killers","Survivors"}) do
+            local f = wsPlayers:FindFirstChild(folderName)
+            if f then
+                local localModel = f:FindFirstChild(player.Name)
+                if localModel and localModel == model then return true end
+            end
+        end
+    end
+    return false
+end
+
+-- ===== Unknown игроки (не в папках Killers/Survivors) =====
+local function scanUnknownPlayers()
+    local candidates = {}
+    local myPos = Camera.CFrame.Position
+    if not settings.AIMBOT_TARGET_UNKNOWN then return candidates end
+
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr == player then continue end
+        if getPlayerFolderName(plr) then continue end
+        local model = plr.Character
+        if model and model.Parent == Workspace then
+            local hum  = model:FindFirstChildOfClass("Humanoid")
+            local root = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart
+            if hum and root and (not settings.AIMBOT_IGNORE_DEAD or hum.Health > 0) then
+                local dist = (root.Position - myPos).Magnitude
+                if dist <= settings.AIMBOT_MAX_DISTANCE and dist >= settings.AIMBOT_MIN_DISTANCE then
+                    table.insert(candidates, {
+                        model = model, root = root, hum = hum,
+                        dist = dist, health = hum.Health, role = "Unknown",
+                    })
+                end
+            end
+        end
+    end
+    return candidates
+end
+
 local function scanWorkspacePlayers()
     local candidates = {}
     local wsPlayers = getWorkspacePlayersFolder()
@@ -428,6 +474,7 @@ local function scanWorkspacePlayers()
             if folder then
                 for _, model in ipairs(folder:GetChildren()) do
                     if model:IsA("Model") then
+                        if isLocalPlayerModel(model) then continue end
                         local hum  = model:FindFirstChildOfClass("Humanoid")
                         local root = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart
                         if hum and root then
@@ -446,31 +493,6 @@ local function scanWorkspacePlayers()
             end
         end
     end
-
-    -- FALLBACK: игроки без папки → Unknown
-    if settings.AIMBOT_TARGET_UNKNOWN then
-        local already = {}
-        for _, c in ipairs(candidates) do already[c.model] = true end
-
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr == player then continue end
-            local model = plr.Character
-            if model and model.Parent == Workspace and not already[model] then
-                local hum  = model:FindFirstChildOfClass("Humanoid")
-                local root = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart
-                if hum and root and (not settings.AIMBOT_IGNORE_DEAD or hum.Health > 0) then
-                    local dist = (root.Position - myPos).Magnitude
-                    if dist <= settings.AIMBOT_MAX_DISTANCE and dist >= settings.AIMBOT_MIN_DISTANCE then
-                        table.insert(candidates, {
-                            model = model, root = root, hum = hum,
-                            dist = dist, health = hum.Health, role = "Unknown",
-                        })
-                    end
-                end
-            end
-        end
-    end
-
     return candidates
 end
 
@@ -509,7 +531,8 @@ end
 local function scanCandidates()
     local list = {}
     for _, c in ipairs(scanWorkspacePlayers()) do table.insert(list, c) end
-    for _, c in ipairs(scanNpcs())            do table.insert(list, c) end
+    for _, c in ipairs(scanUnknownPlayers())   do table.insert(list, c) end
+    for _, c in ipairs(scanNpcs())             do table.insert(list, c) end
     return list
 end
 
@@ -520,6 +543,7 @@ local function pickBestTarget(candidates)
     local valid = {}
 
     for _, c in ipairs(candidates) do
+        if isLocalPlayerModel(c.model) then continue end
         local part = getHitboxFast(c.model, settings.AIMBOT_HITBOX)
         if part and part.Parent then
             local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
@@ -571,7 +595,7 @@ local function getAimPosition(targetPart)
 end
 
 -- ==========================================
--- AIMBOT: RENDER (BindToRenderStep Camera+1)
+-- AIMBOT: RENDER
 -- ==========================================
 local lastFovColor = Color3.new()
 local lastFovSize = 0
@@ -587,7 +611,6 @@ local function aimbotRenderStep(dt)
         return
     end
 
-    -- FOV circle updates
     if fovCircle and fovCircle.circle then
         if fovCircle.circle.Visible ~= settings.AIMBOT_SHOW_FOV then
             fovCircle.circle.Visible = settings.AIMBOT_SHOW_FOV
@@ -658,7 +681,6 @@ local function aimbotRenderStep(dt)
         end
     end
 
-    -- Меняем ТОЛЬКО rotation, position камеры оставляем движку.
     local aimPos = getAimPosition(best.part)
     if aimPos then
         local camPos = Camera.CFrame.Position
@@ -945,7 +967,7 @@ task.spawn(function()
             if not settings.ESP_ENABLED then clearAllESP() return end
             local alive = {}
 
-            -- === Игроки в папках Killers / Survivors ===
+            -- === Killers / Survivors ===
             local wsPlayers = getWorkspacePlayersFolder()
             if wsPlayers then
                 for _, info in ipairs({
@@ -974,10 +996,11 @@ task.spawn(function()
                 end
             end
 
-            -- === Игроки БЕЗ папки — Unknown ===
+            -- === Unknown (не в папках Killers/Survivors и не я) ===
             if settings.UNKNOWN_ESP then
                 for _, plr in ipairs(Players:GetPlayers()) do
                     if plr == player then continue end
+                    if getPlayerFolderName(plr) then continue end
                     local model = plr.Character
                     if model and model.Parent == Workspace and not alive[model] then
                         local hum  = model:FindFirstChildOfClass("Humanoid")
@@ -1459,17 +1482,22 @@ local function teleportToWaypoint(index)
     showNotification("📍 Waypoint", "ТП → " .. wp.Name)
 end
 
-local function teleportToPlayer(targetName)
+local function teleportToPlayerByName(targetName)
     local target
     for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= player and plr.Name:lower():find(targetName:lower(), 1, true) then target = plr break end
+        if plr ~= player and plr.Name == targetName then target = plr break end
+    end
+    if not target then
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= player and plr.Name:lower():find(targetName:lower(), 1, true) then target = plr break end
+        end
     end
     if not target then showNotification("📍 TP", "Игрок не найден: " .. targetName) return end
     local model = getWorkspaceModel(target)
     local root = model and (model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart)
     if not root then showNotification("📍 TP", "У игрока нет модели в workspace") return end
-    if not hrp then return end
-    hrp.CFrame = CFrame.new(root.Position + Vector3.new(0, 3, 0))
+    if not hrp then updateCharacterReferences() if not hrp then return end end
+    hrp.CFrame = CFrame.new(root.Position + Vector3.new(0, settings.TP_PLAYER_OFFSET_Y, 0))
     hrp.AssemblyLinearVelocity = Vector3.zero
     showNotification("📍 TP", "ТП → " .. target.Name)
 end
@@ -1589,7 +1617,7 @@ HotkeysTab:CreateToggle({ Name = "🎯 Aimbot Hotkey", CurrentValue = settings.H
 
 -- AIMBOT TAB
 local AimbotTab = Window:CreateTab({ Name = "Aimbot", Icon = "my_location", ImageSource = "Material", ShowTitle = true })
-AimbotTab:CreateParagraph({ Title = "🎯 WORKING AIMBOT v16", Text = "Цели: workspace.Players.Killers / Survivors + fallback на игроков без папки. FOV от центра экрана." })
+AimbotTab:CreateParagraph({ Title = "🎯 WORKING AIMBOT v17", Text = "Цели: workspace.Players.Killers / Survivors + Unknown (все, кто не в папках). Локальный игрок исключён." })
 
 AimbotTab:CreateToggle({ Name = "🎯 Enable Aimbot", CurrentValue = settings.AIMBOT_ENABLED, Callback = function(v)
     if v and not settings.HOTKEY_AIMBOT_ENABLED then showNotification("🔒 Hotkey Lock", "Разреши Aimbot в Hotkeys!") return end
@@ -1760,15 +1788,91 @@ WaypointTab:CreateToggle({ Name = "🔁 SWAP MODE", CurrentValue = settings.WP_S
 WaypointTab:CreateInput({ Name = "Название", CurrentValue = "", PlaceholderText = "Имя...", RemoveTextAfterFocusLost = false, Callback = function(t) _G.__wpName = t end })
 WaypointTab:CreateButton({ Name = "➕ Сохранить позицию", Callback = function() addWaypoint(_G.__wpName and _G.__wpName ~= "" and _G.__wpName or nil) end })
 WaypointTab:CreateButton({ Name = "🧹 Удалить все", Callback = function() for i = #waypoints, 1, -1 do table.remove(waypoints, i) end saveWaypoints() refreshBeacons() showNotification("📍", "Все точки удалены") end })
-WaypointTab:CreateLabel({ Text = "ТЕЛЕПОРТ", Style = 1 })
+WaypointTab:CreateLabel({ Text = "ТЕЛЕПОРТ К ТОЧКАМ", Style = 1 })
 for i = 1, MAX_WAYPOINTS do
     WaypointTab:CreateButton({ Name = "📍 ТП → #" .. i, Callback = function() teleportToWaypoint(i) end })
 end
-WaypointTab:CreateInput({ Name = "Ник игрока", CurrentValue = "", PlaceholderText = "Player1", RemoveTextAfterFocusLost = false, Callback = function(t) _G.__tpPlayerName = t end })
-WaypointTab:CreateButton({ Name = "🚀 ТП к игроку", Callback = function()
-    if _G.__tpPlayerName and _G.__tpPlayerName ~= "" then teleportToPlayer(_G.__tpPlayerName)
-    else showNotification("📍", "Введи ник") end
-end })
+
+-- ===== TP К ИГРОКУ (через Dropdown) =====
+local function getPlayerNameList()
+    local list = {}
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player then
+            local role = getPlayerRole(plr)
+            local tag = " [?]"
+            if role == "Killer" then tag = " [Killer]"
+            elseif role == "Survivor" then tag = " [Survivor]" end
+            table.insert(list, plr.Name .. tag)
+        end
+    end
+    table.sort(list)
+    return list
+end
+
+local PlayerTPDropdown -- ссылка на dropdown для обновления
+
+WaypointTab:CreateLabel({ Text = "ТЕЛЕПОРТ К ИГРОКУ", Style = 1 })
+
+-- Функция для пересоздания dropdown (Luna не поддерживает SetOptions стабильно во всех версиях)
+local function createPlayerDropdown()
+    if PlayerTPDropdown and PlayerTPDropdown.Destroy then
+        pcall(function() PlayerTPDropdown:Destroy() end)
+    end
+    local currentList = getPlayerNameList()
+    if #currentList == 0 then currentList = {"(нет игроков)"} end
+
+    local savedSelection = settings.TP_PLAYER_SELECTED
+    local selected = nil
+    if savedSelection ~= "" then
+        for _, item in ipairs(currentList) do
+            if item:match("^" .. savedSelection) then selected = item break end
+        end
+    end
+    if not selected then selected = currentList[1] end
+
+    PlayerTPDropdown = WaypointTab:CreateDropdown({
+        Name = "🎯 Выбрать игрока",
+        Options = currentList,
+        CurrentOption = {selected},
+        MultipleOptions = false,
+        Callback = function(o)
+            local name = o:match("^([^%s]+)")
+            settings.TP_PLAYER_SELECTED = name or ""
+            SaveSettings(settings)
+        end
+    })
+end
+
+createPlayerDropdown()
+
+-- Автообновление списка каждые 3 секунды
+local lastPlayerList = table.concat(getPlayerNameList(), "|")
+task.spawn(function()
+    while true do
+        task.wait(3)
+        pcall(function()
+            local newList = getPlayerNameList()
+            local newKey = table.concat(newList, "|")
+            if newKey ~= lastPlayerList then
+                lastPlayerList = newKey
+                createPlayerDropdown()
+            end
+        end)
+    end
+end)
+
+WaypointTab:CreateSlider({ Name = "Смещение Y при ТП", Range = {0, 20}, Increment = 0.5, CurrentValue = settings.TP_PLAYER_OFFSET_Y, Callback = function(v) settings.TP_PLAYER_OFFSET_Y = v SaveSettings(settings) end })
+
+WaypointTab:CreateButton({
+    Name = "🚀 ТП к выбранному игроку",
+    Callback = function()
+        if settings.TP_PLAYER_SELECTED and settings.TP_PLAYER_SELECTED ~= "" then
+            teleportToPlayerByName(settings.TP_PLAYER_SELECTED)
+        else
+            showNotification("📍 TP", "Сначала выбери игрока в списке!")
+        end
+    end
+})
 
 -- FULLBRIGHT TAB
 local FullbrightTab = Window:CreateTab({ Name = "Fullbright", Icon = "wb_sunny", ImageSource = "Material", ShowTitle = true })
@@ -1928,11 +2032,12 @@ end)
 -- INIT
 -- ==========================================
 print("═══════════════════════════════════════════════════════")
-print("🎯 Forsaken Surge v16 — AIMBOT via workspace.Players + Fallback")
+print("🎯 Forsaken Surge v17 — AIMBOT + Fixed Roles + Player TP List")
 print("   Killers:   workspace.Players.Killers.<Name>")
 print("   Survivors: workspace.Players.Survivors.<Name>")
 print("   Unknown:   игрок в Workspace, но нет в папках → цель + белый ESP")
 print("   NPC:       модели с Humanoid без Player → кастомный цвет")
+print("   Self:      локальный игрок ИСКЛЮЧЁН из аимбота и Unknown ESP")
 print("═══════════════════════════════════════════════════════")
 print("🔑 C/V/B/Z/F/G - режимы | " .. settings.AIMBOT_KEY .. " - AIMBOT")
 print("🔑 P/L/T - Waypoints | ЛКМ - Click TP")
