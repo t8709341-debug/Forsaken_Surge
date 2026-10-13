@@ -5,7 +5,7 @@ local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-S
 -- ==========================================
 local Window = Luna:CreateWindow({
     Name = "Forsaken Surge",
-    Subtitle = "v14.0 | KILLER ALERT + AUTO-TP + PLAYERLIST + SERVERHOP",
+    Subtitle = "v14.1 | KILLER ALERT + AUTO-TP + PLAYERLIST + SERVERHOP",
     LogoID = nil,
     LoadingEnabled = true,
     LoadingTitle = "Forsaken Surge",
@@ -83,7 +83,6 @@ local DefaultSettings = {
     FLY_SMOOTHNESS = 8,
     FLY_HOVER = false,
 
-    -- ESP
     ESP_ENABLED = true,
     KILLERS_ESP = true,
     KILLERS_COLOR = "Red",
@@ -133,21 +132,17 @@ local DefaultSettings = {
     FULLBRIGHT_CLOCKTIME = 12,
     FULLBRIGHT_REMOVE_FOG = true,
 
-    -- CLICK TP
     CLICKTP_ENABLED = false,
     CLICKTP_DISTANCE = 500,
     CLICKTP_OFFSET_Y = 3,
 
-    -- FREECAM
     FREECAM_ENABLED = false,
     FREECAM_SPEED = 60,
     FREECAM_SPRINT_MULT = 3,
     FREECAM_HIDE_CHAR = false,
 
-    -- WAYPOINT
     WP_SWAP_ENABLED = false,
 
-    -- ===== KILLER ALERT =====
     KILLER_ALERT_ENABLED = false,
     KILLER_ALERT_RANGE = 40,
     KILLER_ALERT_SOUND = true,
@@ -159,16 +154,13 @@ local DefaultSettings = {
     KILLER_ALERT_HP_THRESHOLD = 1000,
     KILLER_ALERT_DETECT_BY_TEAM = true,
 
-    -- ===== SERVER HOP =====
     SERVERHOP_ENABLED = true,
     SERVERHOP_MODE = "Random",
     SERVERHOP_JOBID = "",
 
-    -- ===== PLAYER LIST =====
     PLAYERLIST_AUTO = false,
     PLAYERLIST_INTERVAL = 2,
 
-    -- ===== HOTKEY PERMISSIONS =====
     HOTKEY_WALLWALK_ENABLED = true,
     HOTKEY_FLY_ENABLED = true,
     HOTKEY_NOCLIP_ENABLED = true,
@@ -515,9 +507,8 @@ local function RemoveESP(ItemInstance)
     end
 end
 
--- ===== DETECT KILLER (shared) =====
+-- ===== DETECT KILLER =====
 local function isPlayerKiller(plr, char)
-    -- 1) Team check
     if settings.KILLER_ALERT_DETECT_BY_TEAM then
         local team = plr.Team
         if team then
@@ -527,7 +518,6 @@ local function isPlayerKiller(plr, char)
             end
         end
     end
-    -- 2) HP check
     if settings.KILLER_ALERT_DETECT_BY_HP and char then
         local hum = char:FindFirstChild("Humanoid")
         if hum and hum.MaxHealth >= settings.KILLER_ALERT_HP_THRESHOLD then
@@ -827,7 +817,7 @@ local function toggleFullbright()
 end
 
 -- ==========================================
--- TOGGLES (Wall Walk, Fly, NoClip, Turbo, Freecam, ClickTP)
+-- TOGGLES
 -- ==========================================
 local function toggleClimb()
     if flying or noClipActive or turboActive then disableAllModes("climb") end
@@ -999,10 +989,9 @@ local function performClickTP()
 end
 
 -- ==========================================
--- KILLER ALERT 🚨
+-- KILLER ALERT
 -- ==========================================
 local killerAlertLastTrigger = 0
-local lastAlertKillerName = ""
 
 local function getKillersInRange()
     local killers = {}
@@ -1023,7 +1012,6 @@ local function getKillersInRange()
 end
 
 local function triggerKillerAlert(killers)
-    -- Sound
     if settings.KILLER_ALERT_SOUND then
         pcall(function()
             local s = Instance.new("Sound")
@@ -1034,7 +1022,6 @@ local function triggerKillerAlert(killers)
             Debris:AddItem(s, 2)
         end)
     end
-    -- Flash
     if settings.KILLER_ALERT_FLASH then
         pcall(function()
             local flash = Instance.new("Frame")
@@ -1048,7 +1035,6 @@ local function triggerKillerAlert(killers)
             Debris:AddItem(flash, 0.6)
         end)
     end
-    -- Auto TP
     if settings.KILLER_ALERT_AUTOTP then
         local wpIdx = settings.KILLER_ALERT_WP_INDEX
         if waypoints[wpIdx] and hrp then
@@ -1073,7 +1059,6 @@ task.spawn(function()
         local killers = getKillersInRange()
         if #killers == 0 then continue end
         killerAlertLastTrigger = now
-        lastAlertKillerName = killers[1].player.Name
         triggerKillerAlert(killers)
     end
 end)
@@ -1144,7 +1129,7 @@ Window:CreateHomeTab({
 })
 
 -- ===== HOTKEYS TAB =====
-local HotkeysTab = Window:CreateTab({ Name = "Hotkeys", Icon = "keyboard", ImageSource = "Material", ShowTitle = true })
+local HotkeysTab = Window:CreateTab({ Name = "Hotkeys", Icon = "keyboard", ShowTitle = true })
 
 HotkeysTab:CreateParagraph({
     Title = "🔑 HOTKEY PERMISSIONS",
@@ -1186,7 +1171,7 @@ HotkeysTab:CreateToggle({ Name = "📍 Waypoint Hotkeys (P/L/T)", CurrentValue =
     Callback = function(v) settings.HOTKEY_WAYPOINTS_ENABLED = v; SaveSettings(settings) end })
 
 -- ===== KILLER ALERT TAB =====
-local KillerTab = Window:CreateTab({ Name = "Killer Alert", Icon = "warning", ImageSource = "Material", ShowTitle = true })
+local KillerTab = Window:CreateTab({ Name = "Killer Alert", Icon = "warning", ShowTitle = true })
 
 KillerTab:CreateParagraph({
     Title = "🚨 KILLER ALERT",
@@ -1217,7 +1202,7 @@ KillerTab:CreateSlider({ Name = "Номер Waypoint (1-8)", Range = {1, 8}, Inc
     CurrentValue = settings.KILLER_ALERT_WP_INDEX,
     Callback = function(v) settings.KILLER_ALERT_WP_INDEX = v; SaveSettings(settings) end })
 
-KillerTab:CreateSlider({ Name = "Кулдаун между срабатываниями (сек)", Range = {1, 30}, Increment = 1,
+KillerTab:CreateSlider({ Name = "Кулдаун (сек)", Range = {1, 30}, Increment = 1,
     CurrentValue = settings.KILLER_ALERT_COOLDOWN,
     Callback = function(v) settings.KILLER_ALERT_COOLDOWN = v; SaveSettings(settings) end })
 
@@ -1226,22 +1211,22 @@ KillerTab:CreateLabel({ Text = "🎯 ДЕТЕКТ КИЛЛЕРА", Style = 1 })
 KillerTab:CreateToggle({ Name = "Определять по Team", CurrentValue = settings.KILLER_ALERT_DETECT_BY_TEAM,
     Callback = function(v) settings.KILLER_ALERT_DETECT_BY_TEAM = v; SaveSettings(settings) end })
 
-KillerTab:CreateToggle({ Name = "Определять по HP (MaxHealth > N)", CurrentValue = settings.KILLER_ALERT_DETECT_BY_HP,
+KillerTab:CreateToggle({ Name = "Определять по HP", CurrentValue = settings.KILLER_ALERT_DETECT_BY_HP,
     Callback = function(v) settings.KILLER_ALERT_DETECT_BY_HP = v; SaveSettings(settings) end })
 
 KillerTab:CreateSlider({ Name = "HP-порог (MaxHealth)", Range = {100, 10000}, Increment = 100,
     CurrentValue = settings.KILLER_ALERT_HP_THRESHOLD,
     Callback = function(v) settings.KILLER_ALERT_HP_THRESHOLD = v; SaveSettings(settings) end })
 
-KillerTab:CreateButton({ Name = "🧪 Тест (запустить сейчас)", Callback = function()
-    if not settings.KILLER_ALERT_ENABLED then showNotification("🚨 Killer Alert", "Сначала включи алерт!"); return end
+KillerTab:CreateButton({ Name = "🧪 Тест сейчас", Callback = function()
+    if not settings.KILLER_ALERT_ENABLED then showNotification("🚨", "Сначала включи алерт!"); return end
     local killers = getKillersInRange()
-    if #killers == 0 then showNotification("🚨 Killer Alert", "Нет киллеров в радиусе " .. settings.KILLER_ALERT_RANGE .. "m")
+    if #killers == 0 then showNotification("🚨", "Нет киллеров в радиусе " .. settings.KILLER_ALERT_RANGE .. "m")
     else triggerKillerAlert(killers) end
 end })
 
 -- ===== SERVER HOP TAB =====
-local ServerHopTab = Window:CreateTab({ Name = "Server Hop", Icon = "public", ImageSource = "Material", ShowTitle = true })
+local ServerHopTab = Window:CreateTab({ Name = "Server Hop", Icon = "public", ShowTitle = true })
 
 ServerHopTab:CreateParagraph({
     Title = "🌐 SERVER HOP",
@@ -1267,28 +1252,23 @@ ServerHopTab:CreateInput({
     Callback = function(text) settings.SERVERHOP_JOBID = text; SaveSettings(settings) end
 })
 
-ServerHopTab:CreateButton({ Name = "🌐 Перейти на рандомный сервер", Callback = function()
+ServerHopTab:CreateButton({ Name = "🌐 Рандомный сервер", Callback = function()
     settings.SERVERHOP_MODE = "Random"
     doServerHop()
 end })
 
-ServerHopTab:CreateButton({ Name = "🔗 Перейти по JobId", Callback = function()
-    if settings.SERVERHOP_JOBID == "" then showNotification("🌐 Server Hop", "Введи JobId!"); return end
+ServerHopTab:CreateButton({ Name = "🔗 По JobId", Callback = function()
+    if settings.SERVERHOP_JOBID == "" then showNotification("🌐", "Введи JobId!"); return end
     settings.SERVERHOP_MODE = "Specific"
     doServerHop()
 end })
 
-ServerHopTab:CreateParagraph({
-    Title = "ℹ️ Инфо",
-    Text = "Random — всегда новый сервер.\nSpecific — ТП на конкретный JobId.\nJobId можно получить через серверные скрипты/логи."
-})
-
 -- ===== PLAYER LIST TAB =====
-local PlayerListTab = Window:CreateTab({ Name = "Player List", Icon = "people", ImageSource = "Material", ShowTitle = true })
+local PlayerListTab = Window:CreateTab({ Name = "Player List", Icon = "people", ShowTitle = true })
 
 PlayerListTab:CreateParagraph({
     Title = "👥 PLAYER LIST",
-    Text = "Список игроков с HP, командой и дистанцией. Кнопки — ТП."
+    Text = "Список игроков. Кнопки — ТП."
 })
 
 local playerButtons = {}
@@ -1333,7 +1313,7 @@ PlayerListTab:CreateButton({ Name = "🔄 Обновить список", Callba
 PlayerListTab:CreateToggle({ Name = "Авто-обновление", CurrentValue = settings.PLAYERLIST_AUTO,
     Callback = function(v) settings.PLAYERLIST_AUTO = v; SaveSettings(settings) end })
 
-PlayerListTab:CreateSlider({ Name = "Интервал обновления (сек)", Range = {1, 10}, Increment = 1,
+PlayerListTab:CreateSlider({ Name = "Интервал (сек)", Range = {1, 10}, Increment = 1,
     CurrentValue = settings.PLAYERLIST_INTERVAL,
     Callback = function(v) settings.PLAYERLIST_INTERVAL = v; SaveSettings(settings) end })
 
@@ -1349,8 +1329,8 @@ end)
 refreshPlayerList()
 
 -- ===== WALL WALK TAB =====
-local WallWalkTab = Window:CreateTab({ Name = "Wall Walk", Icon = "directions_walk", ImageSource = "Material", ShowTitle = true })
-WallWalkTab:CreateParagraph({ Title = "🕷️ SURFACE WALK PRO", Text = "Хоткей: C" })
+local WallWalkTab = Window:CreateTab({ Name = "Wall Walk", Icon = "directions_walk", ShowTitle = true })
+WallWalkTab:CreateParagraph({ Title = "🕷️ SURFACE WALK", Text = "Хоткей: C" })
 WallWalkTab:CreateToggle({ Name = "⚡ Unlimited Mode", CurrentValue = settings.UNLIMITED_MODE,
     Callback = function(v) settings.UNLIMITED_MODE = v; SaveSettings(settings) end })
 WallWalkTab:CreateSlider({ Name = "Скорость ходьбы", Range = {1, getMaxValue("WALK_SPEED", 50)}, Increment = 1,
@@ -1367,13 +1347,13 @@ WallWalkTab:CreateToggle({ Name = "Фиксация на потолке", Curren
     Callback = function(v) settings.CEILING_GRIP = v; SaveSettings(settings) end })
 WallWalkTab:CreateSlider({ Name = "Сила прижатия", Range = {1, 20}, Increment = 0.5,
     CurrentValue = settings.CEILING_GRIP_FORCE, Callback = function(v) settings.CEILING_GRIP_FORCE = v; SaveSettings(settings) end })
-WallWalkTab:CreateToggle({ Name = "Прилипание к поверхности", CurrentValue = settings.STICK_TO_SURFACE,
+WallWalkTab:CreateToggle({ Name = "Прилипание", CurrentValue = settings.STICK_TO_SURFACE,
     Callback = function(v) settings.STICK_TO_SURFACE = v; SaveSettings(settings) end })
-WallWalkTab:CreateToggle({ Name = "Авто-сброс при падении", CurrentValue = settings.AUTO_RESET_ON_FALL,
+WallWalkTab:CreateToggle({ Name = "Авто-сброс", CurrentValue = settings.AUTO_RESET_ON_FALL,
     Callback = function(v) settings.AUTO_RESET_ON_FALL = v; SaveSettings(settings) end })
 
--- ===== ESP TAB (сокращённый) =====
-local ESPTab = Window:CreateTab({ Name = "ESP", Icon = "visibility", ImageSource = "Material", ShowTitle = true })
+-- ===== ESP TAB =====
+local ESPTab = Window:CreateTab({ Name = "ESP", Icon = "visibility", ShowTitle = true })
 ESPTab:CreateToggle({ Name = "Enable ESP", CurrentValue = settings.ESP_ENABLED,
     Callback = function(v) settings.ESP_ENABLED = v; SaveSettings(settings); if not v then clearAllESP() end end })
 ESPTab:CreateToggle({ Name = "Killers ESP", CurrentValue = settings.KILLERS_ESP,
@@ -1392,7 +1372,7 @@ ESPTab:CreateToggle({ Name = "Tracer", CurrentValue = settings.ESP_TRACER_ENABLE
     Callback = function(v) settings.ESP_TRACER_ENABLED = v; SaveSettings(settings) end })
 ESPTab:CreateToggle({ Name = "Team Check", CurrentValue = settings.ESP_TEAM_CHECK,
     Callback = function(v) settings.ESP_TEAM_CHECK = v; SaveSettings(settings) end })
-ESPTab:CreateSlider({ Name = "Макс. дистанция ESP", Range = {50, 2000}, Increment = 10,
+ESPTab:CreateSlider({ Name = "Макс. дистанция", Range = {50, 2000}, Increment = 10,
     CurrentValue = settings.ESP_MAX_DISTANCE, Callback = function(v) settings.ESP_MAX_DISTANCE = v; SaveSettings(settings) end })
 ESPTab:CreateSlider({ Name = "Размер текста", Range = {8, 48}, Increment = 1,
     CurrentValue = settings.ESP_TEXT_SIZE, Callback = function(v) settings.ESP_TEXT_SIZE = v; SaveSettings(settings) end })
@@ -1402,7 +1382,7 @@ ESPTab:CreateSlider({ Name = "Прозрачность контура", Range = 
     CurrentValue = settings.ESP_OUTLINE_TRANSPARENCY, Callback = function(v) settings.ESP_OUTLINE_TRANSPARENCY = v; SaveSettings(settings) end })
 
 -- ===== CLICK TP TAB =====
-local ClickTPTab = Window:CreateTab({ Name = "Click TP", Icon = "mouse", ImageSource = "Material", ShowTitle = true })
+local ClickTPTab = Window:CreateTab({ Name = "Click TP", Icon = "mouse", ShowTitle = true })
 ClickTPTab:CreateToggle({ Name = "Enable Click TP", CurrentValue = settings.CLICKTP_ENABLED,
     Callback = function(v)
         if v and not settings.HOTKEY_CLICKTP_ENABLED then showNotification("🔒", "Разреши в Hotkeys!"); return end
@@ -1415,7 +1395,7 @@ ClickTPTab:CreateSlider({ Name = "Смещение по Y", Range = {0, 20}, Inc
 ClickTPTab:CreateButton({ Name = "🖱️ ТП сейчас", Callback = performClickTP })
 
 -- ===== FREECAM TAB =====
-local FreecamTab = Window:CreateTab({ Name = "Freecam", Icon = "videocam", ImageSource = "Material", ShowTitle = true })
+local FreecamTab = Window:CreateTab({ Name = "Freecam", Icon = "videocam", ShowTitle = true })
 FreecamTab:CreateParagraph({ Title = "🎥 FREECAM", Text = "WASD + Space/Ctrl. Shift — ускорение. Хоткей: G" })
 FreecamTab:CreateToggle({ Name = "Enable Freecam", CurrentValue = settings.FREECAM_ENABLED,
     Callback = function(v)
@@ -1431,7 +1411,7 @@ FreecamTab:CreateToggle({ Name = "Скрывать персонажа", CurrentV
     Callback = function(v) settings.FREECAM_HIDE_CHAR = v; SaveSettings(settings) end })
 
 -- ===== TURBO TAB =====
-local TurboTab = Window:CreateTab({ Name = "Turbo", Icon = "speed", ImageSource = "Material", ShowTitle = true })
+local TurboTab = Window:CreateTab({ Name = "Turbo", Icon = "speed", ShowTitle = true })
 TurboTab:CreateToggle({ Name = "Activate Turbo", CurrentValue = false,
     Callback = function(v)
         if v and not settings.HOTKEY_TURBO_ENABLED then showNotification("🔒", "Разреши в Hotkeys!"); return end
@@ -1445,7 +1425,7 @@ TurboTab:CreateButton({ Name = "Mode: Teleport", Callback = function() settings.
 TurboTab:CreateButton({ Name = "Mode: Combo", Callback = function() settings.TURBO_MODE = "Combo"; SaveSettings(settings) end })
 
 -- ===== NO CLIP TAB =====
-local NoClipTab = Window:CreateTab({ Name = "No Clip", Icon = "open_with", ImageSource = "Material", ShowTitle = true })
+local NoClipTab = Window:CreateTab({ Name = "No Clip", Icon = "open_with", ShowTitle = true })
 NoClipTab:CreateToggle({ Name = "Activate No Clip", CurrentValue = false,
     Callback = function(v)
         if v and not settings.HOTKEY_NOCLIP_ENABLED then showNotification("🔒", "Разреши в Hotkeys!"); return end
@@ -1454,7 +1434,7 @@ NoClipTab:CreateToggle({ Name = "Activate No Clip", CurrentValue = false,
     end })
 
 -- ===== FLY TAB =====
-local FlyTab = Window:CreateTab({ Name = "Fly", Icon = "flight", ImageSource = "Material", ShowTitle = true })
+local FlyTab = Window:CreateTab({ Name = "Fly", Icon = "flight", ShowTitle = true })
 FlyTab:CreateToggle({ Name = "Enable Flight", CurrentValue = false,
     Callback = function(v)
         if v and not settings.HOTKEY_FLY_ENABLED then showNotification("🔒", "Разреши в Hotkeys!"); return end
@@ -1469,7 +1449,7 @@ FlyTab:CreateToggle({ Name = "Hover", CurrentValue = settings.FLY_HOVER,
     Callback = function(v) settings.FLY_HOVER = v; SaveSettings(settings) end })
 
 -- ===== WAYPOINTS TAB =====
-local WaypointTab = Window:CreateTab({ Name = "Waypoints", Icon = "place", ImageSource = "Material", ShowTitle = true })
+local WaypointTab = Window:CreateTab({ Name = "Waypoints", Icon = "place", ShowTitle = true })
 WaypointTab:CreateParagraph({ Title = "📍 WAYPOINTS", Text = "P — сохранить, L — удалить, T — ТП на #1" })
 WaypointTab:CreateToggle({ Name = "🔁 SWAP MODE", CurrentValue = settings.WP_SWAP_ENABLED,
     Callback = function(v) settings.WP_SWAP_ENABLED = v; SaveSettings(settings); refreshBeacons() end })
@@ -1491,11 +1471,11 @@ WaypointTab:CreateInput({ Name = "Ник игрока", CurrentValue = "", Place
 WaypointTab:CreateButton({ Name = "🚀 ТП к игроку",
     Callback = function()
         if _G.__tpPlayerName and _G.__tpPlayerName ~= "" then teleportToPlayer(_G.__tpPlayerName)
-        else showNotification("📍 TP", "Введи ник") end
+        else showNotification("📍", "Введи ник") end
     end })
 
 -- ===== FULLBRIGHT TAB =====
-local FullbrightTab = Window:CreateTab({ Name = "Fullbright", Icon = "wb_sunny", ImageSource = "Material", ShowTitle = true })
+local FullbrightTab = Window:CreateTab({ Name = "Fullbright", Icon = "wb_sunny", ShowTitle = true })
 FullbrightTab:CreateToggle({ Name = "Enable Fullbright", CurrentValue = false,
     Callback = function(v)
         if v and not settings.HOTKEY_FULLBRIGHT_ENABLED then showNotification("🔒", "Разреши в Hotkeys!"); return end
@@ -1510,7 +1490,7 @@ FullbrightTab:CreateToggle({ Name = "Убирать туман", CurrentValue = 
     Callback = function(v) settings.FULLBRIGHT_REMOVE_FOG = v; SaveSettings(settings) end })
 
 -- ===== SETTINGS TAB =====
-local SettingsTab = Window:CreateTab({ Name = "Settings", Icon = "settings", ImageSource = "Material", ShowTitle = true })
+local SettingsTab = Window:CreateTab({ Name = "Settings", Icon = "settings", ShowTitle = true })
 SettingsTab:CreateToggle({ Name = "Remove Killer Walls", CurrentValue = settings.REMOVE_KILLER_WALLS,
     Callback = function(v) settings.REMOVE_KILLER_WALLS = v; SaveSettings(settings) end })
 SettingsTab:CreateToggle({ Name = "Notifications", CurrentValue = settings.NOTIFICATIONS_ENABLED,
@@ -1694,16 +1674,12 @@ end)
 -- INIT
 -- ==========================================
 print("═══════════════════════════════════════════════════════")
-print("🕷️ Forsaken Surge v14.0")
+print("🕷️ Forsaken Surge v14.1")
 print("═══════════════════════════════════════════════════════")
 print("✅ Killer Alert + Auto-TP | ✅ Player List | ✅ Server Hop")
 print("✅ Wall Walk | ✅ Fly | ✅ No Clip | ✅ Turbo")
 print("✅ ESP PRO | ✅ Waypoints + SWAP | ✅ Fullbright")
 print("✅ Click TP | ✅ Freecam | ✅ Hotkey Permissions")
-print("═══════════════════════════════════════════════════════")
-print("🔑 C-WallWalk | V-Fly | B-NoClip | Z-Turbo | F-Fullbright")
-print("🔑 G-Freecam | H-ServerHop | P/L/T-Waypoints")
-print("⚠️  Хоткеи работают только если разрешены в табе Hotkeys!")
 print("═══════════════════════════════════════════════════════")
 
 task.wait(0.5)
